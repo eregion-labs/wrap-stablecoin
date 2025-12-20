@@ -25,6 +25,7 @@ pub fn deposit_reserve_liquidity_ix(
     reserve: Pubkey,
     lending_market: Pubkey,
     lending_market_authority: Pubkey,
+    reserve_liquidity_mint: Pubkey,
     reserve_liquidity_supply: Pubkey,
     reserve_collateral_mint: Pubkey,
     user_source_liquidity: Pubkey,
@@ -41,6 +42,19 @@ pub fn deposit_reserve_liquidity_ix(
             .unwrap(),
     );
 
+    // Account order from KLend source:
+    // 1. owner (signer)
+    // 2. reserve
+    // 3. lending_market
+    // 4. lending_market_authority
+    // 5. reserve_liquidity_mint
+    // 6. reserve_liquidity_supply
+    // 7. reserve_collateral_mint
+    // 8. user_source_liquidity
+    // 9. user_destination_collateral
+    // 10. collateral_token_program
+    // 11. liquidity_token_program
+    // 12. instruction_sysvar
     Instruction {
         program_id: klend_program,
         accounts: vec![
@@ -48,6 +62,7 @@ pub fn deposit_reserve_liquidity_ix(
             AccountMeta::new(reserve, false),
             AccountMeta::new_readonly(lending_market, false),
             AccountMeta::new_readonly(lending_market_authority, false),
+            AccountMeta::new_readonly(reserve_liquidity_mint, false),
             AccountMeta::new(reserve_liquidity_supply, false),
             AccountMeta::new(reserve_collateral_mint, false),
             AccountMeta::new(user_source_liquidity, false),
@@ -68,11 +83,12 @@ pub struct RedeemReserveCollateralArgs {
 pub fn redeem_reserve_collateral_ix(
     klend_program: Pubkey,
     owner: Pubkey,
-    reserve: Pubkey,
     lending_market: Pubkey,
+    reserve: Pubkey,
     lending_market_authority: Pubkey,
-    reserve_liquidity_supply: Pubkey,
+    reserve_liquidity_mint: Pubkey,
     reserve_collateral_mint: Pubkey,
+    reserve_liquidity_supply: Pubkey,
     user_source_collateral: Pubkey,
     user_destination_liquidity: Pubkey,
     collateral_token_program: Pubkey,
@@ -87,13 +103,27 @@ pub fn redeem_reserve_collateral_ix(
             .unwrap(),
     );
 
+    // Account order from KLend source:
+    // 1. owner
+    // 2. lending_market
+    // 3. reserve
+    // 4. lending_market_authority
+    // 5. reserve_liquidity_mint
+    // 6. reserve_collateral_mint
+    // 7. reserve_liquidity_supply
+    // 8. user_source_collateral
+    // 9. user_destination_liquidity
+    // 10. collateral_token_program
+    // 11. liquidity_token_program
+    // 12. instruction_sysvar
     Instruction {
         program_id: klend_program,
         accounts: vec![
             AccountMeta::new(owner, true),
-            AccountMeta::new(reserve, false),
             AccountMeta::new_readonly(lending_market, false),
+            AccountMeta::new(reserve, false),
             AccountMeta::new_readonly(lending_market_authority, false),
+            AccountMeta::new_readonly(reserve_liquidity_mint, false),
             AccountMeta::new(reserve_collateral_mint, false),
             AccountMeta::new(reserve_liquidity_supply, false),
             AccountMeta::new(user_source_collateral, false),

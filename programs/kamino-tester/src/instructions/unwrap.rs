@@ -24,12 +24,17 @@ pub struct Unwrap<'info> {
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
-    /// CHECK: PDA authority for signing
+    /// CHECK: PDA authority for signing - needs mut for CPI to KLend
     #[account(
+        mut,
         seeds = [b"vault_authority", vault_config.key().as_ref()],
         bump = vault_config.vault_authority_bump
     )]
     pub vault_authority: AccountInfo<'info>,
+
+    /// CHECK: USDC mint for CPI to KLend
+    #[account(address = vault_config.usdc_mint)]
+    pub usdc_mint: AccountInfo<'info>,
 
     #[account(
         mut,

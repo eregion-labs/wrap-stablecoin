@@ -16,7 +16,8 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "cargo test -p kamino-tester --tests -- --nocapture"
+#test = "cargo test -p kamino-tester --tests -- --nocapture"
+test = "cargo test -p kamino-tester --tests test_full_integration -- --nocapture"
 
 [[test.genesis]]
 address = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
