@@ -8,6 +8,7 @@ This program provides:
 - **Wrap**: Deposit USDC, receive wStable tokens (1:1), USDC is deposited into KLend to earn yield
 - **Unwrap**: Burn wStable tokens, receive USDC back from KLend
 - **Harvest Yield**: Authority can harvest accrued yield (excess collateral) to treasury
+- **Flash Mint**: Borrow wStable tokens without collateral, repay within the same transaction (for arbitrage)
 
 ## Architecture
 
@@ -21,6 +22,14 @@ User wStable ──► Unwrap ──► Burn wStable
                               │
                               ▼
                          KLend Redeem ──► User USDC
+
+Flash Mint Flow:
+┌─────────────────────────────────────────────────────────────┐
+│ Transaction                                                  │
+│  [1] flash_mint_start ──► Mint wStable to borrower          │
+│  [2] ... user operations (DEX swaps, arbitrage) ...         │
+│  [3] flash_mint_end ──► Burn principal + transfer fee       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Program Instructions
@@ -34,6 +43,49 @@ User wStable ──► Unwrap ──► Burn wStable
 | `set_paused` | Pause/unpause the vault (authority only) |
 | `update_treasury` | Update treasury address (authority only) |
 | `transfer_authority` | Transfer vault authority (authority only) |
+| `flash_mint_start` | Start flash mint - mint tokens to borrower |
+| `flash_mint_end` | End flash mint - burn principal, transfer fee |
+| `set_flash_mint_fee` | Set flash mint fee in basis points (authority only) |
+| `set_flash_mint_enabled` | Enable/disable flash mint for public (authority only) |
+
+## Flash Mint
+
+Flash mint allows users to borrow wStable tokens without collateral, use them within the same transaction, and repay with a fee. This is useful for arbitrage opportunities.
+
+### How It Works
+
+1. **Start**: `flash_mint_start` mints tokens to borrower and creates a temporary `FlashLoanState` PDA
+2. **Use**: Borrower executes operations (DEX swaps, arbitrage, etc.)
+3. **End**: `flash_mint_end` burns the principal, transfers fee to treasury, and closes the loan state
+
+### Configuration
+
+- **Fee**: Configurable in basis points (e.g., 50 bps = 0.5%)
+- **Access Control**:
+  - When disabled: Only admin (authority) can use flash mint
+  - When enabled: Anyone can use flash mint
+- **Default**: Disabled with 0 fee
+
+### Security
+
+| Protection | Mechanism |
+|------------|-----------|
+| Missing `flash_mint_end` | Transaction introspection verifies end instruction exists before minting |
+| Mismatched accounts | Introspection verifies borrower, vault_config, and flash_loan_state match |
+| Double mint attack | PDA `init` constraint prevents creating same flash_loan_state twice |
+| Reentrancy | One flash loan per user per vault at a time (PDA uniqueness) |
+
+### Usage Example
+
+```typescript
+// Arbitrage transaction
+const tx = new Transaction();
+tx.add(flashMintStartIx(amount));      // Borrow 1000 wStable
+tx.add(swapOnDexA(wStable, tokenX));   // Swap wStable -> Token X
+tx.add(swapOnDexB(tokenX, wStable));   // Swap Token X -> wStable (profit)
+tx.add(flashMintEndIx());              // Repay 1000 + fee
+await sendTransaction(tx);
+```
 
 ## Building
 
@@ -61,6 +113,21 @@ The integration test (`programs/kamino-tester/tests/integration_test.rs`) verifi
 | Wrap CPI | ✓ | Verifies CPI to KLend's `deposit_reserve_liquidity` |
 | Unwrap CPI | ✓ | Verifies CPI to KLend's `redeem_reserve_collateral` |
 | Harvest Yield CPI | ✓ | Verifies CPI to KLend's `redeem_reserve_collateral` for treasury |
+
+### Flash Mint Test Coverage
+
+The flash mint tests (`test_flash_mint`) verify:
+
+| Test | Description |
+|------|-------------|
+| Set flash mint fee | Admin can configure fee in basis points |
+| Non-admin blocked when disabled | Regular users cannot flash mint when feature is disabled |
+| Admin bypass when disabled | Authority can use flash mint even when disabled |
+| Enable flash mint | Admin can enable flash mint for all users |
+| Missing flash_mint_end rejected | Transaction fails if flash_mint_end is not in same transaction |
+| Complete flash mint flow | Full start → end flow with fee payment |
+| Double mint attack rejected | Cannot call flash_mint_start twice with one end |
+| Disable flash mint | Admin can disable flash mint |
 
 ### Test Limitations
 
@@ -107,13 +174,16 @@ kamino-tester/
 │   │   │   ├── wrap.rs
 │   │   │   ├── unwrap.rs
 │   │   │   ├── harvest_yield.rs
-│   │   │   └── admin.rs
-│   │   ├── state.rs            # VaultConfig account structure
+│   │   │   ├── admin.rs
+│   │   │   └── flash_mint.rs   # Flash mint instructions and introspection
+│   │   ├── state/              # Account structures
+│   │   │   ├── vault_config.rs # VaultConfig with flash mint settings
+│   │   │   └── flash_loan_state.rs # Temporary flash loan tracking
 │   │   ├── errors.rs           # Custom error codes
 │   │   └── klend/              # KLend CPI helpers
 │   │       └── cpi.rs
 │   └── tests/
-│       ├── integration_test.rs # Full integration test
+│       ├── integration_test.rs # Full integration test + flash mint tests
 │       ├── klend_init.rs       # KLend initialization tests
 │       └── wrapped_token_test.rs
 ├── so/

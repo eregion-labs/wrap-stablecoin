@@ -1,0 +1,192 @@
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::instructions::{
+    load_current_index_checked, load_instruction_at_checked,
+};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+
+use crate::errors::ErrorCode;
+use crate::state::{FlashLoanState, VaultConfig};
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct FlashMintStartArgs {
+    pub amount: u64,
+}
+
+#[derive(Accounts)]
+#[instruction(args: FlashMintStartArgs)]
+pub struct FlashMintStart<'info> {
+    #[account(mut)]
+    pub borrower: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        bump = vault_config.bump,
+        constraint = !vault_config.paused @ ErrorCode::VaultPaused,
+        constraint = vault_config.flash_mint_enabled || borrower.key() == vault_config.authority @ ErrorCode::FlashMintDisabled
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+
+    #[account(
+        init,
+        payer = borrower,
+        space = 8 + FlashLoanState::INIT_SPACE,
+        seeds = [b"flash_loan", borrower.key().as_ref(), vault_config.key().as_ref()],
+        bump
+    )]
+    pub flash_loan_state: Account<'info, FlashLoanState>,
+
+    /// CHECK: PDA authority for signing mint
+    #[account(
+        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        bump = vault_config.vault_authority_bump
+    )]
+    pub vault_authority: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        address = vault_config.wrapped_mint
+    )]
+    pub wrapped_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        mut,
+        constraint = borrower_wrapped.mint == vault_config.wrapped_mint,
+        constraint = borrower_wrapped.owner == borrower.key()
+    )]
+    pub borrower_wrapped: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+
+    /// CHECK: Instructions sysvar for transaction introspection
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    pub instruction_sysvar: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct FlashMintEnd<'info> {
+    #[account(mut)]
+    pub borrower: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        bump = vault_config.bump
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+
+    #[account(
+        mut,
+        close = borrower,
+        seeds = [b"flash_loan", borrower.key().as_ref(), vault_config.key().as_ref()],
+        bump = flash_loan_state.bump,
+        constraint = flash_loan_state.borrower == borrower.key() @ ErrorCode::InvalidFlashLoan,
+        constraint = flash_loan_state.vault_config == vault_config.key() @ ErrorCode::InvalidFlashLoan
+    )]
+    pub flash_loan_state: Account<'info, FlashLoanState>,
+
+    /// CHECK: PDA authority for signing burn
+    #[account(
+        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        bump = vault_config.vault_authority_bump
+    )]
+    pub vault_authority: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        address = vault_config.wrapped_mint
+    )]
+    pub wrapped_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        mut,
+        constraint = borrower_wrapped.mint == vault_config.wrapped_mint,
+        constraint = borrower_wrapped.owner == borrower.key()
+    )]
+    pub borrower_wrapped: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = fee_receiver.mint == vault_config.wrapped_mint
+    )]
+    pub fee_receiver: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct SetFlashMintFee<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        bump = vault_config.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+}
+
+#[derive(Accounts)]
+pub struct SetFlashMintEnabled<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        bump = vault_config.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+}
+
+pub fn verify_flash_mint_end_exists(
+    instruction_sysvar: &AccountInfo,
+    borrower: &Pubkey,
+    vault_config: &Pubkey,
+    flash_loan_state: &Pubkey,
+    program_id: &Pubkey,
+) -> Result<()> {
+    let current_index = load_current_index_checked(instruction_sysvar)
+        .map_err(|_| ErrorCode::MissingFlashMintEnd)?;
+
+    let discriminator: [u8; 8] = anchor_sighash("flash_mint_end");
+
+    let mut index = current_index as usize + 1;
+    loop {
+        match load_instruction_at_checked(index, instruction_sysvar) {
+            Ok(ix) => {
+                // Verify: program, discriminator, and all 3 key accounts match
+                // Account order: [0] borrower, [1] vault_config, [2] flash_loan_state
+                if ix.program_id == *program_id
+                    && ix.data.len() >= 8
+                    && ix.data[..8] == discriminator
+                    && ix.accounts.len() >= 3
+                    && ix.accounts[0].pubkey == *borrower
+                    && ix.accounts[1].pubkey == *vault_config
+                    && ix.accounts[2].pubkey == *flash_loan_state
+                {
+                    return Ok(());
+                }
+                index += 1;
+            }
+            Err(_) => break,
+        }
+    }
+
+    Err(ErrorCode::MissingFlashMintEnd.into())
+}
+
+fn anchor_sighash(name: &str) -> [u8; 8] {
+    use sha2::{Digest, Sha256};
+    let preimage = format!("global:{}", name);
+    let mut hasher = Sha256::new();
+    hasher.update(preimage.as_bytes());
+    let result = hasher.finalize();
+    let mut sighash = [0u8; 8];
+    sighash.copy_from_slice(&result[..8]);
+    sighash
+}

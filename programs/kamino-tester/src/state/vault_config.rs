@@ -17,4 +17,6 @@ pub struct VaultConfig {
     pub vault_authority_bump: u8,
     pub total_usdc_deposited: u64,
     pub paused: bool,
+    pub flash_mint_enabled: bool,
+    pub flash_mint_fee_bps: u16,
 }
