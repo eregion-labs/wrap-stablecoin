@@ -1,0 +1,68 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+
+use crate::errors::ErrorCode;
+use crate::state::{TokenConfig, VaultConfig};
+
+#[derive(Accounts)]
+pub struct AddToken<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        bump = vault_config.bump,
+        has_one = authority @ ErrorCode::Unauthorized
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+
+    /// CHECK: PDA authority for signing token operations
+    #[account(
+        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        bump = vault_config.vault_authority_bump
+    )]
+    pub vault_authority: AccountInfo<'info>,
+
+    pub token_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + TokenConfig::INIT_SPACE,
+        seeds = [b"token_config", vault_config.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub token_config: Account<'info, TokenConfig>,
+
+    /// CHECK: KLend reserve for this token
+    pub reserve: AccountInfo<'info>,
+
+    pub collateral_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"token_collateral_vault", token_config.key().as_ref()],
+        bump,
+        token::mint = collateral_mint,
+        token::authority = vault_authority,
+        token::token_program = collateral_token_program,
+    )]
+    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"token_vault", token_config.key().as_ref()],
+        bump,
+        token::mint = token_mint,
+        token::authority = vault_authority,
+        token::token_program = token_program,
+    )]
+    pub token_vault: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub collateral_token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}

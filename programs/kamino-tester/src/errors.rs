@@ -34,4 +34,34 @@ pub enum ErrorCode {
 
     #[msg("Flash mint fee exceeds maximum")]
     InvalidFlashMintFee,
+
+    #[msg("Token is disabled")]
+    TokenDisabled,
+
+    #[msg("Token has existing deposits, cannot remove")]
+    TokenHasDeposits,
+
+    #[msg("Cannot remove base token")]
+    CannotRemoveBaseToken,
+
+    #[msg("Token already registered")]
+    TokenAlreadyRegistered,
+
+    #[msg("Maximum tokens registered")]
+    MaxTokensReached,
+
+    #[msg("Slippage tolerance exceeded")]
+    SlippageExceeded,
+
+    #[msg("Invalid Jupiter route")]
+    InvalidJupiterRoute,
+
+    #[msg("Swap failed")]
+    SwapFailed,
+
+    #[msg("Token not found")]
+    TokenNotFound,
+
+    #[msg("Invalid token account")]
+    InvalidTokenAccount,
 }

@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 pub mod errors;
 pub mod instructions;
+pub mod jupiter;
 pub mod klend;
 pub mod state;
 
@@ -13,9 +14,12 @@ declare_id!("5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT");
 pub mod kamino_tester {
     use super::*;
     use crate::errors::ErrorCode;
+    use crate::jupiter::{execute_swap_with_data, get_token_balance};
     use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};
     use anchor_lang::solana_program::program::invoke_signed;
-    use anchor_spl::token_interface::{burn, mint_to, transfer_checked, Burn, MintTo, TransferChecked};
+    use anchor_spl::token_interface::{
+        burn, close_account, mint_to, transfer_checked, Burn, CloseAccount, MintTo, TransferChecked,
+    };
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
@@ -25,66 +29,207 @@ pub mod kamino_tester {
         vault_config.treasury = ctx.accounts.treasury.key();
         vault_config.wrapped_mint = ctx.accounts.wrapped_mint.key();
         vault_config.wrapped_mint_bump = ctx.bumps.wrapped_mint;
-        vault_config.usdc_mint = ctx.accounts.usdc_mint.key();
-        vault_config.lending_market = ctx.accounts.lending_market.key();
-        vault_config.reserve = ctx.accounts.reserve.key();
-        vault_config.collateral_mint = ctx.accounts.collateral_mint.key();
-        vault_config.collateral_vault = ctx.accounts.collateral_vault.key();
-        vault_config.collateral_vault_bump = ctx.bumps.collateral_vault;
         vault_config.vault_authority_bump = ctx.bumps.vault_authority;
-        vault_config.total_usdc_deposited = 0;
+        vault_config.lending_market = ctx.accounts.lending_market.key();
+        vault_config.base_mint = ctx.accounts.base_mint.key();
+        vault_config.total_stable_deposited = 0;
+        vault_config.registered_tokens = 0;
         vault_config.paused = false;
         vault_config.flash_mint_enabled = false;
         vault_config.flash_mint_fee_bps = 0;
 
         msg!(
-            "Vault initialized for USDC mint: {}",
-            vault_config.usdc_mint
+            "Vault initialized with base mint: {}",
+            vault_config.base_mint
         );
         Ok(())
     }
 
-    pub fn wrap(ctx: Context<Wrap>, args: WrapArgs) -> Result<()> {
-        require!(args.amount > 0, ErrorCode::InvalidAmount);
-
+    pub fn add_token(ctx: Context<AddToken>, is_base_token: bool) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
-        let vault_config_key = vault_config.key();
+        let token_config = &mut ctx.accounts.token_config;
+
+        token_config.bump = ctx.bumps.token_config;
+        token_config.vault_config = vault_config.key();
+        token_config.token_mint = ctx.accounts.token_mint.key();
+        token_config.token_decimals = ctx.accounts.token_mint.decimals;
+        token_config.reserve = ctx.accounts.reserve.key();
+        token_config.collateral_mint = ctx.accounts.collateral_mint.key();
+        token_config.collateral_vault = ctx.accounts.collateral_vault.key();
+        token_config.collateral_vault_bump = ctx.bumps.collateral_vault;
+        token_config.token_vault = ctx.accounts.token_vault.key();
+        token_config.token_vault_bump = ctx.bumps.token_vault;
+        token_config.total_deposited = 0;
+        token_config.is_base_token = is_base_token;
+        token_config.enabled = true;
+
+        vault_config.registered_tokens = vault_config
+            .registered_tokens
+            .checked_add(1)
+            .ok_or(ErrorCode::MaxTokensReached)?;
+
+        msg!(
+            "Token {} added to vault (is_base: {})",
+            ctx.accounts.token_mint.key(),
+            is_base_token
+        );
+        Ok(())
+    }
+
+    pub fn remove_token(ctx: Context<RemoveToken>) -> Result<()> {
+        let token_mint = ctx.accounts.token_config.token_mint;
+        let vault_config_key = ctx.accounts.vault_config.key();
 
         let authority_seeds: &[&[u8]] = &[
             b"vault_authority",
             vault_config_key.as_ref(),
-            &[vault_config.vault_authority_bump],
+            &[ctx.accounts.vault_config.vault_authority_bump],
         ];
 
+        // Close collateral vault
+        close_account(CpiContext::new_with_signer(
+            ctx.accounts.collateral_token_program.to_account_info(),
+            CloseAccount {
+                account: ctx.accounts.collateral_vault.to_account_info(),
+                destination: ctx.accounts.authority.to_account_info(),
+                authority: ctx.accounts.vault_authority.to_account_info(),
+            },
+            &[authority_seeds],
+        ))?;
+
+        // Close token vault
+        close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            CloseAccount {
+                account: ctx.accounts.token_vault.to_account_info(),
+                destination: ctx.accounts.authority.to_account_info(),
+                authority: ctx.accounts.vault_authority.to_account_info(),
+            },
+            &[authority_seeds],
+        ))?;
+
+        ctx.accounts.vault_config.registered_tokens = ctx
+            .accounts
+            .vault_config
+            .registered_tokens
+            .checked_sub(1)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        msg!("Token {} removed from vault", token_mint);
+        Ok(())
+    }
+
+    pub fn wrap<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Wrap<'info>>,
+        args: WrapArgs,
+    ) -> Result<()> {
+        require!(args.amount > 0, ErrorCode::InvalidAmount);
+
+        // Validate user token accounts
+        ctx.accounts.validate_user_accounts()?;
+
+        // Validate swap accounts if needed
+        ctx.accounts
+            .validate_swap_accounts(ctx.remaining_accounts)?;
+
+        let vault_config = &mut ctx.accounts.vault_config;
+        let token_config = &mut ctx.accounts.token_config;
+        let vault_config_key = vault_config.key();
+        let vault_authority_bump = vault_config.vault_authority_bump;
+        let token_decimals = token_config.token_decimals;
+        let is_base_token = token_config.is_base_token;
+
+        let authority_seeds: &[&[u8]] = &[
+            b"vault_authority",
+            vault_config_key.as_ref(),
+            &[vault_authority_bump],
+        ];
+
+        // Transfer input token from user to token_vault
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.user_token.to_account_info(),
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.token_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            args.amount,
+            token_decimals,
+        )?;
+
+        // Determine deposit amount and source vault for KLend
+        let (deposit_amount, liquidity_source) = if is_base_token {
+            // Direct deposit to KLend - no swap needed
+            (args.amount, ctx.accounts.token_vault.to_account_info())
+        } else {
+            // Swap non-base token to base token via Jupiter
+            // remaining_accounts: [base_token_config, base_token_vault, jupiter_program, ...jupiter_route_accounts]
+            let swap_data = args.swap_data.ok_or(ErrorCode::InvalidJupiterRoute)?;
+            require!(ctx.remaining_accounts.len() >= 3, ErrorCode::TokenNotFound);
+
+            let base_token_vault = &ctx.remaining_accounts[1];
+            let jupiter_program = &ctx.remaining_accounts[2];
+            let jupiter_accounts = &ctx.remaining_accounts[3..];
+
+            // Get balance before swap
+            let balance_before = get_token_balance(base_token_vault)?;
+
+            // Execute Jupiter swap: token_vault -> base_token_vault
+            execute_swap_with_data(
+                jupiter_program,
+                jupiter_accounts,
+                authority_seeds,
+                swap_data,
+            )?;
+
+            // Get balance after swap
+            let balance_after = get_token_balance(base_token_vault)?;
+            let swap_output = balance_after
+                .checked_sub(balance_before)
+                .ok_or(ErrorCode::SwapFailed)?;
+
+            // Verify slippage
+            require!(
+                swap_output >= args.min_out_amount,
+                ErrorCode::SlippageExceeded
+            );
+
+            (swap_output, base_token_vault.to_account_info())
+        };
+
+        // Deposit to KLend
         let ix = deposit_reserve_liquidity_ix(
             ctx.accounts.klend_program.key(),
             ctx.accounts.vault_authority.key(),
-            ctx.accounts.reserve.key(),
+            ctx.accounts.base_reserve.key(),
             ctx.accounts.lending_market.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.usdc_mint,
+            vault_config.base_mint,
             ctx.accounts.reserve_liquidity_supply.key(),
             ctx.accounts.reserve_collateral_mint.key(),
-            ctx.accounts.user_usdc.key(),
-            ctx.accounts.collateral_vault.key(),
+            liquidity_source.key(),
+            ctx.accounts.base_collateral_vault.key(),
             ctx.accounts.collateral_token_program.key(),
             ctx.accounts.token_program.key(),
             ctx.accounts.instruction_sysvar.key(),
-            args.amount,
+            deposit_amount,
         );
 
         invoke_signed(
             &ix,
             &[
                 ctx.accounts.vault_authority.to_account_info(),
-                ctx.accounts.reserve.to_account_info(),
+                ctx.accounts.base_reserve.to_account_info(),
                 ctx.accounts.lending_market.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.usdc_mint.to_account_info(),
+                ctx.accounts.base_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
-                ctx.accounts.user_usdc.to_account_info(),
-                ctx.accounts.collateral_vault.to_account_info(),
+                liquidity_source,
+                ctx.accounts.base_collateral_vault.to_account_info(),
                 ctx.accounts.collateral_token_program.to_account_info(),
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.instruction_sysvar.to_account_info(),
@@ -92,6 +237,7 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
+        // Mint wStable to user (1:1 with USDC deposited)
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -102,34 +248,61 @@ pub mod kamino_tester {
                 },
                 &[authority_seeds],
             ),
-            args.amount,
+            deposit_amount,
         )?;
 
-        vault_config.total_usdc_deposited = vault_config
-            .total_usdc_deposited
-            .checked_add(args.amount)
+        // Update totals - track original input token amount for proportional unwrap
+        token_config.total_deposited = token_config
+            .total_deposited
+            .checked_add(deposit_amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        vault_config.total_stable_deposited = vault_config
+            .total_stable_deposited
+            .checked_add(deposit_amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
-            "Wrapped {} USDC for user {}",
+            "Wrapped {} tokens (deposited {} USDC) for user {}",
             args.amount,
+            deposit_amount,
             ctx.accounts.user.key()
         );
         Ok(())
     }
 
-    pub fn unwrap(ctx: Context<Unwrap>, args: UnwrapArgs) -> Result<()> {
+    pub fn unwrap<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Unwrap<'info>>,
+        args: UnwrapArgs,
+    ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
+        // Validate user token accounts
+        ctx.accounts.validate_user_accounts()?;
+
+        ctx.accounts.validate_jupiter(ctx.remaining_accounts)?;
+
+        // Validate base_token_config and extract fields
+        let (
+            _is_base_token,
+            _token_vault,
+            _collateral_vault,
+            _reserve,
+            _collateral_mint,
+            _total_deposited,
+        ) = ctx.accounts.validate_and_get_base_config()?;
+
         let vault_config = &mut ctx.accounts.vault_config;
         let vault_config_key = vault_config.key();
+        let vault_authority_bump = vault_config.vault_authority_bump;
 
         require!(
-            vault_config.total_usdc_deposited >= args.amount,
+            vault_config.total_stable_deposited >= args.amount,
             ErrorCode::InsufficientBalance
         );
 
+        // Burn wStable from user
         burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -145,20 +318,25 @@ pub mod kamino_tester {
         let authority_seeds: &[&[u8]] = &[
             b"vault_authority",
             vault_config_key.as_ref(),
-            &[vault_config.vault_authority_bump],
+            &[vault_authority_bump],
         ];
 
+        // Get base token vault balance before redemption
+        let base_vault_before =
+            get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+
+        // Redeem base token collateral from KLend
         let ix = redeem_reserve_collateral_ix(
             ctx.accounts.klend_program.key(),
             ctx.accounts.vault_authority.key(),
             ctx.accounts.lending_market.key(),
-            ctx.accounts.reserve.key(),
+            ctx.accounts.base_reserve.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.usdc_mint,
+            vault_config.base_mint,
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.reserve_liquidity_supply.key(),
-            ctx.accounts.collateral_vault.key(),
-            ctx.accounts.user_usdc.key(),
+            ctx.accounts.base_collateral_vault.key(),
+            ctx.accounts.base_token_vault.key(),
             ctx.accounts.collateral_token_program.key(),
             ctx.accounts.token_program.key(),
             ctx.accounts.instruction_sysvar.key(),
@@ -170,13 +348,13 @@ pub mod kamino_tester {
             &[
                 ctx.accounts.vault_authority.to_account_info(),
                 ctx.accounts.lending_market.to_account_info(),
-                ctx.accounts.reserve.to_account_info(),
+                ctx.accounts.base_reserve.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.usdc_mint.to_account_info(),
+                ctx.accounts.base_mint.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
-                ctx.accounts.collateral_vault.to_account_info(),
-                ctx.accounts.user_usdc.to_account_info(),
+                ctx.accounts.base_collateral_vault.to_account_info(),
+                ctx.accounts.base_token_vault.to_account_info(),
                 ctx.accounts.collateral_token_program.to_account_info(),
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.instruction_sysvar.to_account_info(),
@@ -184,15 +362,80 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        vault_config.total_usdc_deposited = vault_config
-            .total_usdc_deposited
+        // If there's swap data, execute Jupiter swap for additional tokens
+        // The swap should route non-base tokens to base_token_vault
+        // remaining_accounts: [jupiter_program, ...jupiter_route_accounts]
+        if let Some(swap_data) = args.swap_data {
+            require!(
+                !ctx.remaining_accounts.is_empty(),
+                ErrorCode::InvalidJupiterRoute
+            );
+
+            let jupiter_program = &ctx.remaining_accounts[0];
+            let jupiter_accounts = &ctx.remaining_accounts[1..];
+
+            execute_swap_with_data(
+                jupiter_program,
+                jupiter_accounts,
+                authority_seeds,
+                swap_data,
+            )?;
+        }
+
+        // Get base token vault balance after redemption (and potential swap)
+        let base_vault_after = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+        let total_redeemed = base_vault_after
+            .checked_sub(base_vault_before)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        // Verify slippage
+        require!(
+            total_redeemed >= args.min_out_amount,
+            ErrorCode::SlippageExceeded
+        );
+
+        // Transfer redeemed USDC to user
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.base_token_vault.to_account_info(),
+                    mint: ctx.accounts.base_mint.to_account_info(),
+                    to: ctx.accounts.user_base_token.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            total_redeemed,
+            6, // USDC decimals
+        )?;
+
+        // Update totals - update base_token_config.total_deposited directly
+        {
+            let mut config_data = ctx.accounts.base_token_config.try_borrow_mut_data()?;
+            let total_deposited_offset = 8 + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1 + 32 + 1;
+            let current_deposited = u64::from_le_bytes(
+                config_data[total_deposited_offset..total_deposited_offset + 8]
+                    .try_into()
+                    .map_err(|_| ErrorCode::MathOverflow)?,
+            );
+            let new_deposited = current_deposited
+                .checked_sub(args.amount)
+                .ok_or(ErrorCode::MathOverflow)?;
+            config_data[total_deposited_offset..total_deposited_offset + 8]
+                .copy_from_slice(&new_deposited.to_le_bytes());
+        }
+
+        vault_config.total_stable_deposited = vault_config
+            .total_stable_deposited
             .checked_sub(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
-            "Unwrapped {} wStable for user {}",
+            "Unwrapped {} wStable for user {}, received {} USDC",
             args.amount,
-            ctx.accounts.user.key()
+            ctx.accounts.user.key(),
+            total_redeemed
         );
         Ok(())
     }
@@ -201,6 +444,7 @@ pub mod kamino_tester {
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
+        let token_config = &ctx.accounts.token_config;
         let vault_config_key = vault_config.key();
 
         let authority_seeds: &[&[u8]] = &[
@@ -215,7 +459,7 @@ pub mod kamino_tester {
             ctx.accounts.lending_market.key(),
             ctx.accounts.reserve.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.usdc_mint,
+            token_config.token_mint,
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.reserve_liquidity_supply.key(),
             ctx.accounts.collateral_vault.key(),
@@ -233,7 +477,7 @@ pub mod kamino_tester {
                 ctx.accounts.lending_market.to_account_info(),
                 ctx.accounts.reserve.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.usdc_mint.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
                 ctx.accounts.collateral_vault.to_account_info(),
@@ -246,8 +490,9 @@ pub mod kamino_tester {
         )?;
 
         msg!(
-            "Harvested yield: {} collateral tokens redeemed to treasury",
-            args.collateral_amount
+            "Harvested yield: {} collateral tokens from {} redeemed to treasury",
+            args.collateral_amount,
+            token_config.token_mint
         );
         Ok(())
     }

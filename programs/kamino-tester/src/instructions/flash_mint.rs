@@ -20,7 +20,7 @@ pub struct FlashMintStart<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused,
         constraint = vault_config.flash_mint_enabled || borrower.key() == vault_config.authority @ ErrorCode::FlashMintDisabled
@@ -43,10 +43,7 @@ pub struct FlashMintStart<'info> {
     )]
     pub vault_authority: AccountInfo<'info>,
 
-    #[account(
-        mut,
-        address = vault_config.wrapped_mint
-    )]
+    #[account(mut, address = vault_config.wrapped_mint)]
     pub wrapped_mint: InterfaceAccount<'info, Mint>,
 
     #[account(
@@ -71,7 +68,7 @@ pub struct FlashMintEnd<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump
     )]
     pub vault_config: Account<'info, VaultConfig>,
@@ -93,10 +90,7 @@ pub struct FlashMintEnd<'info> {
     )]
     pub vault_authority: AccountInfo<'info>,
 
-    #[account(
-        mut,
-        address = vault_config.wrapped_mint
-    )]
+    #[account(mut, address = vault_config.wrapped_mint)]
     pub wrapped_mint: InterfaceAccount<'info, Mint>,
 
     #[account(
@@ -122,7 +116,7 @@ pub struct SetFlashMintFee<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
@@ -136,7 +130,7 @@ pub struct SetFlashMintEnabled<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
@@ -159,8 +153,6 @@ pub fn verify_flash_mint_end_exists(
     loop {
         match load_instruction_at_checked(index, instruction_sysvar) {
             Ok(ix) => {
-                // Verify: program, discriminator, and all 3 key accounts match
-                // Account order: [0] borrower, [1] vault_config, [2] flash_loan_state
                 if ix.program_id == *program_id
                     && ix.data.len() >= 8
                     && ix.data[..8] == discriminator

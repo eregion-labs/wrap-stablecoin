@@ -1,3 +1,4 @@
+use anchor_client::solana_client::rpc_client::RpcClient;
 use anchor_client::{
     solana_sdk::{
         bpf_loader_upgradeable,
@@ -13,7 +14,6 @@ use anchor_client::{
 use anchor_lang::prelude::AnchorSerialize;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use anchor_client::solana_client::rpc_client::RpcClient;
 use std::str::FromStr;
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
@@ -97,15 +97,15 @@ fn create_mint_ix(
     rent_lamports: u64,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::create_account(
-            payer,
-            mint,
-            rent_lamports,
-            MINT_SIZE,
+        system_instruction::create_account(payer, mint, rent_lamports, MINT_SIZE, &spl_token::id()),
+        spl_token::instruction::initialize_mint2(
             &spl_token::id(),
-        ),
-        spl_token::instruction::initialize_mint2(&spl_token::id(), mint, mint_authority, None, decimals)
-            .unwrap(),
+            mint,
+            mint_authority,
+            None,
+            decimals,
+        )
+        .unwrap(),
     ]
 }
 
@@ -124,12 +124,14 @@ fn create_token_account_ix(
             TOKEN_ACCOUNT_SIZE,
             &spl_token::id(),
         ),
-        spl_token::instruction::initialize_account3(&spl_token::id(), account, mint, owner).unwrap(),
+        spl_token::instruction::initialize_account3(&spl_token::id(), account, mint, owner)
+            .unwrap(),
     ]
 }
 
 fn mint_to_ix(mint: &Pubkey, destination: &Pubkey, authority: &Pubkey, amount: u64) -> Instruction {
-    spl_token::instruction::mint_to(&spl_token::id(), mint, destination, authority, &[], amount).unwrap()
+    spl_token::instruction::mint_to(&spl_token::id(), mint, destination, authority, &[], amount)
+        .unwrap()
 }
 
 fn get_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
@@ -162,7 +164,11 @@ fn init_lending_market_ix(
     lending_market_authority: &Pubkey,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "init_lending_market").to_vec();
-    data.extend(InitLendingMarketArgs { quote_currency }.try_to_vec().unwrap());
+    data.extend(
+        InitLendingMarketArgs { quote_currency }
+            .try_to_vec()
+            .unwrap(),
+    );
 
     Instruction {
         program_id,
@@ -369,7 +375,7 @@ fn init_global_config_ix(
 // The actual serialization size may differ from the repr size
 #[derive(AnchorSerialize)]
 struct UpdateReserveConfigArgs {
-    mode: u8,  // Anchor serializes enum variants as indices
+    mode: u8, // Anchor serializes enum variants as indices
     value: Vec<u8>,
     skip_validation: bool,
 }
@@ -388,7 +394,7 @@ fn update_reserve_config_ix(
         UpdateReserveConfigArgs {
             mode,
             value,
-            skip_validation: true,  // Skip oracle validation for test environment
+            skip_validation: true, // Skip oracle validation for test environment
         }
         .try_to_vec()
         .unwrap(),
@@ -425,7 +431,11 @@ fn klend_deposit_reserve_liquidity_ix(
     liquidity_amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "deposit_reserve_liquidity").to_vec();
-    data.extend(DepositReserveLiquidityArgs { liquidity_amount }.try_to_vec().unwrap());
+    data.extend(
+        DepositReserveLiquidityArgs { liquidity_amount }
+            .try_to_vec()
+            .unwrap(),
+    );
 
     // Account order from KLend source:
     // 1. owner
@@ -531,7 +541,7 @@ fn wrapped_wrap_ix(
         accounts: vec![
             AccountMeta::new(*user, true),
             AccountMeta::new(*vault_config, false),
-            AccountMeta::new(*vault_authority, false),  // needs mut for CPI to KLend
+            AccountMeta::new(*vault_authority, false), // needs mut for CPI to KLend
             AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*user_usdc, false),
             AccountMeta::new(*user_wrapped, false),
@@ -582,14 +592,21 @@ fn wrapped_unwrap_ix(
     collateral_amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
-    data.extend(UnwrapArgs { amount, collateral_amount }.try_to_vec().unwrap());
+    data.extend(
+        UnwrapArgs {
+            amount,
+            collateral_amount,
+        }
+        .try_to_vec()
+        .unwrap(),
+    );
 
     Instruction {
         program_id,
         accounts: vec![
             AccountMeta::new(*user, true),
             AccountMeta::new(*vault_config, false),
-            AccountMeta::new(*vault_authority, false),  // needs mut for CPI to KLend
+            AccountMeta::new(*vault_authority, false), // needs mut for CPI to KLend
             AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*user_wrapped, false),
             AccountMeta::new(*user_usdc, false),
@@ -774,7 +791,10 @@ fn test_full_integration() -> Result<()> {
     eprintln!("✓ KLend program verified");
 
     let wrapped_account = ctx.rpc.get_account(&ctx.wrapped_program_id)?;
-    assert!(wrapped_account.executable, "Wrapped token program not loaded");
+    assert!(
+        wrapped_account.executable,
+        "Wrapped token program not loaded"
+    );
     eprintln!("✓ Wrapped token program verified");
 
     // ========================================
@@ -783,8 +803,16 @@ fn test_full_integration() -> Result<()> {
     eprintln!("\n[1/7] Creating USDC mint...");
 
     let usdc_mint = Keypair::new();
-    let rent = ctx.rpc.get_minimum_balance_for_rent_exemption(MINT_SIZE as usize)?;
-    let ixs = create_mint_ix(&ctx.payer.pubkey(), &usdc_mint.pubkey(), &ctx.payer.pubkey(), 6, rent);
+    let rent = ctx
+        .rpc
+        .get_minimum_balance_for_rent_exemption(MINT_SIZE as usize)?;
+    let ixs = create_mint_ix(
+        &ctx.payer.pubkey(),
+        &usdc_mint.pubkey(),
+        &ctx.payer.pubkey(),
+        6,
+        rent,
+    );
     ctx.send_tx(&ixs, &[&ctx.payer, &usdc_mint])?;
     eprintln!("✓ USDC mint: {}", usdc_mint.pubkey());
 
@@ -802,7 +830,9 @@ fn test_full_integration() -> Result<()> {
     let mut quote_currency = [0u8; 32];
     quote_currency[..3].copy_from_slice(b"USD");
 
-    let rent = ctx.rpc.get_minimum_balance_for_rent_exemption(LENDING_MARKET_SPACE)?;
+    let rent = ctx
+        .rpc
+        .get_minimum_balance_for_rent_exemption(LENDING_MARKET_SPACE)?;
     let create_market_ix = system_instruction::create_account(
         &ctx.payer.pubkey(),
         &lending_market.pubkey(),
@@ -817,7 +847,10 @@ fn test_full_integration() -> Result<()> {
         &lending_market.pubkey(),
         &lending_market_authority,
     );
-    ctx.send_tx(&[create_market_ix, init_market_ix], &[&ctx.payer, &lending_market])?;
+    ctx.send_tx(
+        &[create_market_ix, init_market_ix],
+        &[&ctx.payer, &lending_market],
+    )?;
     eprintln!("✓ Lending market: {}", lending_market.pubkey());
     eprintln!("✓ Lending market authority: {}", lending_market_authority);
 
@@ -828,11 +861,20 @@ fn test_full_integration() -> Result<()> {
 
     // Create user USDC account and mint initial liquidity
     let user_usdc = get_ata(&ctx.payer.pubkey(), &usdc_mint.pubkey());
-    let create_user_usdc_ix = create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &usdc_mint.pubkey());
+    let create_user_usdc_ix = create_ata_ix(
+        &ctx.payer.pubkey(),
+        &ctx.payer.pubkey(),
+        &usdc_mint.pubkey(),
+    );
     ctx.send_tx(&[create_user_usdc_ix], &[&ctx.payer])?;
 
     let initial_mint_amount = 1_000_000_000u64; // 1000 USDC
-    let mint_ix = mint_to_ix(&usdc_mint.pubkey(), &user_usdc, &ctx.payer.pubkey(), initial_mint_amount);
+    let mint_ix = mint_to_ix(
+        &usdc_mint.pubkey(),
+        &user_usdc,
+        &ctx.payer.pubkey(),
+        initial_mint_amount,
+    );
     ctx.send_tx(&[mint_ix], &[&ctx.payer])?;
     eprintln!("✓ Minted {} USDC to user", initial_mint_amount / 1_000_000);
 
@@ -863,7 +905,9 @@ fn test_full_integration() -> Result<()> {
     );
 
     // Create reserve account (zero-initialized, the instruction will populate it)
-    let rent = ctx.rpc.get_minimum_balance_for_rent_exemption(RESERVE_SPACE)?;
+    let rent = ctx
+        .rpc
+        .get_minimum_balance_for_rent_exemption(RESERVE_SPACE)?;
     let create_reserve_ix = system_instruction::create_account(
         &ctx.payer.pubkey(),
         &reserve.pubkey(),
@@ -891,7 +935,10 @@ fn test_full_integration() -> Result<()> {
     match ctx.send_tx(&[init_reserve_ix], &[&ctx.payer]) {
         Ok(_) => eprintln!("✓ Reserve initialized: {}", reserve.pubkey()),
         Err(e) => {
-            eprintln!("⚠ Reserve init failed (expected - KLend has complex requirements): {}", e);
+            eprintln!(
+                "⚠ Reserve init failed (expected - KLend has complex requirements): {}",
+                e
+            );
             eprintln!("\nNote: KLend reserve initialization requires specific oracle setup.");
             eprintln!("For a complete test, you would need to:");
             eprintln!("  1. Set up Pyth/Switchboard oracles");
@@ -910,10 +957,8 @@ fn test_full_integration() -> Result<()> {
     eprintln!("\n[5/8] Initializing global config...");
 
     // Derive global_config PDA
-    let (global_config, _) = Pubkey::find_program_address(
-        &[GLOBAL_CONFIG_SEED],
-        &ctx.klend_program_id,
-    );
+    let (global_config, _) =
+        Pubkey::find_program_address(&[GLOBAL_CONFIG_SEED], &ctx.klend_program_id);
 
     // Derive program_data PDA for upgradeable program
     let (program_data, _) = Pubkey::find_program_address(
@@ -954,10 +999,14 @@ fn test_full_integration() -> Result<()> {
             let err_str = e.to_string();
             // Check if update_reserve_config instruction was correctly invoked
             if err_str.contains("UpdateReserveConfig") && err_str.contains("UpdateDepositLimit") {
-                eprintln!("✓ update_reserve_config CPI verified (KLend validation failed as expected)");
+                eprintln!(
+                    "✓ update_reserve_config CPI verified (KLend validation failed as expected)"
+                );
                 eprintln!("  Note: KLend requires specific reserve state for config updates.");
             } else if err_str.contains("Unauthorized") || err_str.contains("ConstraintHasOne") {
-                eprintln!("⚠ Not authorized to update reserve (expected - need lending market owner)");
+                eprintln!(
+                    "⚠ Not authorized to update reserve (expected - need lending market owner)"
+                );
             } else {
                 eprintln!("⚠ Reserve config update failed (expected without oracle setup)");
             }
@@ -1016,7 +1065,8 @@ fn test_full_integration() -> Result<()> {
 
     // Create user wStable account
     let user_wrapped = get_ata(&ctx.payer.pubkey(), &wrapped_mint);
-    let create_user_wrapped_ix = create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &wrapped_mint);
+    let create_user_wrapped_ix =
+        create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &wrapped_mint);
     ctx.send_tx(&[create_user_wrapped_ix], &[&ctx.payer])?;
 
     let wrap_amount = 100_000_000u64; // 100 USDC
@@ -1097,7 +1147,10 @@ fn test_full_integration() -> Result<()> {
         collateral_amount,
     );
     ctx.send_tx(&[unwrap_ix], &[&ctx.payer])?;
-    eprintln!("✓ Unwrapped {} wStable back to USDC", unwrap_amount / 1_000_000);
+    eprintln!(
+        "✓ Unwrapped {} wStable back to USDC",
+        unwrap_amount / 1_000_000
+    );
 
     // ========================================
     // Step 8: Test harvest_yield
@@ -1125,7 +1178,10 @@ fn test_full_integration() -> Result<()> {
         harvest_collateral_amount,
     );
     match ctx.send_tx(&[harvest_ix], &[&ctx.payer]) {
-        Ok(_) => eprintln!("✓ Harvested {} collateral tokens as yield to treasury", harvest_collateral_amount / 1_000_000),
+        Ok(_) => eprintln!(
+            "✓ Harvested {} collateral tokens as yield to treasury",
+            harvest_collateral_amount / 1_000_000
+        ),
         Err(e) => {
             // May fail if there's insufficient collateral after unwrap
             if e.to_string().contains("insufficient") || e.to_string().contains("Insufficient") {
@@ -1163,8 +1219,16 @@ fn test_flash_mint() -> Result<()> {
 
     // Create USDC mint
     let usdc_mint = Keypair::new();
-    let rent = ctx.rpc.get_minimum_balance_for_rent_exemption(MINT_SIZE as usize)?;
-    let ixs = create_mint_ix(&ctx.payer.pubkey(), &usdc_mint.pubkey(), &ctx.payer.pubkey(), 6, rent);
+    let rent = ctx
+        .rpc
+        .get_minimum_balance_for_rent_exemption(MINT_SIZE as usize)?;
+    let ixs = create_mint_ix(
+        &ctx.payer.pubkey(),
+        &usdc_mint.pubkey(),
+        &ctx.payer.pubkey(),
+        6,
+        rent,
+    );
     ctx.send_tx(&ixs, &[&ctx.payer, &usdc_mint])?;
     eprintln!("✓ USDC mint created");
 
@@ -1176,7 +1240,9 @@ fn test_flash_mint() -> Result<()> {
     );
     let mut quote_currency = [0u8; 32];
     quote_currency[..3].copy_from_slice(b"USD");
-    let rent = ctx.rpc.get_minimum_balance_for_rent_exemption(LENDING_MARKET_SPACE)?;
+    let rent = ctx
+        .rpc
+        .get_minimum_balance_for_rent_exemption(LENDING_MARKET_SPACE)?;
     let create_market_ix = system_instruction::create_account(
         &ctx.payer.pubkey(),
         &lending_market.pubkey(),
@@ -1191,7 +1257,10 @@ fn test_flash_mint() -> Result<()> {
         &lending_market.pubkey(),
         &lending_market_authority,
     );
-    ctx.send_tx(&[create_market_ix, init_market_ix], &[&ctx.payer, &lending_market])?;
+    ctx.send_tx(
+        &[create_market_ix, init_market_ix],
+        &[&ctx.payer, &lending_market],
+    )?;
     eprintln!("✓ Lending market created");
 
     // Create reserve
@@ -1215,13 +1284,24 @@ fn test_flash_mint() -> Result<()> {
 
     // Create user USDC account
     let user_usdc = get_ata(&ctx.payer.pubkey(), &usdc_mint.pubkey());
-    let create_user_usdc_ix = create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &usdc_mint.pubkey());
+    let create_user_usdc_ix = create_ata_ix(
+        &ctx.payer.pubkey(),
+        &ctx.payer.pubkey(),
+        &usdc_mint.pubkey(),
+    );
     ctx.send_tx(&[create_user_usdc_ix], &[&ctx.payer])?;
-    let mint_ix = mint_to_ix(&usdc_mint.pubkey(), &user_usdc, &ctx.payer.pubkey(), 1_000_000_000);
+    let mint_ix = mint_to_ix(
+        &usdc_mint.pubkey(),
+        &user_usdc,
+        &ctx.payer.pubkey(),
+        1_000_000_000,
+    );
     ctx.send_tx(&[mint_ix], &[&ctx.payer])?;
 
     // Create reserve account
-    let rent = ctx.rpc.get_minimum_balance_for_rent_exemption(RESERVE_SPACE)?;
+    let rent = ctx
+        .rpc
+        .get_minimum_balance_for_rent_exemption(RESERVE_SPACE)?;
     let create_reserve_ix = system_instruction::create_account(
         &ctx.payer.pubkey(),
         &reserve.pubkey(),
@@ -1286,7 +1366,8 @@ fn test_flash_mint() -> Result<()> {
 
     // Create user wStable account
     let user_wrapped = get_ata(&ctx.payer.pubkey(), &wrapped_mint);
-    let create_user_wrapped_ix = create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &wrapped_mint);
+    let create_user_wrapped_ix =
+        create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &wrapped_mint);
     ctx.send_tx(&[create_user_wrapped_ix], &[&ctx.payer])?;
 
     // Mint some wStable to user for testing (via wrap if possible, or direct mint)
@@ -1296,7 +1377,11 @@ fn test_flash_mint() -> Result<()> {
 
     // Derive flash loan state PDA
     let (flash_loan_state, _) = Pubkey::find_program_address(
-        &[b"flash_loan", ctx.payer.pubkey().as_ref(), vault_config.as_ref()],
+        &[
+            b"flash_loan",
+            ctx.payer.pubkey().as_ref(),
+            vault_config.as_ref(),
+        ],
         &ctx.wrapped_program_id,
     );
 
@@ -1326,17 +1411,23 @@ fn test_flash_mint() -> Result<()> {
     // Create a non-admin user
     let non_admin = Keypair::new();
     // Fund the non-admin
-    let fund_ix = system_instruction::transfer(&ctx.payer.pubkey(), &non_admin.pubkey(), 100_000_000);
+    let fund_ix =
+        system_instruction::transfer(&ctx.payer.pubkey(), &non_admin.pubkey(), 100_000_000);
     ctx.send_tx(&[fund_ix], &[&ctx.payer])?;
 
     // Create non-admin's wStable account
     let non_admin_wrapped = get_ata(&non_admin.pubkey(), &wrapped_mint);
-    let create_non_admin_wrapped_ix = create_ata_ix(&ctx.payer.pubkey(), &non_admin.pubkey(), &wrapped_mint);
+    let create_non_admin_wrapped_ix =
+        create_ata_ix(&ctx.payer.pubkey(), &non_admin.pubkey(), &wrapped_mint);
     ctx.send_tx(&[create_non_admin_wrapped_ix], &[&ctx.payer])?;
 
     // Derive flash loan state for non-admin
     let (non_admin_flash_loan_state, _) = Pubkey::find_program_address(
-        &[b"flash_loan", non_admin.pubkey().as_ref(), vault_config.as_ref()],
+        &[
+            b"flash_loan",
+            non_admin.pubkey().as_ref(),
+            vault_config.as_ref(),
+        ],
         &ctx.wrapped_program_id,
     );
 
@@ -1362,7 +1453,10 @@ fn test_flash_mint() -> Result<()> {
         &fee_receiver_wrapped,
     );
 
-    let result = ctx.send_tx(&[flash_start_ix.clone(), flash_end_ix.clone()], &[&ctx.payer, &non_admin]);
+    let result = ctx.send_tx(
+        &[flash_start_ix.clone(), flash_end_ix.clone()],
+        &[&ctx.payer, &non_admin],
+    );
     match result {
         Err(e) => {
             let err_str = e.to_string();
@@ -1409,7 +1503,9 @@ fn test_flash_mint() -> Result<()> {
             let err_str = e.to_string();
             // May fail due to insufficient tokens (need tokens to pay fee)
             if err_str.contains("insufficient") || err_str.contains("InsufficientRepayment") {
-                eprintln!("✓ Flash mint executed (failed at repayment - expected without initial tokens)");
+                eprintln!(
+                    "✓ Flash mint executed (failed at repayment - expected without initial tokens)"
+                );
             } else {
                 eprintln!("⚠ Admin flash mint failed: {}", err_str);
             }
@@ -1495,7 +1591,9 @@ fn test_flash_mint() -> Result<()> {
         Err(e) => {
             let err_str = e.to_string();
             if err_str.contains("insufficient") || err_str.contains("InsufficientRepayment") {
-                eprintln!("✓ Flash mint flow correct (insufficient balance for repayment as expected)");
+                eprintln!(
+                    "✓ Flash mint flow correct (insufficient balance for repayment as expected)"
+                );
             } else {
                 eprintln!("⚠ Flash mint flow error: {}", err_str);
             }
@@ -1541,7 +1639,10 @@ fn test_flash_mint() -> Result<()> {
     );
 
     // Transaction: start -> start -> end (trying to mint 2x but repay 1x)
-    let result = ctx.send_tx(&[flash_start_ix_1, flash_start_ix_2, flash_end_ix], &[&ctx.payer]);
+    let result = ctx.send_tx(
+        &[flash_start_ix_1, flash_start_ix_2, flash_end_ix],
+        &[&ctx.payer],
+    );
     match result {
         Err(e) => {
             let err_str = e.to_string();

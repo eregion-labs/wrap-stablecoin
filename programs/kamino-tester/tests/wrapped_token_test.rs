@@ -1,3 +1,4 @@
+use anchor_client::solana_client::rpc_client::RpcClient;
 use anchor_client::{
     solana_sdk::{
         commitment_config::CommitmentConfig,
@@ -12,7 +13,6 @@ use anchor_client::{
 use anchor_lang::prelude::AnchorSerialize;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use anchor_client::solana_client::rpc_client::RpcClient;
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
 const WRAPPED_TOKEN_PROGRAM_ID: &str = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT";
@@ -66,13 +66,7 @@ fn create_mint_ix(
     rent_lamports: u64,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::create_account(
-            payer,
-            mint,
-            rent_lamports,
-            MINT_SIZE,
-            &spl_token::id(),
-        ),
+        system_instruction::create_account(payer, mint, rent_lamports, MINT_SIZE, &spl_token::id()),
         spl_token::instruction::initialize_mint2(
             &spl_token::id(),
             mint,
@@ -99,31 +93,14 @@ fn create_token_account_ix(
             TOKEN_ACCOUNT_SIZE,
             &spl_token::id(),
         ),
-        spl_token::instruction::initialize_account3(
-            &spl_token::id(),
-            account,
-            mint,
-            owner,
-        )
-        .unwrap(),
+        spl_token::instruction::initialize_account3(&spl_token::id(), account, mint, owner)
+            .unwrap(),
     ]
 }
 
-fn mint_to_ix(
-    mint: &Pubkey,
-    destination: &Pubkey,
-    authority: &Pubkey,
-    amount: u64,
-) -> Instruction {
-    spl_token::instruction::mint_to(
-        &spl_token::id(),
-        mint,
-        destination,
-        authority,
-        &[],
-        amount,
-    )
-    .unwrap()
+fn mint_to_ix(mint: &Pubkey, destination: &Pubkey, authority: &Pubkey, amount: u64) -> Instruction {
+    spl_token::instruction::mint_to(&spl_token::id(), mint, destination, authority, &[], amount)
+        .unwrap()
 }
 
 fn get_associated_token_address(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
@@ -383,7 +360,13 @@ fn wrapped_token_unwrap_ix(
     collateral_amount: u64,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
-    data.extend(UnwrapArgs { amount, collateral_amount }.try_to_vec()?);
+    data.extend(
+        UnwrapArgs {
+            amount,
+            collateral_amount,
+        }
+        .try_to_vec()?,
+    );
 
     let accounts = vec![
         AccountMeta::new(*user, true),
@@ -544,22 +527,14 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
     eprintln!("Collateral Mint: {}", collateral_mint);
 
     // Derive PDAs
-    let (vault_config, _) = Pubkey::find_program_address(
-        &[b"vault_config", usdc_mint.as_ref()],
-        &program_id,
-    );
-    let (wrapped_mint, _) = Pubkey::find_program_address(
-        &[b"wrapped_mint", vault_config.as_ref()],
-        &program_id,
-    );
-    let (vault_authority, _) = Pubkey::find_program_address(
-        &[b"vault_authority", vault_config.as_ref()],
-        &program_id,
-    );
-    let (collateral_vault, _) = Pubkey::find_program_address(
-        &[b"collateral_vault", vault_config.as_ref()],
-        &program_id,
-    );
+    let (vault_config, _) =
+        Pubkey::find_program_address(&[b"vault_config", usdc_mint.as_ref()], &program_id);
+    let (wrapped_mint, _) =
+        Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], &program_id);
+    let (vault_authority, _) =
+        Pubkey::find_program_address(&[b"vault_authority", vault_config.as_ref()], &program_id);
+    let (collateral_vault, _) =
+        Pubkey::find_program_address(&[b"collateral_vault", vault_config.as_ref()], &program_id);
 
     // Create treasury ATA
     let treasury = get_associated_token_address(&payer.pubkey(), &usdc_mint);
@@ -627,22 +602,14 @@ fn test_04_wrap_usdc() -> Result<()> {
     let collateral_mint: Pubkey = std::env::var("COLLATERAL_MINT")?.parse()?;
     let reserve_liquidity_supply: Pubkey = std::env::var("RESERVE_LIQUIDITY_SUPPLY")?.parse()?;
 
-    let (vault_config, _) = Pubkey::find_program_address(
-        &[b"vault_config", usdc_mint.as_ref()],
-        &program_id,
-    );
-    let (wrapped_mint, _) = Pubkey::find_program_address(
-        &[b"wrapped_mint", vault_config.as_ref()],
-        &program_id,
-    );
-    let (vault_authority, _) = Pubkey::find_program_address(
-        &[b"vault_authority", vault_config.as_ref()],
-        &program_id,
-    );
-    let (collateral_vault, _) = Pubkey::find_program_address(
-        &[b"collateral_vault", vault_config.as_ref()],
-        &program_id,
-    );
+    let (vault_config, _) =
+        Pubkey::find_program_address(&[b"vault_config", usdc_mint.as_ref()], &program_id);
+    let (wrapped_mint, _) =
+        Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], &program_id);
+    let (vault_authority, _) =
+        Pubkey::find_program_address(&[b"vault_authority", vault_config.as_ref()], &program_id);
+    let (collateral_vault, _) =
+        Pubkey::find_program_address(&[b"collateral_vault", vault_config.as_ref()], &program_id);
     let (lending_market_authority, _) = Pubkey::find_program_address(
         &[LENDING_MARKET_AUTH_SEED, lending_market.as_ref()],
         &klend_program_id,
@@ -715,22 +682,14 @@ fn test_05_unwrap_wstable() -> Result<()> {
     let collateral_mint: Pubkey = std::env::var("COLLATERAL_MINT")?.parse()?;
     let reserve_liquidity_supply: Pubkey = std::env::var("RESERVE_LIQUIDITY_SUPPLY")?.parse()?;
 
-    let (vault_config, _) = Pubkey::find_program_address(
-        &[b"vault_config", usdc_mint.as_ref()],
-        &program_id,
-    );
-    let (wrapped_mint, _) = Pubkey::find_program_address(
-        &[b"wrapped_mint", vault_config.as_ref()],
-        &program_id,
-    );
-    let (vault_authority, _) = Pubkey::find_program_address(
-        &[b"vault_authority", vault_config.as_ref()],
-        &program_id,
-    );
-    let (collateral_vault, _) = Pubkey::find_program_address(
-        &[b"collateral_vault", vault_config.as_ref()],
-        &program_id,
-    );
+    let (vault_config, _) =
+        Pubkey::find_program_address(&[b"vault_config", usdc_mint.as_ref()], &program_id);
+    let (wrapped_mint, _) =
+        Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], &program_id);
+    let (vault_authority, _) =
+        Pubkey::find_program_address(&[b"vault_authority", vault_config.as_ref()], &program_id);
+    let (collateral_vault, _) =
+        Pubkey::find_program_address(&[b"collateral_vault", vault_config.as_ref()], &program_id);
     let (lending_market_authority, _) = Pubkey::find_program_address(
         &[LENDING_MARKET_AUTH_SEED, lending_market.as_ref()],
         &klend_program_id,

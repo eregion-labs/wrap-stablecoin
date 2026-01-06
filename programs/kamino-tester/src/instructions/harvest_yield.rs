@@ -3,7 +3,7 @@ use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
 use crate::klend::KLEND_PROGRAM_ID;
-use crate::state::VaultConfig;
+use crate::state::{TokenConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct HarvestYieldArgs {
@@ -16,14 +16,13 @@ pub struct HarvestYield<'info> {
     pub authority: Signer<'info>,
 
     #[account(
-        mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
-    /// CHECK: PDA authority for signing - needs mut for CPI to KLend
+    /// CHECK: PDA authority for signing
     #[account(
         mut,
         seeds = [b"vault_authority", vault_config.key().as_ref()],
@@ -31,13 +30,24 @@ pub struct HarvestYield<'info> {
     )]
     pub vault_authority: AccountInfo<'info>,
 
-    /// CHECK: USDC mint for CPI to KLend
-    #[account(address = vault_config.usdc_mint)]
-    pub usdc_mint: AccountInfo<'info>,
+    #[account(
+        mut,
+        seeds = [b"token_config", vault_config.key().as_ref(), token_config.token_mint.as_ref()],
+        bump = token_config.bump
+    )]
+    pub token_config: Account<'info, TokenConfig>,
 
-    /// CHECK: Treasury USDC account - validated against vault_config
+    /// CHECK: Token mint
+    #[account(address = token_config.token_mint)]
+    pub token_mint: AccountInfo<'info>,
+
+    /// CHECK: Treasury account - validated against vault_config
     #[account(mut, address = vault_config.treasury)]
     pub treasury: AccountInfo<'info>,
+
+    /// CHECK: Token collateral vault
+    #[account(mut, address = token_config.collateral_vault)]
+    pub collateral_vault: AccountInfo<'info>,
 
     /// CHECK: KLend program
     #[account(address = KLEND_PROGRAM_ID)]
@@ -50,8 +60,8 @@ pub struct HarvestYield<'info> {
     /// CHECK: KLend lending market authority PDA
     pub lending_market_authority: AccountInfo<'info>,
 
-    /// CHECK: KLend reserve
-    #[account(mut, address = vault_config.reserve)]
+    /// CHECK: KLend reserve for this token
+    #[account(mut, address = token_config.reserve)]
     pub reserve: AccountInfo<'info>,
 
     /// CHECK: Reserve liquidity supply
@@ -59,12 +69,8 @@ pub struct HarvestYield<'info> {
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
     /// CHECK: KLend collateral mint
-    #[account(mut, address = vault_config.collateral_mint)]
+    #[account(mut, address = token_config.collateral_mint)]
     pub reserve_collateral_mint: AccountInfo<'info>,
-
-    /// CHECK: Vault's collateral token account
-    #[account(mut, address = vault_config.collateral_vault)]
-    pub collateral_vault: AccountInfo<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 

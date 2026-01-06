@@ -10,7 +10,7 @@ pub struct SetPaused<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
@@ -24,7 +24,7 @@ pub struct UpdateTreasury<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
@@ -41,7 +41,7 @@ pub struct TransferAuthority<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.usdc_mint.as_ref()],
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = authority @ ErrorCode::Unauthorized
     )]
