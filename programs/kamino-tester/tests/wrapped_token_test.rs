@@ -249,6 +249,8 @@ fn deposit_reserve_liquidity_ix(
 #[derive(AnchorSerialize)]
 struct WrapArgs {
     amount: u64,
+    min_out_amount: u64,
+    swap_data: Option<Vec<u8>>,
 }
 
 fn wrapped_token_initialize_ix(
@@ -259,9 +261,6 @@ fn wrapped_token_initialize_ix(
     wrapped_mint: &Pubkey,
     vault_authority: &Pubkey,
     lending_market: &Pubkey,
-    reserve: &Pubkey,
-    collateral_mint: &Pubkey,
-    collateral_vault: &Pubkey,
     treasury: &Pubkey,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "initialize").to_vec();
@@ -273,10 +272,44 @@ fn wrapped_token_initialize_ix(
         AccountMeta::new(*wrapped_mint, false),
         AccountMeta::new_readonly(*vault_authority, false),
         AccountMeta::new_readonly(*lending_market, false),
+        AccountMeta::new_readonly(*treasury, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(system_program::id(), false),
+    ];
+
+    Ok(Instruction {
+        program_id,
+        accounts,
+        data,
+    })
+}
+
+fn wrapped_token_add_token_ix(
+    program_id: Pubkey,
+    authority: &Pubkey,
+    vault_config: &Pubkey,
+    vault_authority: &Pubkey,
+    token_mint: &Pubkey,
+    token_config: &Pubkey,
+    reserve: &Pubkey,
+    collateral_mint: &Pubkey,
+    collateral_vault: &Pubkey,
+    token_vault: &Pubkey,
+    is_base_token: bool,
+) -> Result<Instruction> {
+    let mut data = anchor_sighash("global", "add_token").to_vec();
+    data.push(is_base_token as u8);
+
+    let accounts = vec![
+        AccountMeta::new(*authority, true),
+        AccountMeta::new(*vault_config, false),
+        AccountMeta::new_readonly(*vault_authority, false),
+        AccountMeta::new_readonly(*token_mint, false),
+        AccountMeta::new(*token_config, false),
         AccountMeta::new_readonly(*reserve, false),
         AccountMeta::new_readonly(*collateral_mint, false),
         AccountMeta::new(*collateral_vault, false),
-        AccountMeta::new_readonly(*treasury, false),
+        AccountMeta::new(*token_vault, false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(system_program::id(), false),
@@ -294,35 +327,50 @@ fn wrapped_token_wrap_ix(
     user: &Pubkey,
     vault_config: &Pubkey,
     vault_authority: &Pubkey,
-    user_usdc: &Pubkey,
+    token_config: &Pubkey,
+    token_mint: &Pubkey,
+    user_token: &Pubkey,
     user_wrapped: &Pubkey,
     wrapped_mint: &Pubkey,
+    token_vault: &Pubkey,
+    base_mint: &Pubkey,
     klend_program: &Pubkey,
     lending_market: &Pubkey,
     lending_market_authority: &Pubkey,
-    reserve: &Pubkey,
+    base_reserve: &Pubkey,
     reserve_liquidity_supply: &Pubkey,
     reserve_collateral_mint: &Pubkey,
-    collateral_vault: &Pubkey,
+    base_collateral_vault: &Pubkey,
     amount: u64,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "wrap").to_vec();
-    data.extend(WrapArgs { amount }.try_to_vec()?);
+    data.extend(
+        WrapArgs {
+            amount,
+            min_out_amount: 0,
+            swap_data: None,
+        }
+        .try_to_vec()?,
+    );
 
     let accounts = vec![
         AccountMeta::new(*user, true),
         AccountMeta::new(*vault_config, false),
-        AccountMeta::new_readonly(*vault_authority, false),
-        AccountMeta::new(*user_usdc, false),
+        AccountMeta::new(*vault_authority, false),
+        AccountMeta::new(*token_config, false),
+        AccountMeta::new_readonly(*token_mint, false),
+        AccountMeta::new(*user_token, false),
         AccountMeta::new(*user_wrapped, false),
         AccountMeta::new(*wrapped_mint, false),
+        AccountMeta::new(*token_vault, false),
+        AccountMeta::new_readonly(*base_mint, false),
         AccountMeta::new_readonly(*klend_program, false),
         AccountMeta::new_readonly(*lending_market, false),
         AccountMeta::new_readonly(*lending_market_authority, false),
-        AccountMeta::new(*reserve, false),
+        AccountMeta::new(*base_reserve, false),
         AccountMeta::new(*reserve_liquidity_supply, false),
         AccountMeta::new(*reserve_collateral_mint, false),
-        AccountMeta::new(*collateral_vault, false),
+        AccountMeta::new(*base_collateral_vault, false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(sysvar::instructions::id(), false),
@@ -338,6 +386,7 @@ fn wrapped_token_wrap_ix(
 #[derive(AnchorSerialize)]
 struct UnwrapArgs {
     amount: u64,
+    min_out_amount: u64,
     collateral_amount: u64,
 }
 
@@ -347,22 +396,27 @@ fn wrapped_token_unwrap_ix(
     vault_config: &Pubkey,
     vault_authority: &Pubkey,
     user_wrapped: &Pubkey,
-    user_usdc: &Pubkey,
+    user_base_token: &Pubkey,
     wrapped_mint: &Pubkey,
+    base_mint: &Pubkey,
+    base_token_config: &Pubkey,
+    base_token_vault: &Pubkey,
+    base_collateral_vault: &Pubkey,
     klend_program: &Pubkey,
     lending_market: &Pubkey,
     lending_market_authority: &Pubkey,
-    reserve: &Pubkey,
+    base_reserve: &Pubkey,
     reserve_liquidity_supply: &Pubkey,
     reserve_collateral_mint: &Pubkey,
-    collateral_vault: &Pubkey,
     amount: u64,
+    min_out_amount: u64,
     collateral_amount: u64,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
     data.extend(
         UnwrapArgs {
             amount,
+            min_out_amount,
             collateral_amount,
         }
         .try_to_vec()?,
@@ -371,17 +425,20 @@ fn wrapped_token_unwrap_ix(
     let accounts = vec![
         AccountMeta::new(*user, true),
         AccountMeta::new(*vault_config, false),
-        AccountMeta::new_readonly(*vault_authority, false),
+        AccountMeta::new(*vault_authority, false),
         AccountMeta::new(*user_wrapped, false),
-        AccountMeta::new(*user_usdc, false),
+        AccountMeta::new(*user_base_token, false),
         AccountMeta::new(*wrapped_mint, false),
+        AccountMeta::new_readonly(*base_mint, false),
+        AccountMeta::new(*base_token_config, false),
+        AccountMeta::new(*base_token_vault, false),
+        AccountMeta::new(*base_collateral_vault, false),
         AccountMeta::new_readonly(*klend_program, false),
         AccountMeta::new_readonly(*lending_market, false),
         AccountMeta::new_readonly(*lending_market_authority, false),
-        AccountMeta::new(*reserve, false),
+        AccountMeta::new(*base_reserve, false),
         AccountMeta::new(*reserve_liquidity_supply, false),
         AccountMeta::new(*reserve_collateral_mint, false),
-        AccountMeta::new(*collateral_vault, false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(sysvar::instructions::id(), false),
@@ -526,15 +583,13 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
     eprintln!("Reserve: {}", reserve);
     eprintln!("Collateral Mint: {}", collateral_mint);
 
-    // Derive PDAs
+    // Derive PDAs (vault_config uses authority = payer)
     let (vault_config, _) =
-        Pubkey::find_program_address(&[b"vault_config", usdc_mint.as_ref()], &program_id);
+        Pubkey::find_program_address(&[b"vault_config", payer.pubkey().as_ref()], &program_id);
     let (wrapped_mint, _) =
         Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], &program_id);
     let (vault_authority, _) =
         Pubkey::find_program_address(&[b"vault_authority", vault_config.as_ref()], &program_id);
-    let (collateral_vault, _) =
-        Pubkey::find_program_address(&[b"collateral_vault", vault_config.as_ref()], &program_id);
 
     // Create treasury ATA
     let treasury = get_associated_token_address(&payer.pubkey(), &usdc_mint);
@@ -553,7 +608,7 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
         eprintln!("Created treasury ATA: {}", treasury);
     }
 
-    let ix = wrapped_token_initialize_ix(
+    let init_ix = wrapped_token_initialize_ix(
         program_id,
         &payer.pubkey(),
         &usdc_mint,
@@ -561,28 +616,63 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
         &wrapped_mint,
         &vault_authority,
         &lending_market,
-        &reserve,
-        &collateral_mint,
-        &collateral_vault,
         &treasury,
     )?;
 
     let recent_blockhash = rpc.get_latest_blockhash()?;
     let tx = Transaction::new_signed_with_payer(
-        &[ix],
+        &[init_ix],
         Some(&payer.pubkey()),
         &[&payer],
         recent_blockhash,
     );
 
     let signature = rpc.send_and_confirm_transaction(&tx)?;
+    eprintln!("Initialize tx: {}", signature);
+
+    // Add base token (USDC) - required before wrap
+    let (token_config, _) = Pubkey::find_program_address(
+        &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
+        &program_id,
+    );
+    let (token_collateral_vault, _) = Pubkey::find_program_address(
+        &[b"token_collateral_vault", token_config.as_ref()],
+        &program_id,
+    );
+    let (token_vault, _) = Pubkey::find_program_address(
+        &[b"token_vault", token_config.as_ref()],
+        &program_id,
+    );
+
+    let add_token_ix = wrapped_token_add_token_ix(
+        program_id,
+        &payer.pubkey(),
+        &vault_config,
+        &vault_authority,
+        &usdc_mint,
+        &token_config,
+        &reserve,
+        &collateral_mint,
+        &token_collateral_vault,
+        &token_vault,
+        true, // is_base_token
+    )?;
+
+    let recent_blockhash = rpc.get_latest_blockhash()?;
+    let tx = Transaction::new_signed_with_payer(
+        &[add_token_ix],
+        Some(&payer.pubkey()),
+        &[&payer],
+        recent_blockhash,
+    );
+    rpc.send_and_confirm_transaction(&tx)?;
+    eprintln!("Base token (USDC) registered");
 
     eprintln!("===========================================");
     eprintln!("Wrapped Vault initialized!");
     eprintln!("Vault Config: {}", vault_config);
     eprintln!("Wrapped Mint (wStable): {}", wrapped_mint);
     eprintln!("Vault Authority: {}", vault_authority);
-    eprintln!("Collateral Vault: {}", collateral_vault);
     eprintln!("Tx: {}", signature);
     eprintln!("===========================================");
 
@@ -603,13 +693,23 @@ fn test_04_wrap_usdc() -> Result<()> {
     let reserve_liquidity_supply: Pubkey = std::env::var("RESERVE_LIQUIDITY_SUPPLY")?.parse()?;
 
     let (vault_config, _) =
-        Pubkey::find_program_address(&[b"vault_config", usdc_mint.as_ref()], &program_id);
+        Pubkey::find_program_address(&[b"vault_config", payer.pubkey().as_ref()], &program_id);
     let (wrapped_mint, _) =
         Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], &program_id);
     let (vault_authority, _) =
         Pubkey::find_program_address(&[b"vault_authority", vault_config.as_ref()], &program_id);
-    let (collateral_vault, _) =
-        Pubkey::find_program_address(&[b"collateral_vault", vault_config.as_ref()], &program_id);
+    let (token_config, _) = Pubkey::find_program_address(
+        &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
+        &program_id,
+    );
+    let (token_collateral_vault, _) = Pubkey::find_program_address(
+        &[b"token_collateral_vault", token_config.as_ref()],
+        &program_id,
+    );
+    let (token_vault, _) = Pubkey::find_program_address(
+        &[b"token_vault", token_config.as_ref()],
+        &program_id,
+    );
     let (lending_market_authority, _) = Pubkey::find_program_address(
         &[LENDING_MARKET_AUTH_SEED, lending_market.as_ref()],
         &klend_program_id,
@@ -638,16 +738,20 @@ fn test_04_wrap_usdc() -> Result<()> {
         &payer.pubkey(),
         &vault_config,
         &vault_authority,
+        &token_config,
+        &usdc_mint,
         &user_usdc,
         &user_wrapped,
         &wrapped_mint,
+        &token_vault,
+        &usdc_mint,
         &klend_program_id,
         &lending_market,
         &lending_market_authority,
         &reserve,
         &reserve_liquidity_supply,
         &collateral_mint,
-        &collateral_vault,
+        &token_collateral_vault,
         wrap_amount,
     )?;
 
@@ -683,13 +787,23 @@ fn test_05_unwrap_wstable() -> Result<()> {
     let reserve_liquidity_supply: Pubkey = std::env::var("RESERVE_LIQUIDITY_SUPPLY")?.parse()?;
 
     let (vault_config, _) =
-        Pubkey::find_program_address(&[b"vault_config", usdc_mint.as_ref()], &program_id);
+        Pubkey::find_program_address(&[b"vault_config", payer.pubkey().as_ref()], &program_id);
     let (wrapped_mint, _) =
         Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], &program_id);
     let (vault_authority, _) =
         Pubkey::find_program_address(&[b"vault_authority", vault_config.as_ref()], &program_id);
-    let (collateral_vault, _) =
-        Pubkey::find_program_address(&[b"collateral_vault", vault_config.as_ref()], &program_id);
+    let (token_config, _) = Pubkey::find_program_address(
+        &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
+        &program_id,
+    );
+    let (token_collateral_vault, _) = Pubkey::find_program_address(
+        &[b"token_collateral_vault", token_config.as_ref()],
+        &program_id,
+    );
+    let (token_vault, _) = Pubkey::find_program_address(
+        &[b"token_vault", token_config.as_ref()],
+        &program_id,
+    );
     let (lending_market_authority, _) = Pubkey::find_program_address(
         &[LENDING_MARKET_AUTH_SEED, lending_market.as_ref()],
         &klend_program_id,
@@ -709,14 +823,18 @@ fn test_05_unwrap_wstable() -> Result<()> {
         &user_wrapped,
         &user_usdc,
         &wrapped_mint,
+        &usdc_mint,
+        &token_config,
+        &token_vault,
+        &token_collateral_vault,
         &klend_program_id,
         &lending_market,
         &lending_market_authority,
         &reserve,
         &reserve_liquidity_supply,
         &collateral_mint,
-        &collateral_vault,
         unwrap_amount,
+        0, // min_out_amount: accept any amount for test
         collateral_amount,
     )?;
 

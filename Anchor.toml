@@ -17,7 +17,7 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 #test = "cargo test -p kamino-tester --tests -- --nocapture"
-test = "cargo test -p kamino-tester -- --nocapture"
+test = "cargo test -p kamino-tester -- --nocapture --test-threads=1"
 
 [[test.genesis]]
 address = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
