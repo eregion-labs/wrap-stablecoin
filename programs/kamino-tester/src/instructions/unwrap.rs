@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::jupiter::JUPITER_PROGRAM_ID;
 use crate::klend::KLEND_PROGRAM_ID;
 use crate::state::VaultConfig;
 
@@ -11,7 +10,6 @@ pub struct UnwrapArgs {
     pub amount: u64,
     pub min_out_amount: u64,
     pub collateral_amount: u64,
-    pub swap_data: Option<Vec<u8>>,
 }
 
 #[derive(Accounts)]
@@ -93,22 +91,9 @@ pub struct Unwrap<'info> {
     /// CHECK: Instruction sysvar for KLend
     #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
     pub instruction_sysvar: AccountInfo<'info>,
-    // Remaining accounts for additional token redemptions + Jupiter swap:
-    // [jupiter_program, ...jupiter_route_accounts] (if swapping)
 }
 
 impl<'info> Unwrap<'info> {
-    pub fn validate_jupiter(&self, remaining_accounts: &[AccountInfo<'info>]) -> Result<()> {
-        if !remaining_accounts.is_empty() {
-            let jupiter_program = &remaining_accounts[0];
-            require!(
-                jupiter_program.key() == JUPITER_PROGRAM_ID,
-                ErrorCode::InvalidJupiterRoute
-            );
-        }
-        Ok(())
-    }
-
     pub fn validate_user_accounts(&self) -> Result<()> {
         // Validate user_wrapped: check mint and owner from raw data
         let user_wrapped_data = self.user_wrapped.try_borrow_data()?;

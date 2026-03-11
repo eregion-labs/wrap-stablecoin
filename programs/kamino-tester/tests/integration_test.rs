@@ -542,8 +542,6 @@ fn wrapped_add_token_ix(
 #[derive(AnchorSerialize)]
 struct WrapArgs {
     amount: u64,
-    min_out_amount: u64,
-    swap_data: Option<Vec<u8>>,
 }
 
 fn wrapped_wrap_ix(
@@ -568,15 +566,7 @@ fn wrapped_wrap_ix(
     amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "wrap").to_vec();
-    data.extend(
-        WrapArgs {
-            amount,
-            min_out_amount: 0,
-            swap_data: None,
-        }
-        .try_to_vec()
-        .unwrap(),
-    );
+    data.extend(WrapArgs { amount }.try_to_vec().unwrap());
 
     Instruction {
         program_id,
