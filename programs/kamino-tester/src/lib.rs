@@ -160,47 +160,7 @@ pub mod kamino_tester {
             token_decimals,
         )?;
 
-        let deposit_amount = args.amount;
-        let liquidity_source = ctx.accounts.token_vault.to_account_info();
-
-        // Deposit to KLend
-        let ix = deposit_reserve_liquidity_ix(
-            ctx.accounts.klend_program.key(),
-            ctx.accounts.vault_authority.key(),
-            ctx.accounts.base_reserve.key(),
-            ctx.accounts.lending_market.key(),
-            ctx.accounts.lending_market_authority.key(),
-            vault_config.base_mint,
-            ctx.accounts.reserve_liquidity_supply.key(),
-            ctx.accounts.reserve_collateral_mint.key(),
-            liquidity_source.key(),
-            ctx.accounts.base_collateral_vault.key(),
-            ctx.accounts.collateral_token_program.key(),
-            ctx.accounts.token_program.key(),
-            ctx.accounts.instruction_sysvar.key(),
-            deposit_amount,
-        );
-
-        invoke_signed(
-            &ix,
-            &[
-                ctx.accounts.vault_authority.to_account_info(),
-                ctx.accounts.base_reserve.to_account_info(),
-                ctx.accounts.lending_market.to_account_info(),
-                ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.base_mint.to_account_info(),
-                ctx.accounts.reserve_liquidity_supply.to_account_info(),
-                ctx.accounts.reserve_collateral_mint.to_account_info(),
-                liquidity_source,
-                ctx.accounts.base_collateral_vault.to_account_info(),
-                ctx.accounts.collateral_token_program.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.instruction_sysvar.to_account_info(),
-            ],
-            &[authority_seeds],
-        )?;
-
-        // Mint wStable to user (1:1 with USDC deposited)
+        // Mint wStable to user (1:1 with base token deposited)
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -211,24 +171,23 @@ pub mod kamino_tester {
                 },
                 &[authority_seeds],
             ),
-            deposit_amount,
+            args.amount,
         )?;
 
         // Update totals - track original input token amount for proportional unwrap
         token_config.total_deposited = token_config
             .total_deposited
-            .checked_add(deposit_amount)
+            .checked_add(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         vault_config.total_stable_deposited = vault_config
             .total_stable_deposited
-            .checked_add(deposit_amount)
+            .checked_add(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
-            "Wrapped {} tokens (deposited {} USDC) for user {}",
+            "Wrapped {} tokens for user {}",
             args.amount,
-            deposit_amount,
             ctx.accounts.user.key()
         );
         Ok(())
@@ -239,20 +198,13 @@ pub mod kamino_tester {
         args: UnwrapArgs,
     ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
-        require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
         // Validate user token accounts
         ctx.accounts.validate_user_accounts()?;
 
         // Validate base_token_config and extract fields
-        let (
-            _is_base_token,
-            _token_vault,
-            _collateral_vault,
-            _reserve,
-            _collateral_mint,
-            _total_deposited,
-        ) = ctx.accounts.validate_and_get_base_config()?;
+        let (_token_vault, _total_deposited, base_decimals) =
+            ctx.accounts.validate_and_get_base_config()?;
 
         let vault_config = &mut ctx.accounts.vault_config;
         let vault_config_key = vault_config.key();
@@ -282,65 +234,14 @@ pub mod kamino_tester {
             &[vault_authority_bump],
         ];
 
-        // Get base token vault balance before redemption
-        let base_vault_before =
+        let vault_balance =
             get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
-
-        // Redeem base token collateral from KLend
-        let ix = redeem_reserve_collateral_ix(
-            ctx.accounts.klend_program.key(),
-            ctx.accounts.vault_authority.key(),
-            ctx.accounts.lending_market.key(),
-            ctx.accounts.base_reserve.key(),
-            ctx.accounts.lending_market_authority.key(),
-            vault_config.base_mint,
-            ctx.accounts.reserve_collateral_mint.key(),
-            ctx.accounts.reserve_liquidity_supply.key(),
-            ctx.accounts.base_collateral_vault.key(),
-            ctx.accounts.base_token_vault.key(),
-            ctx.accounts.collateral_token_program.key(),
-            ctx.accounts.token_program.key(),
-            ctx.accounts.instruction_sysvar.key(),
-            args.collateral_amount,
-        );
-
-        invoke_signed(
-            &ix,
-            &[
-                ctx.accounts.vault_authority.to_account_info(),
-                ctx.accounts.lending_market.to_account_info(),
-                ctx.accounts.base_reserve.to_account_info(),
-                ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.base_mint.to_account_info(),
-                ctx.accounts.reserve_collateral_mint.to_account_info(),
-                ctx.accounts.reserve_liquidity_supply.to_account_info(),
-                ctx.accounts.base_collateral_vault.to_account_info(),
-                ctx.accounts.base_token_vault.to_account_info(),
-                ctx.accounts.collateral_token_program.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.instruction_sysvar.to_account_info(),
-            ],
-            &[authority_seeds],
-        )?;
-
-        // Get base token vault balance after redemption
-        let base_vault_after = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
-        let total_redeemed = base_vault_after
-            .checked_sub(base_vault_before)
-            .ok_or(ErrorCode::MathOverflow)?;
-
         require!(
-            total_redeemed >= args.amount,
+            vault_balance >= args.amount,
             ErrorCode::InsufficientLiquidity
         );
 
-        // Verify slippage
-        require!(
-            total_redeemed >= args.min_out_amount,
-            ErrorCode::SlippageExceeded
-        );
-
-        // Transfer redeemed USDC to user
+        // Transfer base token from vault to user
         transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -352,8 +253,8 @@ pub mod kamino_tester {
                 },
                 &[authority_seeds],
             ),
-            total_redeemed,
-            6, // USDC decimals
+            args.amount,
+            base_decimals,
         )?;
 
         // Update totals - update base_token_config.total_deposited directly
@@ -378,10 +279,9 @@ pub mod kamino_tester {
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
-            "Unwrapped {} wStable for user {}, received {} USDC",
+            "Unwrapped {} wStable for user {}",
             args.amount,
-            ctx.accounts.user.key(),
-            total_redeemed
+            ctx.accounts.user.key()
         );
         Ok(())
     }
@@ -439,6 +339,120 @@ pub mod kamino_tester {
             "Harvested yield: {} collateral tokens from {} redeemed to treasury",
             args.collateral_amount,
             token_config.token_mint
+        );
+        Ok(())
+    }
+
+    pub fn deposit_to_klend(
+        ctx: Context<DepositToKlend>,
+        args: DepositToKlendArgs,
+    ) -> Result<()> {
+        require!(args.amount > 0, ErrorCode::InvalidAmount);
+
+        let vault_config = &ctx.accounts.vault_config;
+        let vault_config_key = vault_config.key();
+        let authority_seeds: &[&[u8]] = &[
+            b"vault_authority",
+            vault_config_key.as_ref(),
+            &[vault_config.vault_authority_bump],
+        ];
+
+        let ix = deposit_reserve_liquidity_ix(
+            ctx.accounts.klend_program.key(),
+            ctx.accounts.vault_authority.key(),
+            ctx.accounts.base_reserve.key(),
+            ctx.accounts.lending_market.key(),
+            ctx.accounts.lending_market_authority.key(),
+            vault_config.base_mint,
+            ctx.accounts.reserve_liquidity_supply.key(),
+            ctx.accounts.reserve_collateral_mint.key(),
+            ctx.accounts.token_vault.key(),
+            ctx.accounts.base_collateral_vault.key(),
+            ctx.accounts.collateral_token_program.key(),
+            ctx.accounts.token_program.key(),
+            ctx.accounts.instruction_sysvar.key(),
+            args.amount,
+        );
+
+        invoke_signed(
+            &ix,
+            &[
+                ctx.accounts.vault_authority.to_account_info(),
+                ctx.accounts.base_reserve.to_account_info(),
+                ctx.accounts.lending_market.to_account_info(),
+                ctx.accounts.lending_market_authority.to_account_info(),
+                ctx.accounts.base_mint.to_account_info(),
+                ctx.accounts.reserve_liquidity_supply.to_account_info(),
+                ctx.accounts.reserve_collateral_mint.to_account_info(),
+                ctx.accounts.token_vault.to_account_info(),
+                ctx.accounts.base_collateral_vault.to_account_info(),
+                ctx.accounts.collateral_token_program.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.instruction_sysvar.to_account_info(),
+            ],
+            &[authority_seeds],
+        )?;
+
+        msg!(
+            "Deposited {} to KLend from vault",
+            args.amount
+        );
+        Ok(())
+    }
+
+    pub fn withdraw_from_klend(
+        ctx: Context<WithdrawFromKlend>,
+        args: WithdrawFromKlendArgs,
+    ) -> Result<()> {
+        require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
+
+        let vault_config = &ctx.accounts.vault_config;
+        let vault_config_key = vault_config.key();
+        let authority_seeds: &[&[u8]] = &[
+            b"vault_authority",
+            vault_config_key.as_ref(),
+            &[vault_config.vault_authority_bump],
+        ];
+
+        let ix = redeem_reserve_collateral_ix(
+            ctx.accounts.klend_program.key(),
+            ctx.accounts.vault_authority.key(),
+            ctx.accounts.lending_market.key(),
+            ctx.accounts.base_reserve.key(),
+            ctx.accounts.lending_market_authority.key(),
+            vault_config.base_mint,
+            ctx.accounts.reserve_collateral_mint.key(),
+            ctx.accounts.reserve_liquidity_supply.key(),
+            ctx.accounts.base_collateral_vault.key(),
+            ctx.accounts.base_token_vault.key(),
+            ctx.accounts.collateral_token_program.key(),
+            ctx.accounts.token_program.key(),
+            ctx.accounts.instruction_sysvar.key(),
+            args.collateral_amount,
+        );
+
+        invoke_signed(
+            &ix,
+            &[
+                ctx.accounts.vault_authority.to_account_info(),
+                ctx.accounts.lending_market.to_account_info(),
+                ctx.accounts.base_reserve.to_account_info(),
+                ctx.accounts.lending_market_authority.to_account_info(),
+                ctx.accounts.base_mint.to_account_info(),
+                ctx.accounts.reserve_collateral_mint.to_account_info(),
+                ctx.accounts.reserve_liquidity_supply.to_account_info(),
+                ctx.accounts.base_collateral_vault.to_account_info(),
+                ctx.accounts.base_token_vault.to_account_info(),
+                ctx.accounts.collateral_token_program.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.instruction_sysvar.to_account_info(),
+            ],
+            &[authority_seeds],
+        )?;
+
+        msg!(
+            "Withdrew {} from KLend to vault",
+            args.collateral_amount
         );
         Ok(())
     }

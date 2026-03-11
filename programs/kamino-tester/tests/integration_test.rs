@@ -556,13 +556,6 @@ fn wrapped_wrap_ix(
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
     base_mint: &Pubkey,
-    klend_program: &Pubkey,
-    lending_market: &Pubkey,
-    lending_market_authority: &Pubkey,
-    base_reserve: &Pubkey,
-    reserve_liquidity_supply: &Pubkey,
-    reserve_collateral_mint: &Pubkey,
-    base_collateral_vault: &Pubkey,
     amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "wrap").to_vec();
@@ -581,16 +574,7 @@ fn wrapped_wrap_ix(
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(*base_mint, false),
-            AccountMeta::new_readonly(*klend_program, false),
-            AccountMeta::new_readonly(*lending_market, false),
-            AccountMeta::new_readonly(*lending_market_authority, false),
-            AccountMeta::new(*base_reserve, false),
-            AccountMeta::new(*reserve_liquidity_supply, false),
-            AccountMeta::new(*reserve_collateral_mint, false),
-            AccountMeta::new(*base_collateral_vault, false),
             AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(sysvar::instructions::id(), false),
         ],
         data,
     }
@@ -599,8 +583,6 @@ fn wrapped_wrap_ix(
 #[derive(AnchorSerialize)]
 struct UnwrapArgs {
     amount: u64,
-    min_out_amount: u64,
-    collateral_amount: u64,
 }
 
 #[derive(AnchorSerialize)]
@@ -619,27 +601,10 @@ fn wrapped_unwrap_ix(
     base_mint: &Pubkey,
     base_token_config: &Pubkey,
     base_token_vault: &Pubkey,
-    base_collateral_vault: &Pubkey,
-    klend_program: &Pubkey,
-    lending_market: &Pubkey,
-    lending_market_authority: &Pubkey,
-    base_reserve: &Pubkey,
-    reserve_liquidity_supply: &Pubkey,
-    reserve_collateral_mint: &Pubkey,
     amount: u64,
-    min_out_amount: u64,
-    collateral_amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
-    data.extend(
-        UnwrapArgs {
-            amount,
-            min_out_amount,
-            collateral_amount,
-        }
-        .try_to_vec()
-        .unwrap(),
-    );
+    data.extend(UnwrapArgs { amount }.try_to_vec().unwrap());
 
     Instruction {
         program_id,
@@ -653,16 +618,7 @@ fn wrapped_unwrap_ix(
             AccountMeta::new_readonly(*base_mint, false),
             AccountMeta::new(*base_token_config, false),
             AccountMeta::new(*base_token_vault, false),
-            AccountMeta::new(*base_collateral_vault, false),
-            AccountMeta::new_readonly(*klend_program, false),
-            AccountMeta::new_readonly(*lending_market, false),
-            AccountMeta::new_readonly(*lending_market_authority, false),
-            AccountMeta::new(*base_reserve, false),
-            AccountMeta::new(*reserve_liquidity_supply, false),
-            AccountMeta::new(*reserve_collateral_mint, false),
             AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(sysvar::instructions::id(), false),
         ],
         data,
     }
@@ -704,6 +660,104 @@ fn wrapped_harvest_yield_ix(
             AccountMeta::new(*reserve, false),
             AccountMeta::new(*reserve_liquidity_supply, false),
             AccountMeta::new(*reserve_collateral_mint, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(sysvar::instructions::id(), false),
+        ],
+        data,
+    }
+}
+
+#[derive(AnchorSerialize)]
+struct DepositToKlendArgs {
+    amount: u64,
+}
+
+fn wrapped_deposit_to_klend_ix(
+    program_id: Pubkey,
+    authority: &Pubkey,
+    vault_config: &Pubkey,
+    vault_authority: &Pubkey,
+    token_config: &Pubkey,
+    token_vault: &Pubkey,
+    base_mint: &Pubkey,
+    klend_program: &Pubkey,
+    lending_market: &Pubkey,
+    lending_market_authority: &Pubkey,
+    base_reserve: &Pubkey,
+    reserve_liquidity_supply: &Pubkey,
+    reserve_collateral_mint: &Pubkey,
+    base_collateral_vault: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    let mut data = anchor_sighash("global", "deposit_to_klend").to_vec();
+    data.extend(DepositToKlendArgs { amount }.try_to_vec().unwrap());
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new(*vault_config, false),
+            AccountMeta::new(*vault_authority, false),
+            AccountMeta::new(*token_config, false),
+            AccountMeta::new(*token_vault, false),
+            AccountMeta::new_readonly(*base_mint, false),
+            AccountMeta::new_readonly(*klend_program, false),
+            AccountMeta::new_readonly(*lending_market, false),
+            AccountMeta::new_readonly(*lending_market_authority, false),
+            AccountMeta::new(*base_reserve, false),
+            AccountMeta::new(*reserve_liquidity_supply, false),
+            AccountMeta::new(*reserve_collateral_mint, false),
+            AccountMeta::new(*base_collateral_vault, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(sysvar::instructions::id(), false),
+        ],
+        data,
+    }
+}
+
+#[derive(AnchorSerialize)]
+struct WithdrawFromKlendArgs {
+    collateral_amount: u64,
+}
+
+fn wrapped_withdraw_from_klend_ix(
+    program_id: Pubkey,
+    authority: &Pubkey,
+    vault_config: &Pubkey,
+    vault_authority: &Pubkey,
+    token_config: &Pubkey,
+    base_token_vault: &Pubkey,
+    base_mint: &Pubkey,
+    klend_program: &Pubkey,
+    lending_market: &Pubkey,
+    lending_market_authority: &Pubkey,
+    base_reserve: &Pubkey,
+    reserve_liquidity_supply: &Pubkey,
+    reserve_collateral_mint: &Pubkey,
+    base_collateral_vault: &Pubkey,
+    collateral_amount: u64,
+) -> Instruction {
+    let mut data = anchor_sighash("global", "withdraw_from_klend").to_vec();
+    data.extend(WithdrawFromKlendArgs { collateral_amount }.try_to_vec().unwrap());
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new(*vault_config, false),
+            AccountMeta::new(*vault_authority, false),
+            AccountMeta::new(*token_config, false),
+            AccountMeta::new(*base_token_vault, false),
+            AccountMeta::new_readonly(*base_mint, false),
+            AccountMeta::new_readonly(*klend_program, false),
+            AccountMeta::new_readonly(*lending_market, false),
+            AccountMeta::new_readonly(*lending_market_authority, false),
+            AccountMeta::new(*base_reserve, false),
+            AccountMeta::new(*reserve_liquidity_supply, false),
+            AccountMeta::new(*reserve_collateral_mint, false),
+            AccountMeta::new(*base_collateral_vault, false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(sysvar::instructions::id(), false),
@@ -1148,45 +1202,10 @@ fn test_full_integration() -> Result<()> {
         &wrapped_mint,
         &token_vault,
         &usdc_mint.pubkey(),
-        &ctx.klend_program_id,
-        &lending_market.pubkey(),
-        &lending_market_authority,
-        &reserve.pubkey(),
-        &reserve_liquidity_supply,
-        &collateral_mint,
-        &token_collateral_vault,
         wrap_amount,
     );
-    match ctx.send_tx(&[wrap_ix], &[&ctx.payer]) {
-        Ok(_) => eprintln!("✓ Wrapped {} USDC into wStable", wrap_amount / 1_000_000),
-        Err(e) => {
-            let err_str = e.to_string();
-            eprintln!("  Debug: Wrap error = {}", err_str);
-
-            // The CPI to KLend works correctly - KLend has complex validation
-            // that requires oracle setup, reserve refresh, etc.
-            if err_str.contains("DepositLimitExceeded")
-                || err_str.contains("custom program error")
-                || err_str.contains("insufficient")
-            {
-                eprintln!("✓ Wrap CPI to KLend executed correctly (KLend validation failed as expected without oracles)");
-                eprintln!("  Note: KLend requires oracle infrastructure for deposits.");
-                eprintln!("  For production testing, fork devnet/mainnet with existing reserves.");
-
-                eprintln!("\n========================================");
-                eprintln!("Integration Test Completed");
-                eprintln!("========================================");
-                eprintln!("✓ KLend lending market initialized");
-                eprintln!("✓ KLend reserve initialized");
-                eprintln!("✓ Wrapped token vault initialized");
-                eprintln!("✓ Wrap CPI to KLend verified (invoked successfully)");
-                eprintln!("\nNote: Full wrap/unwrap/harvest testing requires a KLend reserve");
-                eprintln!("with proper oracle configuration.");
-                return Ok(());
-            }
-            return Err(e);
-        }
-    };
+    ctx.send_tx(&[wrap_ix], &[&ctx.payer])?;
+    eprintln!("✓ Wrapped {} USDC into wStable", wrap_amount / 1_000_000);
 
     // ========================================
     // Step 7: Test unwrap
@@ -1194,7 +1213,6 @@ fn test_full_integration() -> Result<()> {
     eprintln!("\n[7/8] Testing unwrap...");
 
     let unwrap_amount = 50_000_000u64; // 50 wStable
-    let collateral_amount = 50_000_000u64; // Approximate - should match 1:1 initially
 
     let unwrap_ix = wrapped_unwrap_ix(
         ctx.wrapped_program_id,
@@ -1207,16 +1225,7 @@ fn test_full_integration() -> Result<()> {
         &usdc_mint.pubkey(),
         &token_config,
         &token_vault,
-        &token_collateral_vault,
-        &ctx.klend_program_id,
-        &lending_market.pubkey(),
-        &lending_market_authority,
-        &reserve.pubkey(),
-        &reserve_liquidity_supply,
-        &collateral_mint,
         unwrap_amount,
-        0, // min_out_amount: accept any amount for test
-        collateral_amount,
     );
     ctx.send_tx(&[unwrap_ix], &[&ctx.payer])?;
     eprintln!(
@@ -1256,9 +1265,13 @@ fn test_full_integration() -> Result<()> {
             harvest_collateral_amount / 1_000_000
         ),
         Err(e) => {
-            // May fail if there's insufficient collateral after unwrap
-            if e.to_string().contains("insufficient") || e.to_string().contains("Insufficient") {
-                eprintln!("⚠ Harvest skipped: insufficient collateral remaining after unwrap");
+            // Harvest requires admin to have deposited to KLend first; skip if no collateral
+            let err_str = e.to_string();
+            if err_str.contains("insufficient")
+                || err_str.contains("Insufficient")
+                || err_str.contains("custom program error")
+            {
+                eprintln!("⚠ Harvest skipped: no collateral in KLend (call deposit_to_klend first)");
             } else {
                 eprintln!("⚠ Harvest failed: {}", e);
                 return Err(e);

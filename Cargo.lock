@@ -2097,8 +2097,11 @@ dependencies = [
  "borsh 0.10.4",
  "sha2 0.10.9",
  "shellexpand",
+ "solana-client",
+ "solana-sdk",
  "spl-associated-token-account",
  "spl-token 7.0.0",
+ "tokio",
 ]
 
 [[package]]

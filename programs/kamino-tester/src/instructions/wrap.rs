@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::klend::KLEND_PROGRAM_ID;
 use crate::state::{TokenConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -62,41 +61,7 @@ pub struct Wrap<'info> {
     #[account(address = vault_config.base_mint)]
     pub base_mint: AccountInfo<'info>,
 
-    /// CHECK: KLend program
-    #[account(address = KLEND_PROGRAM_ID)]
-    pub klend_program: AccountInfo<'info>,
-
-    /// CHECK: KLend lending market
-    #[account(address = vault_config.lending_market)]
-    pub lending_market: AccountInfo<'info>,
-
-    /// CHECK: KLend lending market authority PDA
-    pub lending_market_authority: AccountInfo<'info>,
-
-    /// CHECK: Base token KLend reserve
-    #[account(mut)]
-    pub base_reserve: AccountInfo<'info>,
-
-    /// CHECK: Reserve liquidity supply
-    #[account(mut)]
-    pub reserve_liquidity_supply: AccountInfo<'info>,
-
-    /// CHECK: Reserve collateral mint
-    #[account(mut)]
-    pub reserve_collateral_mint: AccountInfo<'info>,
-
-    /// CHECK: Base token collateral vault (from base_token_config)
-    #[account(mut)]
-    pub base_collateral_vault: AccountInfo<'info>,
-
     pub token_program: Interface<'info, TokenInterface>,
-
-    /// CHECK: Collateral token program
-    pub collateral_token_program: AccountInfo<'info>,
-
-    /// CHECK: Instruction sysvar for KLend
-    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
-    pub instruction_sysvar: AccountInfo<'info>,
 }
 
 impl<'info> Wrap<'info> {

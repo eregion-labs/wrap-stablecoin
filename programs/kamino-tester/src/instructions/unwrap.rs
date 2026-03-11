@@ -2,14 +2,11 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::klend::KLEND_PROGRAM_ID;
 use crate::state::VaultConfig;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct UnwrapArgs {
     pub amount: u64,
-    pub min_out_amount: u64,
-    pub collateral_amount: u64,
 }
 
 #[derive(Accounts)]
@@ -52,45 +49,11 @@ pub struct Unwrap<'info> {
     #[account(mut)]
     pub base_token_config: AccountInfo<'info>,
 
-    /// CHECK: Base token vault (receives redeemed USDC from KLend) - validated in handler
+    /// CHECK: Base token vault - validated in handler
     #[account(mut)]
     pub base_token_vault: AccountInfo<'info>,
 
-    /// CHECK: Base collateral vault (holds KLend kTokens) - validated in handler
-    #[account(mut)]
-    pub base_collateral_vault: AccountInfo<'info>,
-
-    /// CHECK: KLend program
-    #[account(address = KLEND_PROGRAM_ID)]
-    pub klend_program: AccountInfo<'info>,
-
-    /// CHECK: KLend lending market
-    #[account(address = vault_config.lending_market)]
-    pub lending_market: AccountInfo<'info>,
-
-    /// CHECK: KLend lending market authority PDA
-    pub lending_market_authority: AccountInfo<'info>,
-
-    /// CHECK: Base token KLend reserve - validated in handler
-    #[account(mut)]
-    pub base_reserve: AccountInfo<'info>,
-
-    /// CHECK: Reserve liquidity supply
-    #[account(mut)]
-    pub reserve_liquidity_supply: AccountInfo<'info>,
-
-    /// CHECK: Reserve collateral mint - validated in handler
-    #[account(mut)]
-    pub reserve_collateral_mint: AccountInfo<'info>,
-
     pub token_program: Interface<'info, TokenInterface>,
-
-    /// CHECK: Collateral token program
-    pub collateral_token_program: AccountInfo<'info>,
-
-    /// CHECK: Instruction sysvar for KLend
-    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
-    pub instruction_sysvar: AccountInfo<'info>,
 }
 
 impl<'info> Unwrap<'info> {
@@ -138,10 +101,10 @@ impl<'info> Unwrap<'info> {
     }
 
     /// Validate base_token_config PDA and extract fields needed for unwrap
-    /// Returns (is_base_token, token_vault, collateral_vault, reserve, collateral_mint, total_deposited)
+    /// Returns (token_vault, total_deposited, token_decimals)
     pub fn validate_and_get_base_config(
         &self,
-    ) -> Result<(bool, Pubkey, Pubkey, Pubkey, Pubkey, u64)> {
+    ) -> Result<(Pubkey, u64, u8)> {
         // Verify PDA derivation
         let vault_config_key = self.vault_config.key();
         let base_mint = self.vault_config.base_mint;
@@ -167,33 +130,13 @@ impl<'info> Unwrap<'info> {
         );
 
         // TokenConfig layout after discriminator:
-        // bump: u8 (1)
-        // vault_config: Pubkey (32)
-        // token_mint: Pubkey (32)
-        // token_decimals: u8 (1)
-        // reserve: Pubkey (32)
-        // collateral_mint: Pubkey (32)
-        // collateral_vault: Pubkey (32)
-        // collateral_vault_bump: u8 (1)
-        // token_vault: Pubkey (32)
-        // token_vault_bump: u8 (1)
-        // total_deposited: u64 (8)
-        // is_base_token: bool (1)
-        // enabled: bool (1)
+        // bump: u8 (1), vault_config: Pubkey (32), token_mint: Pubkey (32), token_decimals: u8 (1)
+        // reserve: Pubkey (32), collateral_mint: Pubkey (32), collateral_vault: Pubkey (32)
+        // collateral_vault_bump: u8 (1), token_vault: Pubkey (32), token_vault_bump: u8 (1)
+        // total_deposited: u64 (8), is_base_token: bool (1), enabled: bool (1)
 
-        let offset = 8; // discriminator
-        let reserve =
-            Pubkey::try_from(&config_data[offset + 1 + 32 + 32 + 1..offset + 1 + 32 + 32 + 1 + 32])
-                .map_err(|_| ErrorCode::TokenNotFound)?;
-        let collateral_mint = Pubkey::try_from(
-            &config_data[offset + 1 + 32 + 32 + 1 + 32..offset + 1 + 32 + 32 + 1 + 32 + 32],
-        )
-        .map_err(|_| ErrorCode::TokenNotFound)?;
-        let collateral_vault = Pubkey::try_from(
-            &config_data
-                [offset + 1 + 32 + 32 + 1 + 32 + 32..offset + 1 + 32 + 32 + 1 + 32 + 32 + 32],
-        )
-        .map_err(|_| ErrorCode::TokenNotFound)?;
+        let offset = 8;
+        let token_decimals = config_data[offset + 1 + 32 + 32];
         let token_vault = Pubkey::try_from(
             &config_data[offset + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1
                 ..offset + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1 + 32],
@@ -208,31 +151,13 @@ impl<'info> Unwrap<'info> {
         );
 
         let is_base_token = config_data[total_deposited_offset + 8] != 0;
-
         require!(is_base_token, ErrorCode::TokenNotFound);
 
-        // Verify the provided accounts match
         require!(
             self.base_token_vault.key() == token_vault,
             ErrorCode::TokenNotFound
         );
-        require!(
-            self.base_collateral_vault.key() == collateral_vault,
-            ErrorCode::TokenNotFound
-        );
-        require!(self.base_reserve.key() == reserve, ErrorCode::TokenNotFound);
-        require!(
-            self.reserve_collateral_mint.key() == collateral_mint,
-            ErrorCode::TokenNotFound
-        );
 
-        Ok((
-            is_base_token,
-            token_vault,
-            collateral_vault,
-            reserve,
-            collateral_mint,
-            total_deposited,
-        ))
+        Ok((token_vault, total_deposited, token_decimals))
     }
 }
