@@ -20,6 +20,12 @@ pub enum ErrorCode {
     #[msg("Invalid amount")]
     InvalidAmount,
 
+    #[msg("Wrap accepts base token only")]
+    BaseTokenOnly,
+
+    #[msg("Insufficient liquidity for redemption")]
+    InsufficientLiquidity,
+
     #[msg("Flash mint feature is disabled")]
     FlashMintDisabled,
 
@@ -52,9 +58,6 @@ pub enum ErrorCode {
 
     #[msg("Slippage tolerance exceeded")]
     SlippageExceeded,
-
-    #[msg("Invalid Jupiter route")]
-    InvalidJupiterRoute,
 
     #[msg("Swap failed")]
     SwapFailed,

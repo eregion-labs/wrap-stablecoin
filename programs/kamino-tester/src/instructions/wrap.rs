@@ -2,15 +2,12 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::jupiter::JUPITER_PROGRAM_ID;
 use crate::klend::KLEND_PROGRAM_ID;
 use crate::state::{TokenConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct WrapArgs {
     pub amount: u64,
-    pub min_out_amount: u64,
-    pub swap_data: Option<Vec<u8>>,
 }
 
 #[derive(Accounts)]
@@ -100,23 +97,9 @@ pub struct Wrap<'info> {
     /// CHECK: Instruction sysvar for KLend
     #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
     pub instruction_sysvar: AccountInfo<'info>,
-    // Remaining accounts:
-    // If swapping (non-base token): [base_token_config, base_token_vault, jupiter_program, ...jupiter_route_accounts]
 }
 
 impl<'info> Wrap<'info> {
-    pub fn validate_swap_accounts(&self, remaining_accounts: &[AccountInfo<'info>]) -> Result<()> {
-        if !self.token_config.is_base_token {
-            require!(remaining_accounts.len() >= 3, ErrorCode::TokenNotFound);
-            let jupiter_program = &remaining_accounts[2];
-            require!(
-                jupiter_program.key() == JUPITER_PROGRAM_ID,
-                ErrorCode::InvalidJupiterRoute
-            );
-        }
-        Ok(())
-    }
-
     pub fn validate_user_accounts(&self) -> Result<()> {
         // Validate user_token: check mint and owner from raw data
         let user_token_data = self.user_token.try_borrow_data()?;

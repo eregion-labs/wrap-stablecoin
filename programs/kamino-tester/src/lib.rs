@@ -14,7 +14,7 @@ declare_id!("5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT");
 pub mod kamino_tester {
     use super::*;
     use crate::errors::ErrorCode;
-    use crate::jupiter::{execute_swap_with_data, get_token_balance};
+    use crate::jupiter::get_token_balance;
     use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_spl::token_interface::{
@@ -128,16 +128,16 @@ pub mod kamino_tester {
         // Validate user token accounts
         ctx.accounts.validate_user_accounts()?;
 
-        // Validate swap accounts if needed
-        ctx.accounts
-            .validate_swap_accounts(ctx.remaining_accounts)?;
+        require!(
+            ctx.accounts.token_config.is_base_token,
+            ErrorCode::BaseTokenOnly
+        );
 
         let vault_config = &mut ctx.accounts.vault_config;
         let token_config = &mut ctx.accounts.token_config;
         let vault_config_key = vault_config.key();
         let vault_authority_bump = vault_config.vault_authority_bump;
         let token_decimals = token_config.token_decimals;
-        let is_base_token = token_config.is_base_token;
 
         let authority_seeds: &[&[u8]] = &[
             b"vault_authority",
@@ -160,45 +160,8 @@ pub mod kamino_tester {
             token_decimals,
         )?;
 
-        // Determine deposit amount and source vault for KLend
-        let (deposit_amount, liquidity_source) = if is_base_token {
-            // Direct deposit to KLend - no swap needed
-            (args.amount, ctx.accounts.token_vault.to_account_info())
-        } else {
-            // Swap non-base token to base token via Jupiter
-            // remaining_accounts: [base_token_config, base_token_vault, jupiter_program, ...jupiter_route_accounts]
-            let swap_data = args.swap_data.ok_or(ErrorCode::InvalidJupiterRoute)?;
-            require!(ctx.remaining_accounts.len() >= 3, ErrorCode::TokenNotFound);
-
-            let base_token_vault = &ctx.remaining_accounts[1];
-            let jupiter_program = &ctx.remaining_accounts[2];
-            let jupiter_accounts = &ctx.remaining_accounts[3..];
-
-            // Get balance before swap
-            let balance_before = get_token_balance(base_token_vault)?;
-
-            // Execute Jupiter swap: token_vault -> base_token_vault
-            execute_swap_with_data(
-                jupiter_program,
-                jupiter_accounts,
-                authority_seeds,
-                swap_data,
-            )?;
-
-            // Get balance after swap
-            let balance_after = get_token_balance(base_token_vault)?;
-            let swap_output = balance_after
-                .checked_sub(balance_before)
-                .ok_or(ErrorCode::SwapFailed)?;
-
-            // Verify slippage
-            require!(
-                swap_output >= args.min_out_amount,
-                ErrorCode::SlippageExceeded
-            );
-
-            (swap_output, base_token_vault.to_account_info())
-        };
+        let deposit_amount = args.amount;
+        let liquidity_source = ctx.accounts.token_vault.to_account_info();
 
         // Deposit to KLend
         let ix = deposit_reserve_liquidity_ix(
@@ -281,8 +244,6 @@ pub mod kamino_tester {
         // Validate user token accounts
         ctx.accounts.validate_user_accounts()?;
 
-        ctx.accounts.validate_jupiter(ctx.remaining_accounts)?;
-
         // Validate base_token_config and extract fields
         let (
             _is_base_token,
@@ -362,31 +323,16 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        // If there's swap data, execute Jupiter swap for additional tokens
-        // The swap should route non-base tokens to base_token_vault
-        // remaining_accounts: [jupiter_program, ...jupiter_route_accounts]
-        if let Some(swap_data) = args.swap_data {
-            require!(
-                !ctx.remaining_accounts.is_empty(),
-                ErrorCode::InvalidJupiterRoute
-            );
-
-            let jupiter_program = &ctx.remaining_accounts[0];
-            let jupiter_accounts = &ctx.remaining_accounts[1..];
-
-            execute_swap_with_data(
-                jupiter_program,
-                jupiter_accounts,
-                authority_seeds,
-                swap_data,
-            )?;
-        }
-
-        // Get base token vault balance after redemption (and potential swap)
+        // Get base token vault balance after redemption
         let base_vault_after = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
         let total_redeemed = base_vault_after
             .checked_sub(base_vault_before)
             .ok_or(ErrorCode::MathOverflow)?;
+
+        require!(
+            total_redeemed >= args.amount,
+            ErrorCode::InsufficientLiquidity
+        );
 
         // Verify slippage
         require!(
