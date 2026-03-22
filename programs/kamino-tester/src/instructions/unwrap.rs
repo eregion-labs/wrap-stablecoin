@@ -42,8 +42,8 @@ pub struct Unwrap<'info> {
     pub wrapped_mint: AccountInfo<'info>,
 
     /// CHECK: Base token mint (USDC)
-    #[account(address = vault_config.base_mint)]
-    pub base_mint: AccountInfo<'info>,
+    #[account(address = vault_config.usdc_mint)]
+    pub usdc_mint: AccountInfo<'info>,
 
     /// CHECK: Base token config (USDC) - validated in handler
     #[account(mut)]
@@ -89,7 +89,7 @@ impl<'info> Unwrap<'info> {
         let user_base_token_owner = Pubkey::try_from(&user_base_token_data[32..64])
             .map_err(|_| ErrorCode::InvalidTokenAccount)?;
         require!(
-            user_base_token_mint == self.vault_config.base_mint,
+            user_base_token_mint == self.vault_config.usdc_mint,
             ErrorCode::InvalidTokenAccount
         );
         require!(
@@ -107,13 +107,13 @@ impl<'info> Unwrap<'info> {
     ) -> Result<(Pubkey, u64, u8)> {
         // Verify PDA derivation
         let vault_config_key = self.vault_config.key();
-        let base_mint = self.vault_config.base_mint;
+        let usdc_mint = self.vault_config.usdc_mint;
 
         let (expected_pda, _bump) = Pubkey::find_program_address(
             &[
                 b"token_config",
                 vault_config_key.as_ref(),
-                base_mint.as_ref(),
+                usdc_mint.as_ref(),
             ],
             &crate::ID,
         );

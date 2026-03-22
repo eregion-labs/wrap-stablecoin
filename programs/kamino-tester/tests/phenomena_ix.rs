@@ -136,6 +136,11 @@ pub fn wrapped_initialize_ix(
     vault_authority: &Pubkey,
     lending_market: &Pubkey,
     treasury: &Pubkey,
+    reserve: &Pubkey,
+    collateral_mint: &Pubkey,
+    token_config: &Pubkey,
+    collateral_vault: &Pubkey,
+    token_vault: &Pubkey,
 ) -> Instruction {
     let data = anchor_sighash("global", "initialize").to_vec();
 
@@ -149,39 +154,9 @@ pub fn wrapped_initialize_ix(
             AccountMeta::new_readonly(*vault_authority, false),
             AccountMeta::new_readonly(*lending_market, false),
             AccountMeta::new_readonly(*treasury, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
-        data,
-    }
-}
-
-pub fn wrapped_add_token_ix(
-    program_id: Pubkey,
-    authority: &Pubkey,
-    vault_config: &Pubkey,
-    vault_authority: &Pubkey,
-    token_mint: &Pubkey,
-    token_config: &Pubkey,
-    reserve: &Pubkey,
-    collateral_mint: &Pubkey,
-    collateral_vault: &Pubkey,
-    token_vault: &Pubkey,
-    is_base_token: bool,
-) -> Instruction {
-    let mut data = anchor_sighash("global", "add_token").to_vec();
-    data.push(is_base_token as u8);
-
-    Instruction {
-        program_id,
-        accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(*vault_config, false),
-            AccountMeta::new_readonly(*vault_authority, false),
-            AccountMeta::new_readonly(*token_mint, false),
-            AccountMeta::new(*token_config, false),
             AccountMeta::new_readonly(*reserve, false),
             AccountMeta::new_readonly(*collateral_mint, false),
+            AccountMeta::new(*token_config, false),
             AccountMeta::new(*collateral_vault, false),
             AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(spl_token::id(), false),
@@ -208,7 +183,7 @@ pub fn wrapped_wrap_ix(
     user_wrapped: &Pubkey,
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
-    base_mint: &Pubkey,
+    usdc_mint: &Pubkey,
     amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "wrap").to_vec();
@@ -226,7 +201,7 @@ pub fn wrapped_wrap_ix(
             AccountMeta::new(*user_wrapped, false),
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new(*token_vault, false),
-            AccountMeta::new_readonly(*base_mint, false),
+            AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,
@@ -246,7 +221,7 @@ pub fn wrapped_unwrap_ix(
     user_wrapped: &Pubkey,
     user_base_token: &Pubkey,
     wrapped_mint: &Pubkey,
-    base_mint: &Pubkey,
+    usdc_mint: &Pubkey,
     base_token_config: &Pubkey,
     base_token_vault: &Pubkey,
     amount: u64,
@@ -263,7 +238,7 @@ pub fn wrapped_unwrap_ix(
             AccountMeta::new(*user_wrapped, false),
             AccountMeta::new(*user_base_token, false),
             AccountMeta::new(*wrapped_mint, false),
-            AccountMeta::new_readonly(*base_mint, false),
+            AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*base_token_config, false),
             AccountMeta::new(*base_token_vault, false),
             AccountMeta::new_readonly(spl_token::id(), false),

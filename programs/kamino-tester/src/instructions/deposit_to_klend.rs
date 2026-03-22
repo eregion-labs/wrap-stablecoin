@@ -44,8 +44,8 @@ pub struct DepositToKlend<'info> {
     pub token_vault: AccountInfo<'info>,
 
     /// CHECK: Base token mint
-    #[account(address = vault_config.base_mint)]
-    pub base_mint: AccountInfo<'info>,
+    #[account(address = vault_config.usdc_mint)]
+    pub usdc_mint: AccountInfo<'info>,
 
     /// CHECK: KLend program
     #[account(address = KLEND_PROGRAM_ID)]

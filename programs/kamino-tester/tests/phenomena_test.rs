@@ -25,7 +25,6 @@ use phenomena_ix::{
     derive_klend_pdas,
     init_lending_market_ix,
     init_reserve_ix,
-    wrapped_add_token_ix,
     wrapped_initialize_ix,
     wrapped_unwrap_ix,
     wrapped_wrap_ix,
@@ -220,7 +219,7 @@ fn test_setup_wrap_unwrap() {
     };
 
     // ========================================
-    // Step 4: Initialize wrapped vault
+    // Step 4: Initialize wrapped vault (includes base token setup)
     // ========================================
     println!("\n[4/7] Initializing wrapped vault...");
     let (vault_config, _) = Pubkey::find_program_address(
@@ -235,26 +234,6 @@ fn test_setup_wrap_unwrap() {
         &[b"vault_authority", vault_config.as_ref()],
         &wrapped_program_id,
     );
-
-    let treasury = user_usdc;
-    let init_vault_ix = wrapped_initialize_ix(
-        wrapped_program_id,
-        &authority.pubkey(),
-        &usdc_mint.pubkey(),
-        &vault_config,
-        &wrapped_mint,
-        &vault_authority,
-        &lending_market.pubkey(),
-        &treasury,
-    );
-    send_tx(&rpc, vec![init_vault_ix], &payer.pubkey(), &[&payer, &authority]).unwrap();
-    println!("✓ Vault config: {}", vault_config);
-    println!("✓ Wrapped mint (wStable): {}", wrapped_mint);
-
-    // ========================================
-    // Step 5: Add base token (USDC)
-    // ========================================
-    println!("\n[5/7] Adding base token (USDC)...");
     let (token_config, _) = Pubkey::find_program_address(
         &[b"token_config", vault_config.as_ref(), usdc_mint.pubkey().as_ref()],
         &wrapped_program_id,
@@ -268,20 +247,25 @@ fn test_setup_wrap_unwrap() {
         &wrapped_program_id,
     );
 
-    let add_token_ix = wrapped_add_token_ix(
+    let treasury = user_usdc;
+    let init_vault_ix = wrapped_initialize_ix(
         wrapped_program_id,
         &authority.pubkey(),
-        &vault_config,
-        &vault_authority,
         &usdc_mint.pubkey(),
-        &token_config,
+        &vault_config,
+        &wrapped_mint,
+        &vault_authority,
+        &lending_market.pubkey(),
+        &treasury,
         &reserve_pubkey,
         &collateral_mint_pubkey,
+        &token_config,
         &token_collateral_vault,
         &token_vault,
-        true, // is_base_token
     );
-    send_tx(&rpc, vec![add_token_ix], &payer.pubkey(), &[&payer, &authority]).unwrap();
+    send_tx(&rpc, vec![init_vault_ix], &payer.pubkey(), &[&payer, &authority]).unwrap();
+    println!("✓ Vault config: {}", vault_config);
+    println!("✓ Wrapped mint (wStable): {}", wrapped_mint);
     println!("✓ Base token (USDC) registered");
 
     // ========================================

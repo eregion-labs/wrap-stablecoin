@@ -260,6 +260,11 @@ fn wrapped_token_initialize_ix(
     vault_authority: &Pubkey,
     lending_market: &Pubkey,
     treasury: &Pubkey,
+    reserve: &Pubkey,
+    collateral_mint: &Pubkey,
+    token_config: &Pubkey,
+    collateral_vault: &Pubkey,
+    token_vault: &Pubkey,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "initialize").to_vec();
 
@@ -271,41 +276,9 @@ fn wrapped_token_initialize_ix(
         AccountMeta::new_readonly(*vault_authority, false),
         AccountMeta::new_readonly(*lending_market, false),
         AccountMeta::new_readonly(*treasury, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-        AccountMeta::new_readonly(system_program::id(), false),
-    ];
-
-    Ok(Instruction {
-        program_id,
-        accounts,
-        data,
-    })
-}
-
-fn wrapped_token_add_token_ix(
-    program_id: Pubkey,
-    authority: &Pubkey,
-    vault_config: &Pubkey,
-    vault_authority: &Pubkey,
-    token_mint: &Pubkey,
-    token_config: &Pubkey,
-    reserve: &Pubkey,
-    collateral_mint: &Pubkey,
-    collateral_vault: &Pubkey,
-    token_vault: &Pubkey,
-    is_base_token: bool,
-) -> Result<Instruction> {
-    let mut data = anchor_sighash("global", "add_token").to_vec();
-    data.push(is_base_token as u8);
-
-    let accounts = vec![
-        AccountMeta::new(*authority, true),
-        AccountMeta::new(*vault_config, false),
-        AccountMeta::new_readonly(*vault_authority, false),
-        AccountMeta::new_readonly(*token_mint, false),
-        AccountMeta::new(*token_config, false),
         AccountMeta::new_readonly(*reserve, false),
         AccountMeta::new_readonly(*collateral_mint, false),
+        AccountMeta::new(*token_config, false),
         AccountMeta::new(*collateral_vault, false),
         AccountMeta::new(*token_vault, false),
         AccountMeta::new_readonly(spl_token::id(), false),
@@ -331,7 +304,7 @@ fn wrapped_token_wrap_ix(
     user_wrapped: &Pubkey,
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
-    base_mint: &Pubkey,
+    usdc_mint: &Pubkey,
     amount: u64,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "wrap").to_vec();
@@ -347,7 +320,7 @@ fn wrapped_token_wrap_ix(
         AccountMeta::new(*user_wrapped, false),
         AccountMeta::new(*wrapped_mint, false),
         AccountMeta::new(*token_vault, false),
-        AccountMeta::new_readonly(*base_mint, false),
+        AccountMeta::new_readonly(*usdc_mint, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
@@ -371,7 +344,7 @@ fn wrapped_token_unwrap_ix(
     user_wrapped: &Pubkey,
     user_base_token: &Pubkey,
     wrapped_mint: &Pubkey,
-    base_mint: &Pubkey,
+    usdc_mint: &Pubkey,
     base_token_config: &Pubkey,
     base_token_vault: &Pubkey,
     amount: u64,
@@ -386,7 +359,7 @@ fn wrapped_token_unwrap_ix(
         AccountMeta::new(*user_wrapped, false),
         AccountMeta::new(*user_base_token, false),
         AccountMeta::new(*wrapped_mint, false),
-        AccountMeta::new_readonly(*base_mint, false),
+        AccountMeta::new_readonly(*usdc_mint, false),
         AccountMeta::new(*base_token_config, false),
         AccountMeta::new(*base_token_vault, false),
         AccountMeta::new_readonly(spl_token::id(), false),
@@ -411,7 +384,7 @@ fn wrapped_token_deposit_to_klend_ix(
     vault_authority: &Pubkey,
     token_config: &Pubkey,
     token_vault: &Pubkey,
-    base_mint: &Pubkey,
+    usdc_mint: &Pubkey,
     klend_program: &Pubkey,
     lending_market: &Pubkey,
     lending_market_authority: &Pubkey,
@@ -432,7 +405,7 @@ fn wrapped_token_deposit_to_klend_ix(
             AccountMeta::new(*vault_authority, false),
             AccountMeta::new(*token_config, false),
             AccountMeta::new(*token_vault, false),
-            AccountMeta::new_readonly(*base_mint, false),
+            AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new_readonly(*klend_program, false),
             AccountMeta::new_readonly(*lending_market, false),
             AccountMeta::new_readonly(*lending_market_authority, false),
@@ -460,7 +433,7 @@ fn wrapped_token_withdraw_from_klend_ix(
     vault_authority: &Pubkey,
     token_config: &Pubkey,
     base_token_vault: &Pubkey,
-    base_mint: &Pubkey,
+    usdc_mint: &Pubkey,
     klend_program: &Pubkey,
     lending_market: &Pubkey,
     lending_market_authority: &Pubkey,
@@ -481,7 +454,7 @@ fn wrapped_token_withdraw_from_klend_ix(
             AccountMeta::new(*vault_authority, false),
             AccountMeta::new(*token_config, false),
             AccountMeta::new(*base_token_vault, false),
-            AccountMeta::new_readonly(*base_mint, false),
+            AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new_readonly(*klend_program, false),
             AccountMeta::new_readonly(*lending_market, false),
             AccountMeta::new_readonly(*lending_market_authority, false),
@@ -654,6 +627,17 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
         eprintln!("Created treasury ATA: {}", treasury);
     }
 
+    let (token_config, _) = Pubkey::find_program_address(
+        &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
+        &program_id,
+    );
+    let (token_collateral_vault, _) = Pubkey::find_program_address(
+        &[b"token_collateral_vault", token_config.as_ref()],
+        &program_id,
+    );
+    let (token_vault, _) =
+        Pubkey::find_program_address(&[b"token_vault", token_config.as_ref()], &program_id);
+
     let init_ix = wrapped_token_initialize_ix(
         program_id,
         &payer.pubkey(),
@@ -663,6 +647,11 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
         &vault_authority,
         &lending_market,
         &treasury,
+        &reserve,
+        &collateral_mint,
+        &token_config,
+        &token_collateral_vault,
+        &token_vault,
     )?;
 
     let recent_blockhash = rpc.get_latest_blockhash()?;
@@ -675,43 +664,6 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
 
     let signature = rpc.send_and_confirm_transaction(&tx)?;
     eprintln!("Initialize tx: {}", signature);
-
-    // Add base token (USDC) - required before wrap
-    let (token_config, _) = Pubkey::find_program_address(
-        &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
-        &program_id,
-    );
-    let (token_collateral_vault, _) = Pubkey::find_program_address(
-        &[b"token_collateral_vault", token_config.as_ref()],
-        &program_id,
-    );
-    let (token_vault, _) = Pubkey::find_program_address(
-        &[b"token_vault", token_config.as_ref()],
-        &program_id,
-    );
-
-    let add_token_ix = wrapped_token_add_token_ix(
-        program_id,
-        &payer.pubkey(),
-        &vault_config,
-        &vault_authority,
-        &usdc_mint,
-        &token_config,
-        &reserve,
-        &collateral_mint,
-        &token_collateral_vault,
-        &token_vault,
-        true, // is_base_token
-    )?;
-
-    let recent_blockhash = rpc.get_latest_blockhash()?;
-    let tx = Transaction::new_signed_with_payer(
-        &[add_token_ix],
-        Some(&payer.pubkey()),
-        &[&payer],
-        recent_blockhash,
-    );
-    rpc.send_and_confirm_transaction(&tx)?;
     eprintln!("Base token (USDC) registered");
 
     eprintln!("===========================================");

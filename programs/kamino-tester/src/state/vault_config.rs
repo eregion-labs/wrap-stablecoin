@@ -10,7 +10,7 @@ pub struct VaultConfig {
     pub wrapped_mint_bump: u8,
     pub vault_authority_bump: u8,
     pub lending_market: Pubkey,
-    pub base_mint: Pubkey,
+    pub usdc_mint: Pubkey,
     pub total_stable_deposited: u64,
     pub registered_tokens: u8,
     pub paused: bool,

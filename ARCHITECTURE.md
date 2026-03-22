@@ -93,7 +93,7 @@ Accrued yield from KLend is harvested by the authority into a **treasury** accou
 
 ```
 VaultConfig (per authority)
-├── base_mint          — Base stablecoin (USDC)
+├── usdc_mint          — Base stablecoin (USDC)
 ├── wrapped_mint       — wStable mint
 ├── lending_market     — KLend market
 ├── treasury           — Yield recipient

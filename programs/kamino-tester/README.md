@@ -51,7 +51,7 @@ A Solana program that creates a unified wrapped stablecoin (wStable) backed by m
 
 ```
 VaultConfig (one per authority)
-├── base_mint (USDC)
+├── usdc_mint (USDC)
 ├── wrapped_mint (wStable)
 ├── lending_market (KLend)
 └── registered_tokens: u8
@@ -90,7 +90,7 @@ TokenConfig (one per supported token)
 | `wrapped_mint_bump` | `u8` | Wrapped mint PDA bump |
 | `vault_authority_bump` | `u8` | Vault authority PDA bump |
 | `lending_market` | `Pubkey` | KLend lending market |
-| `base_mint` | `Pubkey` | Base token (USDC) mint |
+| `usdc_mint` | `Pubkey` | Base token (USDC) mint |
 | `total_stable_deposited` | `u64` | Total deposits across all tokens |
 | `registered_tokens` | `u8` | Count of registered tokens |
 | `paused` | `bool` | Emergency pause flag |
@@ -125,7 +125,7 @@ Create the vault with base configuration. Does not register any tokens.
 | Account | Signer | Mutable | Description |
 |---------|--------|---------|-------------|
 | `authority` | Yes | Yes | Payer and admin |
-| `base_mint` | No | No | Base token mint (USDC) |
+| `usdc_mint` | No | No | Base token mint (USDC) |
 | `vault_config` | No | Yes | Vault config PDA (created) |
 | `wrapped_mint` | No | Yes | wStable mint PDA (created) |
 | `vault_authority` | No | No | Vault authority PDA |
@@ -209,7 +209,7 @@ Deposit any supported stablecoin and receive wStable. Non-base tokens are swappe
 | `wrapped_mint` | No | Yes | wStable mint |
 | `token_vault` | No | Yes | Input token vault |
 | `base_token_config` | No | No | Base token config (if swapping) |
-| `base_mint` | No | No | Base token mint (USDC) |
+| `usdc_mint` | No | No | Base token mint (USDC) |
 | `base_token_vault` | No | Yes | Base token vault (if swapping) |
 | `klend_program` | No | No | KLend program |
 | `lending_market` | No | No | KLend market |
@@ -254,7 +254,7 @@ Burn wStable and receive USDC. Redeems from KLend and optionally swaps other tok
 | `user_wrapped` | No | Yes | User's wStable account |
 | `user_base_token` | No | Yes | User's USDC account |
 | `wrapped_mint` | No | Yes | wStable mint |
-| `base_mint` | No | No | Base token mint |
+| `usdc_mint` | No | No | Base token mint |
 | `base_token_config` | No | Yes | Base token config |
 | `base_token_vault` | No | Yes | Base token vault |
 | `base_collateral_vault` | No | Yes | Base collateral vault |

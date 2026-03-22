@@ -18,11 +18,12 @@ pub mod kamino_tester {
     use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_spl::token_interface::{
-        burn, close_account, mint_to, transfer_checked, Burn, CloseAccount, MintTo, TransferChecked,
+        burn, mint_to, transfer_checked, Burn, MintTo, TransferChecked,
     };
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
+        let token_config = &mut ctx.accounts.token_config;
 
         vault_config.bump = ctx.bumps.vault_config;
         vault_config.authority = ctx.accounts.authority.key();
@@ -31,28 +32,17 @@ pub mod kamino_tester {
         vault_config.wrapped_mint_bump = ctx.bumps.wrapped_mint;
         vault_config.vault_authority_bump = ctx.bumps.vault_authority;
         vault_config.lending_market = ctx.accounts.lending_market.key();
-        vault_config.base_mint = ctx.accounts.base_mint.key();
+        vault_config.usdc_mint = ctx.accounts.usdc_mint.key();
         vault_config.total_stable_deposited = 0;
-        vault_config.registered_tokens = 0;
+        vault_config.registered_tokens = 1;
         vault_config.paused = false;
         vault_config.flash_mint_enabled = false;
         vault_config.flash_mint_fee_bps = 0;
 
-        msg!(
-            "Vault initialized with base mint: {}",
-            vault_config.base_mint
-        );
-        Ok(())
-    }
-
-    pub fn add_token(ctx: Context<AddToken>, is_base_token: bool) -> Result<()> {
-        let vault_config = &mut ctx.accounts.vault_config;
-        let token_config = &mut ctx.accounts.token_config;
-
         token_config.bump = ctx.bumps.token_config;
         token_config.vault_config = vault_config.key();
-        token_config.token_mint = ctx.accounts.token_mint.key();
-        token_config.token_decimals = ctx.accounts.token_mint.decimals;
+        token_config.token_mint = ctx.accounts.usdc_mint.key();
+        token_config.token_decimals = ctx.accounts.usdc_mint.decimals;
         token_config.reserve = ctx.accounts.reserve.key();
         token_config.collateral_mint = ctx.accounts.collateral_mint.key();
         token_config.collateral_vault = ctx.accounts.collateral_vault.key();
@@ -60,62 +50,13 @@ pub mod kamino_tester {
         token_config.token_vault = ctx.accounts.token_vault.key();
         token_config.token_vault_bump = ctx.bumps.token_vault;
         token_config.total_deposited = 0;
-        token_config.is_base_token = is_base_token;
+        token_config.is_base_token = true;
         token_config.enabled = true;
 
-        vault_config.registered_tokens = vault_config
-            .registered_tokens
-            .checked_add(1)
-            .ok_or(ErrorCode::MaxTokensReached)?;
-
         msg!(
-            "Token {} added to vault (is_base: {})",
-            ctx.accounts.token_mint.key(),
-            is_base_token
+            "Vault initialized with base mint: {}",
+            vault_config.usdc_mint
         );
-        Ok(())
-    }
-
-    pub fn remove_token(ctx: Context<RemoveToken>) -> Result<()> {
-        let token_mint = ctx.accounts.token_config.token_mint;
-        let vault_config_key = ctx.accounts.vault_config.key();
-
-        let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
-            vault_config_key.as_ref(),
-            &[ctx.accounts.vault_config.vault_authority_bump],
-        ];
-
-        // Close collateral vault
-        close_account(CpiContext::new_with_signer(
-            ctx.accounts.collateral_token_program.to_account_info(),
-            CloseAccount {
-                account: ctx.accounts.collateral_vault.to_account_info(),
-                destination: ctx.accounts.authority.to_account_info(),
-                authority: ctx.accounts.vault_authority.to_account_info(),
-            },
-            &[authority_seeds],
-        ))?;
-
-        // Close token vault
-        close_account(CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            CloseAccount {
-                account: ctx.accounts.token_vault.to_account_info(),
-                destination: ctx.accounts.authority.to_account_info(),
-                authority: ctx.accounts.vault_authority.to_account_info(),
-            },
-            &[authority_seeds],
-        ))?;
-
-        ctx.accounts.vault_config.registered_tokens = ctx
-            .accounts
-            .vault_config
-            .registered_tokens
-            .checked_sub(1)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        msg!("Token {} removed from vault", token_mint);
         Ok(())
     }
 
@@ -234,8 +175,7 @@ pub mod kamino_tester {
             &[vault_authority_bump],
         ];
 
-        let vault_balance =
-            get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+        let vault_balance = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
         require!(
             vault_balance >= args.amount,
             ErrorCode::InsufficientLiquidity
@@ -247,7 +187,7 @@ pub mod kamino_tester {
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
                     from: ctx.accounts.base_token_vault.to_account_info(),
-                    mint: ctx.accounts.base_mint.to_account_info(),
+                    mint: ctx.accounts.usdc_mint.to_account_info(),
                     to: ctx.accounts.user_base_token.to_account_info(),
                     authority: ctx.accounts.vault_authority.to_account_info(),
                 },
@@ -343,10 +283,7 @@ pub mod kamino_tester {
         Ok(())
     }
 
-    pub fn deposit_to_klend(
-        ctx: Context<DepositToKlend>,
-        args: DepositToKlendArgs,
-    ) -> Result<()> {
+    pub fn deposit_to_klend(ctx: Context<DepositToKlend>, args: DepositToKlendArgs) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
@@ -363,7 +300,7 @@ pub mod kamino_tester {
             ctx.accounts.base_reserve.key(),
             ctx.accounts.lending_market.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.base_mint,
+            vault_config.usdc_mint,
             ctx.accounts.reserve_liquidity_supply.key(),
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.token_vault.key(),
@@ -381,7 +318,7 @@ pub mod kamino_tester {
                 ctx.accounts.base_reserve.to_account_info(),
                 ctx.accounts.lending_market.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.base_mint.to_account_info(),
+                ctx.accounts.usdc_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.token_vault.to_account_info(),
@@ -393,10 +330,7 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        msg!(
-            "Deposited {} to KLend from vault",
-            args.amount
-        );
+        msg!("Deposited {} to KLend from vault", args.amount);
         Ok(())
     }
 
@@ -420,7 +354,7 @@ pub mod kamino_tester {
             ctx.accounts.lending_market.key(),
             ctx.accounts.base_reserve.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.base_mint,
+            vault_config.usdc_mint,
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.reserve_liquidity_supply.key(),
             ctx.accounts.base_collateral_vault.key(),
@@ -438,7 +372,7 @@ pub mod kamino_tester {
                 ctx.accounts.lending_market.to_account_info(),
                 ctx.accounts.base_reserve.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.base_mint.to_account_info(),
+                ctx.accounts.usdc_mint.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
                 ctx.accounts.base_collateral_vault.to_account_info(),
@@ -450,10 +384,7 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        msg!(
-            "Withdrew {} from KLend to vault",
-            args.collateral_amount
-        );
+        msg!("Withdrew {} from KLend to vault", args.collateral_amount);
         Ok(())
     }
 

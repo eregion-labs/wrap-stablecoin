@@ -1,14 +1,16 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenInterface};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
-use crate::state::VaultConfig;
+use crate::state::{TokenConfig, VaultConfig};
 
+/// Single-reserve architecture: initialize creates vault_config, wrapped_mint, and the base
+/// token config (token_config, collateral_vault, token_vault) in one call.
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    pub base_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: InterfaceAccount<'info, Mint>,
 
     #[account(
         init,
@@ -43,6 +45,46 @@ pub struct Initialize<'info> {
     /// CHECK: Treasury account to receive yield
     pub treasury: AccountInfo<'info>,
 
+    /// KLend reserve for the base token
+    /// CHECK: Validated by KLend
+    pub reserve: AccountInfo<'info>,
+
+    /// KLend collateral mint for the reserve
+    /// CHECK: Validated by KLend; used to constrain token::mint
+    pub collateral_mint: AccountInfo<'info>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + TokenConfig::INIT_SPACE,
+        seeds = [b"token_config", vault_config.key().as_ref(), usdc_mint.key().as_ref()],
+        bump
+    )]
+    pub token_config: Account<'info, TokenConfig>,
+
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"token_collateral_vault", token_config.key().as_ref()],
+        bump,
+        token::mint = collateral_mint,
+        token::authority = vault_authority,
+        token::token_program = collateral_token_program,
+    )]
+    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"token_vault", token_config.key().as_ref()],
+        bump,
+        token::mint = usdc_mint,
+        token::authority = vault_authority,
+        token::token_program = token_program,
+    )]
+    pub token_vault: InterfaceAccount<'info, TokenAccount>,
+
     pub token_program: Interface<'info, TokenInterface>,
+    pub collateral_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
