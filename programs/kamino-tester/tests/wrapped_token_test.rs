@@ -699,10 +699,8 @@ fn test_04_wrap_usdc() -> Result<()> {
         &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
         &program_id,
     );
-    let (token_vault, _) = Pubkey::find_program_address(
-        &[b"token_vault", token_config.as_ref()],
-        &program_id,
-    );
+    let (token_vault, _) =
+        Pubkey::find_program_address(&[b"token_vault", token_config.as_ref()], &program_id);
 
     let user_usdc = get_associated_token_address(&payer.pubkey(), &usdc_mint);
     let user_wrapped = get_associated_token_address(&payer.pubkey(), &wrapped_mint);
@@ -774,10 +772,8 @@ fn test_05_unwrap_wstable() -> Result<()> {
         &[b"token_config", vault_config.as_ref(), usdc_mint.as_ref()],
         &program_id,
     );
-    let (token_vault, _) = Pubkey::find_program_address(
-        &[b"token_vault", token_config.as_ref()],
-        &program_id,
-    );
+    let (token_vault, _) =
+        Pubkey::find_program_address(&[b"token_vault", token_config.as_ref()], &program_id);
 
     let user_usdc = get_associated_token_address(&payer.pubkey(), &usdc_mint);
     let user_wrapped = get_associated_token_address(&payer.pubkey(), &wrapped_mint);
