@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::state::{TokenConfig, VaultConfig};
+use crate::state::{Allowlist, TokenConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct WrapArgs {
@@ -60,6 +60,9 @@ pub struct Wrap<'info> {
     /// CHECK: Base token mint (USDC)
     #[account(address = vault_config.usdc_mint)]
     pub usdc_mint: AccountInfo<'info>,
+
+    /// Required when wrap_public is false. PDA seeds: [b"allowlist", vault_config.key()]
+    pub allowlist: Option<Account<'info, Allowlist>>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }

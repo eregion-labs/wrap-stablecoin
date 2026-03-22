@@ -184,6 +184,7 @@ pub fn wrapped_wrap_ix(
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
     usdc_mint: &Pubkey,
+    allowlist: Option<&Pubkey>,
     amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "wrap").to_vec();
@@ -194,7 +195,7 @@ pub fn wrapped_wrap_ix(
         accounts: vec![
             AccountMeta::new(*user, true),
             AccountMeta::new(*vault_config, false),
-            AccountMeta::new(*vault_authority, false),
+            AccountMeta::new_readonly(*vault_authority, false),
             AccountMeta::new(*token_config, false),
             AccountMeta::new_readonly(*token_mint, false),
             AccountMeta::new(*user_token, false),
@@ -202,6 +203,7 @@ pub fn wrapped_wrap_ix(
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(*usdc_mint, false),
+            AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,
@@ -224,6 +226,7 @@ pub fn wrapped_unwrap_ix(
     usdc_mint: &Pubkey,
     base_token_config: &Pubkey,
     base_token_vault: &Pubkey,
+    allowlist: Option<&Pubkey>,
     amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
@@ -234,13 +237,14 @@ pub fn wrapped_unwrap_ix(
         accounts: vec![
             AccountMeta::new(*user, true),
             AccountMeta::new(*vault_config, false),
-            AccountMeta::new(*vault_authority, false),
+            AccountMeta::new_readonly(*vault_authority, false),
             AccountMeta::new(*user_wrapped, false),
             AccountMeta::new(*user_base_token, false),
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*base_token_config, false),
             AccountMeta::new(*base_token_vault, false),
+            AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,

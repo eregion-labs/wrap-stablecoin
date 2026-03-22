@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use crate::errors::ErrorCode;
+
 pub mod errors;
 pub mod instructions;
 pub mod jupiter;
@@ -9,6 +11,23 @@ pub mod state;
 pub use instructions::*;
 
 declare_id!("5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT");
+
+fn check_access(
+    is_public: bool,
+    authority: &Pubkey,
+    user: &Pubkey,
+    allowlist: Option<&Account<crate::state::Allowlist>>,
+    err: ErrorCode,
+) -> Result<()> {
+    if is_public || user == authority {
+        return Ok(());
+    }
+    let allowlist = allowlist.ok_or(err)?;
+    if !allowlist.contains(user) {
+        return Err(err.into());
+    }
+    Ok(())
+}
 
 #[program]
 pub mod kamino_tester {
@@ -36,6 +55,8 @@ pub mod kamino_tester {
         vault_config.total_stable_deposited = 0;
         vault_config.registered_tokens = 1;
         vault_config.paused = false;
+        vault_config.wrap_public = true;
+        vault_config.unwrap_public = true;
         vault_config.flash_mint_enabled = false;
         vault_config.flash_mint_fee_bps = 0;
 
@@ -65,6 +86,14 @@ pub mod kamino_tester {
         args: WrapArgs,
     ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
+
+        check_access(
+            ctx.accounts.vault_config.wrap_public,
+            &ctx.accounts.vault_config.authority,
+            &ctx.accounts.user.key(),
+            ctx.accounts.allowlist.as_ref(),
+            ErrorCode::NotAllowedToWrap,
+        )?;
 
         // Validate user token accounts
         ctx.accounts.validate_user_accounts()?;
@@ -139,6 +168,14 @@ pub mod kamino_tester {
         args: UnwrapArgs,
     ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
+
+        check_access(
+            ctx.accounts.vault_config.unwrap_public,
+            &ctx.accounts.vault_config.authority,
+            &ctx.accounts.user.key(),
+            ctx.accounts.allowlist.as_ref(),
+            ErrorCode::NotAllowedToUnwrap,
+        )?;
 
         // Validate user token accounts
         ctx.accounts.validate_user_accounts()?;
@@ -391,6 +428,53 @@ pub mod kamino_tester {
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         ctx.accounts.vault_config.paused = paused;
         msg!("Vault paused status set to: {}", paused);
+        Ok(())
+    }
+
+    pub fn set_wrap_public(ctx: Context<SetWrapPublic>, wrap_public: bool) -> Result<()> {
+        ctx.accounts.vault_config.wrap_public = wrap_public;
+        msg!("Wrap public set to: {}", wrap_public);
+        Ok(())
+    }
+
+    pub fn set_unwrap_public(ctx: Context<SetUnwrapPublic>, unwrap_public: bool) -> Result<()> {
+        ctx.accounts.vault_config.unwrap_public = unwrap_public;
+        msg!("Unwrap public set to: {}", unwrap_public);
+        Ok(())
+    }
+
+    pub fn init_allowlist(ctx: Context<InitAllowlist>) -> Result<()> {
+        let allowlist = &mut ctx.accounts.allowlist;
+        allowlist.bump = ctx.bumps.allowlist;
+        allowlist.allowed = vec![];
+        msg!("Allowlist initialized");
+        Ok(())
+    }
+
+    pub fn add_to_allowlist(ctx: Context<AddToAllowlist>, pubkey: Pubkey) -> Result<()> {
+        let allowlist = &mut ctx.accounts.allowlist;
+        require!(
+            allowlist.allowed.len() < crate::state::MAX_ALLOWED,
+            ErrorCode::AllowlistFull
+        );
+        require!(
+            !allowlist.contains(&pubkey),
+            ErrorCode::AllowlistDuplicate
+        );
+        allowlist.allowed.push(pubkey);
+        msg!("Added {} to allowlist", pubkey);
+        Ok(())
+    }
+
+    pub fn remove_from_allowlist(ctx: Context<RemoveFromAllowlist>, pubkey: Pubkey) -> Result<()> {
+        let allowlist = &mut ctx.accounts.allowlist;
+        let pos = allowlist
+            .allowed
+            .iter()
+            .position(|k| k == &pubkey)
+            .ok_or(ErrorCode::NotInAllowlist)?;
+        allowlist.allowed.swap_remove(pos);
+        msg!("Removed {} from allowlist", pubkey);
         Ok(())
     }
 

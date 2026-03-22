@@ -305,6 +305,7 @@ fn wrapped_token_wrap_ix(
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
     usdc_mint: &Pubkey,
+    allowlist: Option<&Pubkey>,
     amount: u64,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "wrap").to_vec();
@@ -313,7 +314,7 @@ fn wrapped_token_wrap_ix(
     let accounts = vec![
         AccountMeta::new(*user, true),
         AccountMeta::new(*vault_config, false),
-        AccountMeta::new(*vault_authority, false),
+        AccountMeta::new_readonly(*vault_authority, false),
         AccountMeta::new(*token_config, false),
         AccountMeta::new_readonly(*token_mint, false),
         AccountMeta::new(*user_token, false),
@@ -321,6 +322,7 @@ fn wrapped_token_wrap_ix(
         AccountMeta::new(*wrapped_mint, false),
         AccountMeta::new(*token_vault, false),
         AccountMeta::new_readonly(*usdc_mint, false),
+        AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
@@ -347,6 +349,7 @@ fn wrapped_token_unwrap_ix(
     usdc_mint: &Pubkey,
     base_token_config: &Pubkey,
     base_token_vault: &Pubkey,
+    allowlist: Option<&Pubkey>,
     amount: u64,
 ) -> Result<Instruction> {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
@@ -355,13 +358,14 @@ fn wrapped_token_unwrap_ix(
     let accounts = vec![
         AccountMeta::new(*user, true),
         AccountMeta::new(*vault_config, false),
-        AccountMeta::new(*vault_authority, false),
+        AccountMeta::new_readonly(*vault_authority, false),
         AccountMeta::new(*user_wrapped, false),
         AccountMeta::new(*user_base_token, false),
         AccountMeta::new(*wrapped_mint, false),
         AccountMeta::new_readonly(*usdc_mint, false),
         AccountMeta::new(*base_token_config, false),
         AccountMeta::new(*base_token_vault, false),
+        AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
@@ -730,6 +734,7 @@ fn test_04_wrap_usdc() -> Result<()> {
         &wrapped_mint,
         &token_vault,
         &usdc_mint,
+        None,
         wrap_amount,
     )?;
 
@@ -790,6 +795,7 @@ fn test_05_unwrap_wstable() -> Result<()> {
         &usdc_mint,
         &token_config,
         &token_vault,
+        None,
         unwrap_amount,
     )?;
 

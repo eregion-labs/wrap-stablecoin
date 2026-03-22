@@ -67,4 +67,19 @@ pub enum ErrorCode {
 
     #[msg("Invalid token account")]
     InvalidTokenAccount,
+
+    #[msg("Not allowed to wrap")]
+    NotAllowedToWrap,
+
+    #[msg("Not allowed to unwrap")]
+    NotAllowedToUnwrap,
+
+    #[msg("Allowlist full")]
+    AllowlistFull,
+
+    #[msg("Pubkey not in allowlist")]
+    NotInAllowlist,
+
+    #[msg("Pubkey already in allowlist")]
+    AllowlistDuplicate,
 }

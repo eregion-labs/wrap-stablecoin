@@ -14,6 +14,8 @@ pub struct VaultConfig {
     pub total_stable_deposited: u64,
     pub registered_tokens: u8,
     pub paused: bool,
+    pub wrap_public: bool,
+    pub unwrap_public: bool,
     pub flash_mint_enabled: bool,
     pub flash_mint_fee_bps: u16,
 }

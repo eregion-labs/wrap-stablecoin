@@ -289,6 +289,7 @@ fn test_setup_wrap_unwrap() {
         &wrapped_mint,
         &token_vault,
         &usdc_mint.pubkey(),
+        None,
         wrap_amount,
     );
     send_tx(&rpc, vec![wrap_ix], &payer.pubkey(), &[&payer]).unwrap();
@@ -310,6 +311,7 @@ fn test_setup_wrap_unwrap() {
         &usdc_mint.pubkey(),
         &token_config,
         &token_vault,
+        None,
         unwrap_amount,
     );
     send_tx(&rpc, vec![unwrap_ix], &payer.pubkey(), &[&payer]).unwrap();

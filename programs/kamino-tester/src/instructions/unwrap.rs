@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::state::VaultConfig;
+use crate::state::{Allowlist, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct UnwrapArgs {
@@ -52,6 +52,9 @@ pub struct Unwrap<'info> {
     /// CHECK: Base token vault - validated in handler
     #[account(mut)]
     pub base_token_vault: AccountInfo<'info>,
+
+    /// Required when unwrap_public is false. PDA seeds: [b"allowlist", vault_config.key()]
+    pub allowlist: Option<Account<'info, Allowlist>>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
