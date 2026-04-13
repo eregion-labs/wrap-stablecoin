@@ -7,13 +7,13 @@ use crate::state::{TokenConfig, VaultConfig};
 #[derive(Accounts)]
 pub struct AddToken<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
@@ -28,7 +28,7 @@ pub struct AddToken<'info> {
 
     #[account(
         init,
-        payer = authority,
+        payer = admin,
         space = 8 + TokenConfig::INIT_SPACE,
         seeds = [b"token_config", vault_config.key().as_ref(), token_mint.key().as_ref()],
         bump
@@ -40,9 +40,12 @@ pub struct AddToken<'info> {
 
     pub collateral_mint: InterfaceAccount<'info, Mint>,
 
+    /// CHECK: Reserve liquidity supply token account (stored for validation in wrap/unwrap)
+    pub reserve_liquidity_supply: AccountInfo<'info>,
+
     #[account(
         init,
-        payer = authority,
+        payer = admin,
         seeds = [b"token_collateral_vault", token_config.key().as_ref()],
         bump,
         token::mint = collateral_mint,
@@ -53,7 +56,7 @@ pub struct AddToken<'info> {
 
     #[account(
         init,
-        payer = authority,
+        payer = admin,
         seeds = [b"token_vault", token_config.key().as_ref()],
         bump,
         token::mint = token_mint,

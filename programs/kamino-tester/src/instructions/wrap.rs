@@ -73,20 +73,20 @@ pub struct Wrap<'info> {
     /// CHECK: KLend lending market authority PDA
     pub lending_market_authority: AccountInfo<'info>,
 
-    /// CHECK: Base token KLend reserve
-    #[account(mut)]
+    /// CHECK: Base token KLend reserve - validated via token_config
+    #[account(mut, address = token_config.reserve)]
     pub base_reserve: AccountInfo<'info>,
 
-    /// CHECK: Reserve liquidity supply
-    #[account(mut)]
+    /// CHECK: Reserve liquidity supply - validated via token_config
+    #[account(mut, address = token_config.reserve_liquidity_supply)]
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
-    /// CHECK: Reserve collateral mint
-    #[account(mut)]
+    /// CHECK: Reserve collateral mint - validated via token_config
+    #[account(mut, address = token_config.collateral_mint)]
     pub reserve_collateral_mint: AccountInfo<'info>,
 
-    /// CHECK: Base token collateral vault (from base_token_config)
-    #[account(mut)]
+    /// CHECK: Base token collateral vault - validated via token_config
+    #[account(mut, address = token_config.collateral_vault)]
     pub base_collateral_vault: AccountInfo<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
