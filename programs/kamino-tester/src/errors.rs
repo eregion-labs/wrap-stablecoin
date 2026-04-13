@@ -82,4 +82,16 @@ pub enum ErrorCode {
 
     #[msg("Pubkey already in allowlist")]
     AllowlistDuplicate,
+
+    #[msg("is_base_token flag does not match vault base_mint")]
+    InvalidBaseTokenConfig,
+
+    #[msg("Harvest amount exceeds available yield")]
+    ExceedsHarvestableYield,
+
+    #[msg("Flash mint amount exceeds configured maximum")]
+    FlashMintAmountExceeded,
+
+    #[msg("No pending authority transfer")]
+    NoPendingTransfer,
 }

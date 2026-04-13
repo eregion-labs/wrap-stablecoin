@@ -26,7 +26,7 @@ pub struct Initialize<'info> {
         payer = authority,
         seeds = [b"wrapped_mint", vault_config.key().as_ref()],
         bump,
-        mint::decimals = 6,
+        mint::decimals = usdc_mint.decimals,
         mint::authority = vault_authority,
         mint::token_program = token_program,
     )]
@@ -48,6 +48,10 @@ pub struct Initialize<'info> {
     /// KLend reserve for the base token
     /// CHECK: Validated by KLend
     pub reserve: AccountInfo<'info>,
+
+    /// KLend reserve liquidity supply (stored in token_config for later CPI validation)
+    /// CHECK: Validated by KLend
+    pub reserve_liquidity_supply: AccountInfo<'info>,
 
     /// KLend collateral mint for the reserve
     /// CHECK: Validated by KLend; used to constrain token::mint

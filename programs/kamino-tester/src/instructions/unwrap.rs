@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
 use crate::errors::ErrorCode;
-use crate::state::{Allowlist, VaultConfig};
+use crate::state::{Allowlist, TokenConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct UnwrapArgs {
@@ -45,12 +45,16 @@ pub struct Unwrap<'info> {
     #[account(address = vault_config.usdc_mint)]
     pub usdc_mint: AccountInfo<'info>,
 
-    /// CHECK: Base token config (USDC) - validated in handler
-    #[account(mut)]
-    pub base_token_config: AccountInfo<'info>,
+    #[account(
+        mut,
+        seeds = [b"token_config", vault_config.key().as_ref(), vault_config.usdc_mint.as_ref()],
+        bump = base_token_config.bump,
+        constraint = base_token_config.is_base_token @ ErrorCode::TokenNotFound
+    )]
+    pub base_token_config: Account<'info, TokenConfig>,
 
-    /// CHECK: Base token vault - validated in handler
-    #[account(mut)]
+    /// CHECK: Base token vault - validated via base_token_config
+    #[account(mut, address = base_token_config.token_vault)]
     pub base_token_vault: AccountInfo<'info>,
 
     /// Required when unwrap_public is false. PDA seeds: [b"allowlist", vault_config.key()]
@@ -101,66 +105,5 @@ impl<'info> Unwrap<'info> {
         );
 
         Ok(())
-    }
-
-    /// Validate base_token_config PDA and extract fields needed for unwrap
-    /// Returns (token_vault, total_deposited, token_decimals)
-    pub fn validate_and_get_base_config(
-        &self,
-    ) -> Result<(Pubkey, u64, u8)> {
-        // Verify PDA derivation
-        let vault_config_key = self.vault_config.key();
-        let usdc_mint = self.vault_config.usdc_mint;
-
-        let (expected_pda, _bump) = Pubkey::find_program_address(
-            &[
-                b"token_config",
-                vault_config_key.as_ref(),
-                usdc_mint.as_ref(),
-            ],
-            &crate::ID,
-        );
-        require!(
-            self.base_token_config.key() == expected_pda,
-            ErrorCode::TokenNotFound
-        );
-
-        // Read token_config data (skip 8-byte discriminator)
-        let config_data = self.base_token_config.try_borrow_data()?;
-        require!(
-            config_data.len() >= 8 + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1 + 32 + 1 + 8 + 1 + 1,
-            ErrorCode::TokenNotFound
-        );
-
-        // TokenConfig layout after discriminator:
-        // bump: u8 (1), vault_config: Pubkey (32), token_mint: Pubkey (32), token_decimals: u8 (1)
-        // reserve: Pubkey (32), collateral_mint: Pubkey (32), collateral_vault: Pubkey (32)
-        // collateral_vault_bump: u8 (1), token_vault: Pubkey (32), token_vault_bump: u8 (1)
-        // total_deposited: u64 (8), is_base_token: bool (1), enabled: bool (1)
-
-        let offset = 8;
-        let token_decimals = config_data[offset + 1 + 32 + 32];
-        let token_vault = Pubkey::try_from(
-            &config_data[offset + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1
-                ..offset + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1 + 32],
-        )
-        .map_err(|_| ErrorCode::TokenNotFound)?;
-
-        let total_deposited_offset = offset + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1 + 32 + 1;
-        let total_deposited = u64::from_le_bytes(
-            config_data[total_deposited_offset..total_deposited_offset + 8]
-                .try_into()
-                .map_err(|_| ErrorCode::TokenNotFound)?,
-        );
-
-        let is_base_token = config_data[total_deposited_offset + 8] != 0;
-        require!(is_base_token, ErrorCode::TokenNotFound);
-
-        require!(
-            self.base_token_vault.key() == token_vault,
-            ErrorCode::TokenNotFound
-        );
-
-        Ok((token_vault, total_deposited, token_decimals))
     }
 }
