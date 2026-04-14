@@ -1,5 +1,3 @@
-#![allow(deprecated)] // Anchor 0.31 macro uses AccountInfo::realloc (renamed to resize)
-
 use anchor_lang::prelude::*;
 
 pub mod errors;
@@ -28,8 +26,6 @@ pub mod kamino_tester {
 
         vault_config.bump = ctx.bumps.vault_config;
         vault_config.authority = ctx.accounts.authority.key();
-        vault_config.admin = ctx.accounts.authority.key();
-        vault_config.pending_admin = Pubkey::default();
         vault_config.treasury = ctx.accounts.treasury.key();
         vault_config.wrapped_mint = ctx.accounts.wrapped_mint.key();
         vault_config.wrapped_mint_bump = ctx.bumps.wrapped_mint;
@@ -41,7 +37,6 @@ pub mod kamino_tester {
         vault_config.paused = false;
         vault_config.flash_mint_enabled = false;
         vault_config.flash_mint_fee_bps = 0;
-        vault_config.flash_mint_max_amount = 0;
 
         msg!(
             "Vault initialized with base mint: {}",
@@ -53,19 +48,6 @@ pub mod kamino_tester {
     pub fn add_token(ctx: Context<AddToken>, is_base_token: bool) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
         let token_config = &mut ctx.accounts.token_config;
-
-        // Validate is_base_token consistency with vault base_mint
-        if is_base_token {
-            require!(
-                ctx.accounts.token_mint.key() == vault_config.base_mint,
-                ErrorCode::InvalidBaseTokenConfig
-            );
-        } else {
-            require!(
-                ctx.accounts.token_mint.key() != vault_config.base_mint,
-                ErrorCode::InvalidBaseTokenConfig
-            );
-        }
 
         token_config.bump = ctx.bumps.token_config;
         token_config.vault_config = vault_config.key();
@@ -80,8 +62,6 @@ pub mod kamino_tester {
         token_config.total_deposited = 0;
         token_config.is_base_token = is_base_token;
         token_config.enabled = true;
-        token_config.reserve_liquidity_supply = ctx.accounts.reserve_liquidity_supply.key();
-        token_config.total_collateral_deposited = 0;
 
         vault_config.registered_tokens = vault_config
             .registered_tokens
@@ -111,7 +91,7 @@ pub mod kamino_tester {
             ctx.accounts.collateral_token_program.to_account_info(),
             CloseAccount {
                 account: ctx.accounts.collateral_vault.to_account_info(),
-                destination: ctx.accounts.admin.to_account_info(),
+                destination: ctx.accounts.authority.to_account_info(),
                 authority: ctx.accounts.vault_authority.to_account_info(),
             },
             &[authority_seeds],
@@ -122,7 +102,7 @@ pub mod kamino_tester {
             ctx.accounts.token_program.to_account_info(),
             CloseAccount {
                 account: ctx.accounts.token_vault.to_account_info(),
-                destination: ctx.accounts.admin.to_account_info(),
+                destination: ctx.accounts.authority.to_account_info(),
                 authority: ctx.accounts.vault_authority.to_account_info(),
             },
             &[authority_seeds],
@@ -183,10 +163,6 @@ pub mod kamino_tester {
         let deposit_amount = args.amount;
         let liquidity_source = ctx.accounts.token_vault.to_account_info();
 
-        // Record collateral balance before KLend deposit
-        let collateral_before =
-            get_token_balance(&ctx.accounts.base_collateral_vault.to_account_info())?;
-
         // Deposit to KLend
         let ix = deposit_reserve_liquidity_ix(
             ctx.accounts.klend_program.key(),
@@ -224,19 +200,7 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        // Track kTokens received for harvest yield cap
-        let collateral_after =
-            get_token_balance(&ctx.accounts.base_collateral_vault.to_account_info())?;
-        let collateral_received = collateral_after
-            .checked_sub(collateral_before)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        token_config.total_collateral_deposited = token_config
-            .total_collateral_deposited
-            .checked_add(collateral_received)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        // Mint wStable to user (1:1 with base token deposited)
+        // Mint wStable to user (1:1 with USDC deposited)
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -250,7 +214,7 @@ pub mod kamino_tester {
             deposit_amount,
         )?;
 
-        // Update totals
+        // Update totals - track original input token amount for proportional unwrap
         token_config.total_deposited = token_config
             .total_deposited
             .checked_add(deposit_amount)
@@ -262,7 +226,7 @@ pub mod kamino_tester {
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
-            "Wrapped {} tokens (deposited {} base) for user {}",
+            "Wrapped {} tokens (deposited {} USDC) for user {}",
             args.amount,
             deposit_amount,
             ctx.accounts.user.key()
@@ -275,32 +239,29 @@ pub mod kamino_tester {
         args: UnwrapArgs,
     ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
+        require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
         // Validate user token accounts
         ctx.accounts.validate_user_accounts()?;
 
+        // Validate base_token_config and extract fields
+        let (
+            _is_base_token,
+            _token_vault,
+            _collateral_vault,
+            _reserve,
+            _collateral_mint,
+            _total_deposited,
+        ) = ctx.accounts.validate_and_get_base_config()?;
+
         let vault_config = &mut ctx.accounts.vault_config;
-        let base_token_config = &mut ctx.accounts.base_token_config;
         let vault_config_key = vault_config.key();
         let vault_authority_bump = vault_config.vault_authority_bump;
-        let token_decimals = base_token_config.token_decimals;
 
         require!(
             vault_config.total_stable_deposited >= args.amount,
             ErrorCode::InsufficientBalance
         );
-
-        // Cap collateral redemption to the user's proportional share.
-        // This prevents griefing attacks where an attacker redeems all kTokens
-        // (forcing yield loss) while only burning a small amount of wStable.
-        let collateral_to_redeem = (args.amount as u128)
-            .checked_mul(base_token_config.total_collateral_deposited as u128)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(base_token_config.total_deposited as u128)
-            .ok_or(ErrorCode::MathOverflow)? as u64;
-
-        // +1 rounding buffer so the redemption always covers args.amount
-        let collateral_to_redeem = collateral_to_redeem.saturating_add(1);
 
         // Burn wStable from user
         burn(
@@ -340,7 +301,7 @@ pub mod kamino_tester {
             ctx.accounts.collateral_token_program.key(),
             ctx.accounts.token_program.key(),
             ctx.accounts.instruction_sysvar.key(),
-            collateral_to_redeem,
+            args.collateral_amount,
         );
 
         invoke_signed(
@@ -368,20 +329,18 @@ pub mod kamino_tester {
             .checked_sub(base_vault_before)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        // Ensure KLend returned enough to cover the requested amount
         require!(
             total_redeemed >= args.amount,
             ErrorCode::InsufficientLiquidity
         );
 
-        // Verify slippage against min_out_amount
+        // Verify slippage
         require!(
             total_redeemed >= args.min_out_amount,
             ErrorCode::SlippageExceeded
         );
 
-        // Transfer only the requested amount to user (not total_redeemed).
-        // Any excess stays in the vault as yield.
+        // Transfer redeemed USDC to user
         transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -393,21 +352,25 @@ pub mod kamino_tester {
                 },
                 &[authority_seeds],
             ),
-            args.amount,
-            token_decimals,
+            total_redeemed,
+            6, // USDC decimals
         )?;
 
-        // Track collateral redeemed
-        base_token_config.total_collateral_deposited = base_token_config
-            .total_collateral_deposited
-            .checked_sub(collateral_to_redeem)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        // Update totals
-        base_token_config.total_deposited = base_token_config
-            .total_deposited
-            .checked_sub(args.amount)
-            .ok_or(ErrorCode::MathOverflow)?;
+        // Update totals - update base_token_config.total_deposited directly
+        {
+            let mut config_data = ctx.accounts.base_token_config.try_borrow_mut_data()?;
+            let total_deposited_offset = 8 + 1 + 32 + 32 + 1 + 32 + 32 + 32 + 1 + 32 + 1;
+            let current_deposited = u64::from_le_bytes(
+                config_data[total_deposited_offset..total_deposited_offset + 8]
+                    .try_into()
+                    .map_err(|_| ErrorCode::MathOverflow)?,
+            );
+            let new_deposited = current_deposited
+                .checked_sub(args.amount)
+                .ok_or(ErrorCode::MathOverflow)?;
+            config_data[total_deposited_offset..total_deposited_offset + 8]
+                .copy_from_slice(&new_deposited.to_le_bytes());
+        }
 
         vault_config.total_stable_deposited = vault_config
             .total_stable_deposited
@@ -415,10 +378,10 @@ pub mod kamino_tester {
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
-            "Unwrapped {} wStable for user {}, redeemed {} kTokens",
+            "Unwrapped {} wStable for user {}, received {} USDC",
             args.amount,
             ctx.accounts.user.key(),
-            collateral_to_redeem
+            total_redeemed
         );
         Ok(())
     }
@@ -429,17 +392,6 @@ pub mod kamino_tester {
         let vault_config = &ctx.accounts.vault_config;
         let token_config = &ctx.accounts.token_config;
         let vault_config_key = vault_config.key();
-
-        // Cap harvest to excess collateral (yield only, not user-backed deposits)
-        let collateral_balance =
-            get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
-        let max_harvestable = collateral_balance
-            .checked_sub(token_config.total_collateral_deposited)
-            .ok_or(ErrorCode::NoYieldAvailable)?;
-        require!(
-            args.collateral_amount <= max_harvestable,
-            ErrorCode::ExceedsHarvestableYield
-        );
 
         let authority_seeds: &[&[u8]] = &[
             b"vault_authority",
@@ -509,22 +461,12 @@ pub mod kamino_tester {
     }
 
     pub fn transfer_authority(ctx: Context<TransferAuthority>) -> Result<()> {
-        ctx.accounts.vault_config.pending_admin = ctx.accounts.new_admin.key();
+        let old_authority = ctx.accounts.vault_config.authority;
+        ctx.accounts.vault_config.authority = ctx.accounts.new_authority.key();
         msg!(
-            "Admin transfer proposed to {}",
-            ctx.accounts.new_admin.key()
-        );
-        Ok(())
-    }
-
-    pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
-        let old_admin = ctx.accounts.vault_config.admin;
-        ctx.accounts.vault_config.admin = ctx.accounts.new_admin.key();
-        ctx.accounts.vault_config.pending_admin = Pubkey::default();
-        msg!(
-            "Admin transferred from {} to {}",
-            old_admin,
-            ctx.accounts.new_admin.key()
+            "Authority transferred from {} to {}",
+            old_authority,
+            ctx.accounts.new_authority.key()
         );
         Ok(())
     }
@@ -534,14 +476,6 @@ pub mod kamino_tester {
 
         let vault_config = &ctx.accounts.vault_config;
         let vault_config_key = vault_config.key();
-
-        // Enforce flash mint max amount if configured (0 = no limit)
-        if vault_config.flash_mint_max_amount > 0 {
-            require!(
-                args.amount <= vault_config.flash_mint_max_amount,
-                ErrorCode::FlashMintAmountExceeded
-            );
-        }
 
         verify_flash_mint_end_exists(
             &ctx.accounts.instruction_sysvar,
@@ -605,7 +539,6 @@ pub mod kamino_tester {
             ErrorCode::InsufficientRepayment
         );
 
-        // Burn the principal
         burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -618,7 +551,6 @@ pub mod kamino_tester {
             amount,
         )?;
 
-        // Transfer fee to treasury
         if fee > 0 {
             transfer_checked(
                 CpiContext::new(
@@ -657,20 +589,6 @@ pub mod kamino_tester {
     pub fn set_flash_mint_enabled(ctx: Context<SetFlashMintEnabled>, enabled: bool) -> Result<()> {
         ctx.accounts.vault_config.flash_mint_enabled = enabled;
         msg!("Flash mint enabled set to: {}", enabled);
-        Ok(())
-    }
-
-    pub fn set_flash_mint_max_amount(
-        ctx: Context<SetFlashMintMaxAmount>,
-        max_amount: u64,
-    ) -> Result<()> {
-        let old = ctx.accounts.vault_config.flash_mint_max_amount;
-        ctx.accounts.vault_config.flash_mint_max_amount = max_amount;
-        msg!(
-            "Flash mint max amount updated from {} to {} (0 = no limit)",
-            old,
-            max_amount
-        );
         Ok(())
     }
 }

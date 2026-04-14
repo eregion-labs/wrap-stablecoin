@@ -67,16 +67,4 @@ pub enum ErrorCode {
 
     #[msg("Invalid token account")]
     InvalidTokenAccount,
-
-    #[msg("is_base_token flag does not match vault base_mint")]
-    InvalidBaseTokenConfig,
-
-    #[msg("Harvest amount exceeds available yield")]
-    ExceedsHarvestableYield,
-
-    #[msg("Flash mint amount exceeds configured maximum")]
-    FlashMintAmountExceeded,
-
-    #[msg("No pending authority transfer")]
-    NoPendingTransfer,
 }

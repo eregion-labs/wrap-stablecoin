@@ -16,7 +16,4 @@ pub struct TokenConfig {
     pub total_deposited: u64,
     pub is_base_token: bool,
     pub enabled: bool,
-    pub reserve_liquidity_supply: Pubkey,
-    /// Tracks kTokens deposited on behalf of users (for harvest yield cap).
-    pub total_collateral_deposited: u64,
 }

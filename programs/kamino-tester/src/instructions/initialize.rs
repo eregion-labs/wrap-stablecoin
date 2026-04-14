@@ -24,7 +24,7 @@ pub struct Initialize<'info> {
         payer = authority,
         seeds = [b"wrapped_mint", vault_config.key().as_ref()],
         bump,
-        mint::decimals = base_mint.decimals,
+        mint::decimals = 6,
         mint::authority = vault_authority,
         mint::token_program = token_program,
     )]

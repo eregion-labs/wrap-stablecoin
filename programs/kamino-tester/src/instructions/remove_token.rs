@@ -7,13 +7,13 @@ use crate::state::{TokenConfig, VaultConfig};
 #[derive(Accounts)]
 pub struct RemoveToken<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub authority: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized
+        has_one = authority @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
@@ -26,7 +26,7 @@ pub struct RemoveToken<'info> {
 
     #[account(
         mut,
-        close = admin,
+        close = authority,
         seeds = [b"token_config", vault_config.key().as_ref(), token_config.token_mint.as_ref()],
         bump = token_config.bump,
         constraint = token_config.total_deposited == 0 @ ErrorCode::TokenHasDeposits,
