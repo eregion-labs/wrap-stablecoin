@@ -13,14 +13,14 @@ pub struct HarvestYieldArgs {
 #[derive(Accounts)]
 pub struct HarvestYield<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     /// CHECK: PDA authority for signing
     #[account(
@@ -35,7 +35,7 @@ pub struct HarvestYield<'info> {
         seeds = [b"token_config", vault_config.key().as_ref(), token_config.token_mint.as_ref()],
         bump = token_config.bump
     )]
-    pub token_config: Account<'info, TokenConfig>,
+    pub token_config: Box<Account<'info, TokenConfig>>,
 
     /// CHECK: Token mint
     #[account(address = token_config.token_mint)]
@@ -64,8 +64,8 @@ pub struct HarvestYield<'info> {
     #[account(mut, address = token_config.reserve)]
     pub reserve: AccountInfo<'info>,
 
-    /// CHECK: Reserve liquidity supply
-    #[account(mut)]
+    /// CHECK: Reserve liquidity supply - validated via token_config
+    #[account(mut, address = token_config.reserve_liquidity_supply)]
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
     /// CHECK: KLend collateral mint
