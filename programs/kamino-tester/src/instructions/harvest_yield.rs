@@ -20,7 +20,7 @@ pub struct HarvestYield<'info> {
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     /// CHECK: PDA authority for signing
     #[account(
@@ -35,7 +35,7 @@ pub struct HarvestYield<'info> {
         seeds = [b"token_config", vault_config.key().as_ref(), token_config.token_mint.as_ref()],
         bump = token_config.bump
     )]
-    pub token_config: Account<'info, TokenConfig>,
+    pub token_config: Box<Account<'info, TokenConfig>>,
 
     /// CHECK: Token mint
     #[account(address = token_config.token_mint)]
