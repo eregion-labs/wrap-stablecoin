@@ -1,0 +1,25 @@
+[toolchain]
+package_manager = "yarn"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+kamino_tester = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+#test = "cargo test -p kamino-tester --tests -- --nocapture"
+test = "cargo test -p kamino-tester -- --nocapture --test-threads=1"
+
+[[test.genesis]]
+address = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
+program = "so/klend.so"
+upgradeable = true
