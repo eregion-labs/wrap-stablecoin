@@ -12,8 +12,8 @@ use utoipa::ToSchema;
 use crate::app_state::AppState;
 use crate::jupiter;
 use crate::wrap_stablecoin::{
-    build_versioned_tx, decode_versioned_tx_b64, instructions_from_versioned_tx,
-    unsigned_unwrap_tx_bytes, unsigned_wrap_tx_bytes,
+    build_versioned_tx, decode_versioned_tx_b64, ensure_tx_targets_program,
+    instructions_from_versioned_tx, unsigned_unwrap_tx_bytes, unsigned_wrap_tx_bytes,
 };
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -48,6 +48,7 @@ pub struct PreviewRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PreviewResponse {
     pub err: Option<String>,
     pub logs: Option<Vec<String>>,
@@ -82,6 +83,22 @@ fn b64_encode_tx(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
+/// Decode `raw` and confirm at least one instruction targets our wStable program.
+/// Returns `(status, body)` suitable for propagating as an axum error tuple.
+fn verify_tx_bytes(
+    raw: &[u8],
+    program_id: &Pubkey,
+) -> Result<(), (axum::http::StatusCode, String)> {
+    let vtx: VersionedTransaction = bincode::deserialize(raw).map_err(|e| {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("tx decode: {e}"),
+        )
+    })?;
+    ensure_tx_targets_program(&vtx, program_id)
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))
+}
+
 /// Build unsigned **wrap** (issue) transaction.
 #[utoipa::path(
     post,
@@ -107,6 +124,7 @@ pub async fn issue_tx(
         body.amount,
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    verify_tx_bytes(&raw, &state.program_id)?;
     Ok(Json(TxResponse {
         transaction_b64: b64_encode_tx(&raw),
     }))
@@ -138,6 +156,7 @@ pub async fn redeem_tx(
         body.min_out_amount,
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    verify_tx_bytes(&raw, &state.program_id)?;
     Ok(Json(TxResponse {
         transaction_b64: b64_encode_tx(&raw),
     }))
@@ -170,6 +189,8 @@ pub async fn preview_tx(
                 format!("tx decode: {e}"),
             )
         })?;
+    ensure_tx_targets_program(&vtx, &state.program_id)
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     let sim = state
         .rpc
         .simulate_transaction(&vtx)
@@ -238,6 +259,7 @@ pub async fn compose_tx(
             }
         }
         .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        verify_tx_bytes(&raw, &state.program_id)?;
         return Ok(Json(TxResponse {
             transaction_b64: b64_encode_tx(&raw),
         }));
@@ -327,6 +349,8 @@ pub async fn compose_tx(
         }
     };
 
+    ensure_tx_targets_program(&vtx, &state.program_id)
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     let raw = bincode::serialize(&vtx).map_err(|e| {
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,

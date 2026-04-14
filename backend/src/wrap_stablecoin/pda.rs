@@ -1,8 +1,5 @@
+use kamino_tester::constants::{KLEND_PROGRAM_ID, LENDING_MARKET_AUTH_SEED};
 use solana_sdk::pubkey::Pubkey;
-
-pub const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
-
-const LENDING_MARKET_AUTH_SEED: &[u8] = b"lma";
 
 pub fn vault_config(program_id: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"vault_config", authority.as_ref()], program_id)
@@ -35,5 +32,5 @@ pub fn lending_market_authority(klend_program: &Pubkey, lending_market: &Pubkey)
 }
 
 pub fn klend_program_id() -> Pubkey {
-    KLEND_PROGRAM_ID.parse().expect("const KLEND_PROGRAM_ID")
+    KLEND_PROGRAM_ID
 }

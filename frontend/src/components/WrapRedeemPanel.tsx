@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 import { apiPost } from "@/lib/api";
+import { sendWithBlockhashRefresh } from "@/lib/sendWithRefresh";
 
 type TxResponse = { transactionB64: string };
 
@@ -38,16 +39,22 @@ export default function WrapRedeemPanel() {
     }
     setBusy("issue");
     try {
-      const { transactionB64 } = await apiPost<{ user: string; amount: number }, TxResponse>(
-        "/v1/tx/issue",
-        {
-          user: address!,
-          amount,
-        },
-      );
-      const txBytes = Buffer.from(transactionB64, "base64");
-      const tx = VersionedTransaction.deserialize(txBytes);
-      const signature = await sendTransaction(tx, connection);
+      const buildTx = async () => {
+        const { transactionB64 } = await apiPost<{ user: string; amount: number }, TxResponse>(
+          "/v1/tx/issue",
+          { user: address!, amount },
+        );
+        return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
+      };
+      const signature = await sendWithBlockhashRefresh({
+        connection,
+        sendTransaction,
+        buildTx,
+        onBlockhashExpired: () =>
+          enqueueSnackbar("Blockhash expired — please re-approve the refreshed transaction", {
+            variant: "warning",
+          }),
+      });
       enqueueSnackbar(`Issued — ${signature}`, { variant: "success" });
     } catch (e) {
       enqueueSnackbar((e as Error).message, { variant: "error" });
@@ -74,17 +81,22 @@ export default function WrapRedeemPanel() {
     }
     setBusy("redeem");
     try {
-      const { transactionB64 } = await apiPost<
-        { user: string; amount: number; minOutAmount: number },
-        TxResponse
-      >("/v1/tx/redeem", {
-        user: address!,
-        amount,
-        minOutAmount,
+      const buildTx = async () => {
+        const { transactionB64 } = await apiPost<
+          { user: string; amount: number; minOutAmount: number },
+          TxResponse
+        >("/v1/tx/redeem", { user: address!, amount, minOutAmount });
+        return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
+      };
+      const signature = await sendWithBlockhashRefresh({
+        connection,
+        sendTransaction,
+        buildTx,
+        onBlockhashExpired: () =>
+          enqueueSnackbar("Blockhash expired — please re-approve the refreshed transaction", {
+            variant: "warning",
+          }),
       });
-      const txBytes = Buffer.from(transactionB64, "base64");
-      const tx = VersionedTransaction.deserialize(txBytes);
-      const signature = await sendTransaction(tx, connection);
       enqueueSnackbar(`Redeemed — ${signature}`, { variant: "success" });
     } catch (e) {
       enqueueSnackbar((e as Error).message, { variant: "error" });

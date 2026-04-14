@@ -2,8 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use sha2::{Digest, Sha256};
 
-pub const KLEND_PROGRAM_ID: Pubkey = pubkey!("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD");
-pub const LENDING_MARKET_AUTH_SEED: &[u8] = b"lma";
+pub use crate::constants::{KLEND_PROGRAM_ID, LENDING_MARKET_AUTH_SEED};
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
     let mut hasher = Sha256::new();
