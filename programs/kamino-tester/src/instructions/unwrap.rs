@@ -20,7 +20,7 @@ pub struct Unwrap<'info> {
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     /// CHECK: PDA authority for signing
     #[account(
@@ -51,7 +51,7 @@ pub struct Unwrap<'info> {
         bump = base_token_config.bump,
         constraint = base_token_config.is_base_token @ ErrorCode::TokenNotFound
     )]
-    pub base_token_config: Account<'info, TokenConfig>,
+    pub base_token_config: Box<Account<'info, TokenConfig>>,
 
     /// CHECK: Base token vault - validated via base_token_config
     #[account(mut, address = base_token_config.token_vault)]

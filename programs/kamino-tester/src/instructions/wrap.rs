@@ -20,7 +20,7 @@ pub struct Wrap<'info> {
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     /// CHECK: PDA authority for signing
     #[account(
@@ -35,7 +35,7 @@ pub struct Wrap<'info> {
         bump = token_config.bump,
         constraint = token_config.enabled @ ErrorCode::TokenDisabled
     )]
-    pub token_config: Account<'info, TokenConfig>,
+    pub token_config: Box<Account<'info, TokenConfig>>,
 
     /// CHECK: Input token mint
     #[account(address = token_config.token_mint)]
