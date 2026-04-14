@@ -1,7 +1,2 @@
-.anchor
-.DS_Store
-target
-**/*.rs.bk
-node_modules
-test-ledger
-.yarn
+# Monorepo: ignore rules live in the repository root `.gitignore` (one directory up).
+# Add package-local exceptions here only if needed.
