@@ -21,7 +21,7 @@ pub struct Wrap<'info> {
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
-    pub vault_config: Box<Account<'info, VaultConfig>>,
+    pub vault_config: Account<'info, VaultConfig>,
 
     /// CHECK: PDA authority for signing
     #[account(
@@ -36,7 +36,7 @@ pub struct Wrap<'info> {
         bump = token_config.bump,
         constraint = token_config.enabled @ ErrorCode::TokenDisabled
     )]
-    pub token_config: Box<Account<'info, TokenConfig>>,
+    pub token_config: Account<'info, TokenConfig>,
 
     /// CHECK: Input token mint
     #[account(address = token_config.token_mint)]
@@ -73,20 +73,20 @@ pub struct Wrap<'info> {
     /// CHECK: KLend lending market authority PDA
     pub lending_market_authority: AccountInfo<'info>,
 
-    /// CHECK: Base token KLend reserve - validated via token_config
-    #[account(mut, address = token_config.reserve)]
+    /// CHECK: Base token KLend reserve
+    #[account(mut)]
     pub base_reserve: AccountInfo<'info>,
 
-    /// CHECK: Reserve liquidity supply - validated via token_config
-    #[account(mut, address = token_config.reserve_liquidity_supply)]
+    /// CHECK: Reserve liquidity supply
+    #[account(mut)]
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
-    /// CHECK: Reserve collateral mint - validated via token_config
-    #[account(mut, address = token_config.collateral_mint)]
+    /// CHECK: Reserve collateral mint
+    #[account(mut)]
     pub reserve_collateral_mint: AccountInfo<'info>,
 
-    /// CHECK: Base token collateral vault - validated via token_config
-    #[account(mut, address = token_config.collateral_vault)]
+    /// CHECK: Base token collateral vault (from base_token_config)
+    #[account(mut)]
     pub base_collateral_vault: AccountInfo<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,

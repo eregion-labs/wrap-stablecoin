@@ -23,7 +23,7 @@ pub struct FlashMintStart<'info> {
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused,
-        constraint = vault_config.flash_mint_enabled || borrower.key() == vault_config.admin @ ErrorCode::FlashMintDisabled
+        constraint = vault_config.flash_mint_enabled || borrower.key() == vault_config.authority @ ErrorCode::FlashMintDisabled
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
@@ -67,6 +67,7 @@ pub struct FlashMintEnd<'info> {
     pub borrower: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump
     )]
@@ -82,6 +83,13 @@ pub struct FlashMintEnd<'info> {
     )]
     pub flash_loan_state: Account<'info, FlashLoanState>,
 
+    /// CHECK: PDA authority for signing burn
+    #[account(
+        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        bump = vault_config.vault_authority_bump
+    )]
+    pub vault_authority: AccountInfo<'info>,
+
     #[account(mut, address = vault_config.wrapped_mint)]
     pub wrapped_mint: InterfaceAccount<'info, Mint>,
 
@@ -94,8 +102,7 @@ pub struct FlashMintEnd<'info> {
 
     #[account(
         mut,
-        constraint = fee_receiver.mint == vault_config.wrapped_mint,
-        constraint = fee_receiver.owner == vault_config.treasury @ ErrorCode::Unauthorized
+        constraint = fee_receiver.mint == vault_config.wrapped_mint
     )]
     pub fee_receiver: InterfaceAccount<'info, TokenAccount>,
 
@@ -105,13 +112,13 @@ pub struct FlashMintEnd<'info> {
 #[derive(Accounts)]
 pub struct SetFlashMintFee<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub authority: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized
+        has_one = authority @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 }
@@ -119,27 +126,13 @@ pub struct SetFlashMintFee<'info> {
 #[derive(Accounts)]
 pub struct SetFlashMintEnabled<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub authority: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized
-    )]
-    pub vault_config: Account<'info, VaultConfig>,
-}
-
-#[derive(Accounts)]
-pub struct SetFlashMintMaxAmount<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
-        bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized
+        has_one = authority @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 }
