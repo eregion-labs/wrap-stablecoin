@@ -57,7 +57,7 @@ pub fn deposit_reserve_liquidity_ix(
     Instruction {
         program_id: klend_program,
         accounts: vec![
-            AccountMeta::new(owner, true),
+            AccountMeta::new_readonly(owner, true),
             AccountMeta::new(reserve, false),
             AccountMeta::new_readonly(lending_market, false),
             AccountMeta::new_readonly(lending_market_authority, false),
@@ -118,7 +118,7 @@ pub fn redeem_reserve_collateral_ix(
     Instruction {
         program_id: klend_program,
         accounts: vec![
-            AccountMeta::new(owner, true),
+            AccountMeta::new_readonly(owner, true),
             AccountMeta::new_readonly(lending_market, false),
             AccountMeta::new(reserve, false),
             AccountMeta::new_readonly(lending_market_authority, false),

@@ -10,7 +10,7 @@ pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init,
@@ -19,7 +19,7 @@ pub struct Initialize<'info> {
         seeds = [b"vault_config", authority.key().as_ref()],
         bump
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     #[account(
         init,
@@ -30,7 +30,7 @@ pub struct Initialize<'info> {
         mint::authority = vault_authority,
         mint::token_program = token_program,
     )]
-    pub wrapped_mint: InterfaceAccount<'info, Mint>,
+    pub wrapped_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// CHECK: PDA authority for signing token operations
     #[account(
@@ -64,7 +64,7 @@ pub struct Initialize<'info> {
         seeds = [b"token_config", vault_config.key().as_ref(), usdc_mint.key().as_ref()],
         bump
     )]
-    pub token_config: Account<'info, TokenConfig>,
+    pub token_config: Box<Account<'info, TokenConfig>>,
 
     #[account(
         init,
@@ -75,7 +75,7 @@ pub struct Initialize<'info> {
         token::authority = vault_authority,
         token::token_program = collateral_token_program,
     )]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -86,7 +86,7 @@ pub struct Initialize<'info> {
         token::authority = vault_authority,
         token::token_program = token_program,
     )]
-    pub token_vault: InterfaceAccount<'info, TokenAccount>,
+    pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub collateral_token_program: Interface<'info, TokenInterface>,

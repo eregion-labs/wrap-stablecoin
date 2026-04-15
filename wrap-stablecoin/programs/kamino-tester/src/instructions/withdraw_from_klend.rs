@@ -21,7 +21,7 @@ pub struct WithdrawFromKlend<'info> {
         has_one = admin @ ErrorCode::Unauthorized,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     /// CHECK: PDA authority for signing KLend CPI
     #[account(
@@ -37,7 +37,7 @@ pub struct WithdrawFromKlend<'info> {
         constraint = token_config.is_base_token @ ErrorCode::TokenNotFound,
         constraint = token_config.enabled @ ErrorCode::TokenDisabled
     )]
-    pub token_config: Account<'info, TokenConfig>,
+    pub token_config: Box<Account<'info, TokenConfig>>,
 
     /// CHECK: Base token vault - receives redeemed liquidity from KLend
     #[account(mut, address = token_config.token_vault)]
