@@ -144,11 +144,16 @@ pub struct SetFlashMintMaxAmount<'info> {
     pub vault_config: Account<'info, VaultConfig>,
 }
 
+/// Max forward scan for the matching flash_mint_end in the current transaction. A v0 tx can
+/// hold ~60 top-level instructions; 64 is a generous upper bound that keeps CU predictable.
+const FLASH_MINT_SCAN_LIMIT: usize = 64;
+
 pub fn verify_flash_mint_end_exists(
     instruction_sysvar: &AccountInfo,
     borrower: &Pubkey,
     vault_config: &Pubkey,
     flash_loan_state: &Pubkey,
+    wrapped_mint: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<()> {
     let current_index = load_current_index_checked(instruction_sysvar)
@@ -156,27 +161,31 @@ pub fn verify_flash_mint_end_exists(
 
     let discriminator: [u8; 8] = anchor_sighash("flash_mint_end");
 
-    let mut index = current_index as usize + 1;
-    loop {
+    let start = current_index as usize + 1;
+    for offset in 0..FLASH_MINT_SCAN_LIMIT {
+        let index = start + offset;
         match load_instruction_at_checked(index, instruction_sysvar) {
             Ok(ix) => {
+                // Accounts order in FlashMintEnd:
+                //   [0] borrower, [1] vault_config, [2] flash_loan_state,
+                //   [3] wrapped_mint, [4] borrower_wrapped, [5] fee_receiver, [6] token_program
                 if ix.program_id == *program_id
                     && ix.data.len() >= 8
                     && ix.data[..8] == discriminator
-                    && ix.accounts.len() >= 3
+                    && ix.accounts.len() >= 4
                     && ix.accounts[0].pubkey == *borrower
                     && ix.accounts[1].pubkey == *vault_config
                     && ix.accounts[2].pubkey == *flash_loan_state
+                    && ix.accounts[3].pubkey == *wrapped_mint
                 {
                     return Ok(());
                 }
-                index += 1;
             }
-            Err(_) => break,
+            Err(_) => return Err(ErrorCode::MissingFlashMintEnd.into()),
         }
     }
 
-    Err(ErrorCode::MissingFlashMintEnd.into())
+    Err(ErrorCode::FlashMintScanLimit.into())
 }
 
 fn anchor_sighash(name: &str) -> [u8; 8] {

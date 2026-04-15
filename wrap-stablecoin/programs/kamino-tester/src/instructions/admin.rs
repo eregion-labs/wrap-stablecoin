@@ -52,6 +52,20 @@ pub struct TransferAuthority<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CancelTransferAuthority<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        bump = vault_config.bump,
+        has_one = admin @ ErrorCode::Unauthorized
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+}
+
+#[derive(Accounts)]
 pub struct AcceptAuthority<'info> {
     #[account(mut)]
     pub new_admin: Signer<'info>,

@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
+use crate::constants::{KLEND_PROGRAM_ID, LENDING_MARKET_AUTH_SEED};
+use crate::errors::ErrorCode;
 use crate::state::{TokenConfig, VaultConfig};
 
 /// Single-reserve architecture: initialize creates vault_config, wrapped_mint, and the base
@@ -40,17 +42,28 @@ pub struct Initialize<'info> {
     pub vault_authority: AccountInfo<'info>,
 
     /// CHECK: KLend lending market
+    #[account(owner = KLEND_PROGRAM_ID @ ErrorCode::InvalidReserveOwner)]
     pub lending_market: AccountInfo<'info>,
+
+    /// CHECK: KLend lending market authority PDA — derived from the lending market passed here.
+    /// Captured once at init so the PDA constraint in deposit/withdraw/harvest is cheap.
+    #[account(
+        seeds = [LENDING_MARKET_AUTH_SEED, lending_market.key().as_ref()],
+        bump,
+        seeds::program = KLEND_PROGRAM_ID
+    )]
+    pub lending_market_authority: AccountInfo<'info>,
 
     /// CHECK: Treasury account to receive yield
     pub treasury: AccountInfo<'info>,
 
     /// KLend reserve for the base token
-    /// CHECK: Validated by KLend
+    /// CHECK: Owner must be KLend; full struct validation happens at CPI time.
+    #[account(owner = KLEND_PROGRAM_ID @ ErrorCode::InvalidReserveOwner)]
     pub reserve: AccountInfo<'info>,
 
     /// KLend reserve liquidity supply (stored in token_config for later CPI validation)
-    /// CHECK: Validated by KLend
+    /// CHECK: Validated by KLend; must be an SPL token account in practice.
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
     /// KLend collateral mint for the reserve

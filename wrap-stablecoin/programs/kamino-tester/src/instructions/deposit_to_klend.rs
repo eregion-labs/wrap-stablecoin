@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
+use crate::constants::LENDING_MARKET_AUTH_SEED;
 use crate::errors::ErrorCode;
 use crate::klend::KLEND_PROGRAM_ID;
 use crate::state::{TokenConfig, VaultConfig};
@@ -56,14 +57,19 @@ pub struct DepositToKlend<'info> {
     pub lending_market: AccountInfo<'info>,
 
     /// CHECK: KLend lending market authority PDA
+    #[account(
+        seeds = [LENDING_MARKET_AUTH_SEED, vault_config.lending_market.as_ref()],
+        bump,
+        seeds::program = KLEND_PROGRAM_ID
+    )]
     pub lending_market_authority: AccountInfo<'info>,
 
     /// CHECK: Base token KLend reserve
     #[account(mut, address = token_config.reserve)]
     pub base_reserve: AccountInfo<'info>,
 
-    /// CHECK: Reserve liquidity supply
-    #[account(mut)]
+    /// CHECK: Reserve liquidity supply - pinned to the value stored at init
+    #[account(mut, address = token_config.reserve_liquidity_supply)]
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
     /// CHECK: Reserve collateral mint

@@ -1,19 +1,17 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
+use crate::constants::LENDING_MARKET_AUTH_SEED;
 use crate::errors::ErrorCode;
 use crate::klend::KLEND_PROGRAM_ID;
 use crate::state::{TokenConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct HarvestYieldArgs {
+    /// Amount of kTokens the admin wants to redeem to treasury. The program enforces the
+    /// post-redeem backing invariant using the exchange rate implied by the CPI result
+    /// itself — the admin does not attest a rate.
     pub collateral_amount: u64,
-    /// Admin-attested minimum KLend exchange rate, in basis points (10000 = 1.00x). The harvest
-    /// cap uses this to convert the USDC-denominated `total_liquidity_in_klend` liability into a
-    /// kToken backing requirement. Admin MUST pass a rate no higher than the reserve's current
-    /// rate (a conservative lower bound); otherwise the cap is too loose and excess kTokens get
-    /// drained. Protected by admin signer + `has_one`.
-    pub min_ktoken_rate_bps: u64,
 }
 
 #[derive(Accounts)]
@@ -24,7 +22,8 @@ pub struct HarvestYield<'info> {
     #[account(
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized,
+        constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
     pub vault_config: Box<Account<'info, VaultConfig>>,
 
@@ -63,6 +62,11 @@ pub struct HarvestYield<'info> {
     pub lending_market: AccountInfo<'info>,
 
     /// CHECK: KLend lending market authority PDA
+    #[account(
+        seeds = [LENDING_MARKET_AUTH_SEED, vault_config.lending_market.as_ref()],
+        bump,
+        seeds::program = KLEND_PROGRAM_ID
+    )]
     pub lending_market_authority: AccountInfo<'info>,
 
     /// CHECK: KLend reserve for this token

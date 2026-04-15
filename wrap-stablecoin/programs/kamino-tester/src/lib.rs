@@ -114,7 +114,10 @@ pub mod kamino_tester {
             &[vault_authority_bump],
         ];
 
-        // Transfer input token from user to token_vault
+        // Snapshot vault balance so fee-on-transfer mints can't let us mint more wStable
+        // than base token actually received.
+        let vault_before = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+
         transfer_checked(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -129,7 +132,12 @@ pub mod kamino_tester {
             token_decimals,
         )?;
 
-        // Mint wStable to user (1:1 with base token deposited)
+        let vault_after = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+        let received = vault_after
+            .checked_sub(vault_before)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(received > 0, ErrorCode::InvalidAmount);
+
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -140,25 +148,25 @@ pub mod kamino_tester {
                 },
                 &[authority_seeds],
             ),
-            args.amount,
+            received,
         )?;
 
-        // Update totals
         token_config.total_deposited = token_config
             .total_deposited
-            .checked_add(args.amount)
+            .checked_add(received)
             .ok_or(ErrorCode::MathOverflow)?;
 
         vault_config.total_stable_deposited = vault_config
             .total_stable_deposited
-            .checked_add(args.amount)
+            .checked_add(received)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        msg!(
-            "Wrapped {} tokens for user {}",
-            args.amount,
-            ctx.accounts.user.key()
-        );
+        emit!(Wrapped {
+            user: ctx.accounts.user.key(),
+            token_mint: token_config.token_mint,
+            amount_in: args.amount,
+            amount_minted: received,
+        });
         Ok(())
     }
 
@@ -239,46 +247,29 @@ pub mod kamino_tester {
             .checked_sub(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        msg!(
-            "Unwrapped {} wStable for user {}",
-            args.amount,
-            ctx.accounts.user.key()
-        );
+        emit!(Unwrapped {
+            user: ctx.accounts.user.key(),
+            amount: args.amount,
+        });
         Ok(())
     }
 
     pub fn harvest_yield(ctx: Context<HarvestYield>, args: HarvestYieldArgs) -> Result<()> {
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
-        require!(args.min_ktoken_rate_bps > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
         let token_config = &ctx.accounts.token_config;
         let vault_config_key = vault_config.key();
 
-        // Cap harvest so that the remaining kTokens still back user-owned USDC in KLend.
-        // backing_needed = ceil(total_liquidity_in_klend * 10000 / min_ktoken_rate_bps)
-        let rate_bps = args.min_ktoken_rate_bps as u128;
-        let scaled = (token_config.total_liquidity_in_klend as u128)
-            .checked_mul(10_000)
-            .ok_or(ErrorCode::MathOverflow)?;
-        let backing_needed_u128 = scaled
-            .checked_add(rate_bps - 1)
-            .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(rate_bps)
-            .ok_or(ErrorCode::MathOverflow)?;
-        let backing_needed: u64 = backing_needed_u128
-            .try_into()
-            .map_err(|_| ErrorCode::MathOverflow)?;
-
-        let collateral_balance =
+        // Don't let admin try to redeem more kTokens than the vault holds.
+        let collateral_before =
             get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
-        let max_harvestable = collateral_balance
-            .checked_sub(backing_needed)
-            .ok_or(ErrorCode::NoYieldAvailable)?;
         require!(
-            args.collateral_amount <= max_harvestable,
-            ErrorCode::ExceedsHarvestableYield
+            args.collateral_amount <= collateral_before,
+            ErrorCode::InsufficientBalance
         );
+
+        let treasury_before = get_token_balance(&ctx.accounts.treasury.to_account_info())?;
 
         let authority_seeds: &[&[u8]] = &[
             b"vault_authority",
@@ -322,11 +313,41 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        msg!(
-            "Harvested yield: {} collateral tokens from {} redeemed to treasury",
-            args.collateral_amount,
-            token_config.token_mint
+        // Use the CPI itself as the exchange-rate oracle. KLend rounds liquidity_received
+        // DOWN, so the implied kToken-per-USDC rate (kTokens_redeemed / liquidity_received)
+        // is an UPPER bound on the true rate — this makes the backing check strictly
+        // conservative. Admin has no input into the rate, so there's no rug path.
+        let collateral_after = get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
+        let treasury_after = get_token_balance(&ctx.accounts.treasury.to_account_info())?;
+
+        let ktokens_redeemed = collateral_before
+            .checked_sub(collateral_after)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(ktokens_redeemed > 0, ErrorCode::HarvestRedeemedNothing);
+
+        let liquidity_received = treasury_after
+            .checked_sub(treasury_before)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(liquidity_received > 0, ErrorCode::HarvestRedeemedNothing);
+
+        // Remaining backing value (in USDC) at the rate implied by this redemption:
+        //   remaining_value = collateral_after * liquidity_received / ktokens_redeemed
+        // Must cover the tracked liability (total_liquidity_in_klend).
+        let remaining_value = (collateral_after as u128)
+            .checked_mul(liquidity_received as u128)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(ktokens_redeemed as u128)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(
+            remaining_value >= token_config.total_liquidity_in_klend as u128,
+            ErrorCode::HarvestLeavesUnderbacked
         );
+
+        emit!(Harvested {
+            token_mint: token_config.token_mint,
+            ktokens_redeemed,
+            liquidity_received,
+        });
         Ok(())
     }
 
@@ -463,7 +484,7 @@ pub mod kamino_tester {
 
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         ctx.accounts.vault_config.paused = paused;
-        msg!("Vault paused status set to: {}", paused);
+        emit!(PauseChanged { paused });
         Ok(())
     }
 
@@ -524,23 +545,37 @@ pub mod kamino_tester {
     }
 
     pub fn transfer_authority(ctx: Context<TransferAuthority>) -> Result<()> {
-        ctx.accounts.vault_config.pending_admin = ctx.accounts.new_admin.key();
-        msg!(
-            "Admin transfer proposed to {}",
-            ctx.accounts.new_admin.key()
-        );
+        let new_admin = ctx.accounts.new_admin.key();
+        require!(new_admin != Pubkey::default(), ErrorCode::Unauthorized);
+        ctx.accounts.vault_config.pending_admin = new_admin;
+        emit!(AdminTransferProposed {
+            admin: ctx.accounts.vault_config.admin,
+            pending_admin: new_admin,
+        });
+        Ok(())
+    }
+
+    pub fn cancel_transfer_authority(ctx: Context<CancelTransferAuthority>) -> Result<()> {
+        ctx.accounts.vault_config.pending_admin = Pubkey::default();
+        msg!("Admin transfer proposal cancelled");
         Ok(())
     }
 
     pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
-        let old_admin = ctx.accounts.vault_config.admin;
-        ctx.accounts.vault_config.admin = ctx.accounts.new_admin.key();
-        ctx.accounts.vault_config.pending_admin = Pubkey::default();
-        msg!(
-            "Admin transferred from {} to {}",
-            old_admin,
-            ctx.accounts.new_admin.key()
+        // Reject the "default pubkey implicit default" edge-case defensively, even though
+        // no one holds the private key for Pubkey::default().
+        require!(
+            ctx.accounts.vault_config.pending_admin != Pubkey::default(),
+            ErrorCode::NoPendingTransfer
         );
+        let old_admin = ctx.accounts.vault_config.admin;
+        let new_admin = ctx.accounts.new_admin.key();
+        ctx.accounts.vault_config.admin = new_admin;
+        ctx.accounts.vault_config.pending_admin = Pubkey::default();
+        emit!(AdminTransferred {
+            old_admin,
+            new_admin,
+        });
         Ok(())
     }
 
@@ -563,6 +598,7 @@ pub mod kamino_tester {
             &ctx.accounts.borrower.key(),
             &vault_config_key,
             &ctx.accounts.flash_loan_state.key(),
+            &ctx.accounts.wrapped_mint.key(),
             ctx.program_id,
         )?;
 
@@ -599,12 +635,11 @@ pub mod kamino_tester {
             args.amount,
         )?;
 
-        msg!(
-            "Flash mint started: {} tokens to {}, fee: {}",
-            args.amount,
-            ctx.accounts.borrower.key(),
-            fee
-        );
+        emit!(FlashMintStarted {
+            borrower: ctx.accounts.borrower.key(),
+            amount: args.amount,
+            fee,
+        });
         Ok(())
     }
 
@@ -650,12 +685,11 @@ pub mod kamino_tester {
             )?;
         }
 
-        msg!(
-            "Flash mint completed: {} burned, {} fee paid by {}",
+        emit!(FlashMintEnded {
+            borrower: ctx.accounts.borrower.key(),
             amount,
             fee,
-            ctx.accounts.borrower.key()
-        );
+        });
         Ok(())
     }
 
@@ -688,4 +722,56 @@ pub mod kamino_tester {
         );
         Ok(())
     }
+}
+
+#[event]
+pub struct Wrapped {
+    pub user: Pubkey,
+    pub token_mint: Pubkey,
+    pub amount_in: u64,
+    pub amount_minted: u64,
+}
+
+#[event]
+pub struct Unwrapped {
+    pub user: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct Harvested {
+    pub token_mint: Pubkey,
+    pub ktokens_redeemed: u64,
+    pub liquidity_received: u64,
+}
+
+#[event]
+pub struct FlashMintStarted {
+    pub borrower: Pubkey,
+    pub amount: u64,
+    pub fee: u64,
+}
+
+#[event]
+pub struct FlashMintEnded {
+    pub borrower: Pubkey,
+    pub amount: u64,
+    pub fee: u64,
+}
+
+#[event]
+pub struct PauseChanged {
+    pub paused: bool,
+}
+
+#[event]
+pub struct AdminTransferProposed {
+    pub admin: Pubkey,
+    pub pending_admin: Pubkey,
+}
+
+#[event]
+pub struct AdminTransferred {
+    pub old_admin: Pubkey,
+    pub new_admin: Pubkey,
 }

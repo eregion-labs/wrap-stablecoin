@@ -73,4 +73,19 @@ pub enum ErrorCode {
 
     #[msg("Invalid treasury address")]
     InvalidTreasury,
+
+    #[msg("Reserve account not owned by KLend program")]
+    InvalidReserveOwner,
+
+    #[msg("Token account data invalid or unexpected owner")]
+    InvalidTokenAccountData,
+
+    #[msg("Flash mint introspection scan exceeded bound")]
+    FlashMintScanLimit,
+
+    #[msg("Harvest would leave insufficient backing for tracked liability")]
+    HarvestLeavesUnderbacked,
+
+    #[msg("Harvest redeem produced no collateral movement")]
+    HarvestRedeemedNothing,
 }

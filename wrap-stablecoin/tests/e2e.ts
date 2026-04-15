@@ -52,20 +52,15 @@ function anchorSighash(name: string): Buffer {
  * deposit/redeem in the same transaction so reserve.last_update is current.
  */
 function refreshReserveIx(): TransactionInstruction {
-  // KLend's refresh_reserve expects positional slots for all four oracle
-  // sources (pyth, switchboard price, switchboard twap, scope). Unused slots
-  // must use the **KLend program ID itself** as the None sentinel — this is
-  // how the SDK's generated codec writes Option<Address> on the wire.
-  // See node_modules/@kamino-finance/klend-sdk/dist/@codegen/klend/instructions/refreshReserve.js
   const NONE = KLEND_PROGRAM_ID;
   return new TransactionInstruction({
     programId: KLEND_PROGRAM_ID,
     keys: [
       { pubkey: USDC_RESERVE, isSigner: false, isWritable: true },
       { pubkey: LENDING_MARKET, isSigner: false, isWritable: false },
-      { pubkey: NONE, isSigner: false, isWritable: false }, // pyth_oracle (unused)
-      { pubkey: NONE, isSigner: false, isWritable: false }, // switchboard_price_oracle (unused)
-      { pubkey: NONE, isSigner: false, isWritable: false }, // switchboard_twap_oracle (unused)
+      { pubkey: NONE, isSigner: false, isWritable: false },
+      { pubkey: NONE, isSigner: false, isWritable: false },
+      { pubkey: NONE, isSigner: false, isWritable: false },
       { pubkey: SCOPE_PRICES, isSigner: false, isWritable: false },
     ],
     data: anchorSighash("refresh_reserve"),
@@ -151,9 +146,18 @@ function tokenVaultPda(
   return pda;
 }
 
+function allowlistPda(
+  programId: PublicKey,
+  vaultConfig: PublicKey,
+): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("allowlist"), vaultConfig.toBuffer()],
+    programId,
+  );
+  return pda;
+}
+
 describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
-  // The test wallet is persisted in fixtures/user/wallet.json and pre-funded in
-  // the test validator with 100 SOL + 1M USDC (see Anchor.toml).
   const walletSecret = JSON.parse(
     fs.readFileSync("fixtures/user/wallet.json", "utf8"),
   );
@@ -170,7 +174,6 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   const program = anchor.workspace.kaminoTester as Program<KaminoTester>;
   const programId = program.programId;
 
-  // Derived accounts.
   const vaultConfig = vaultConfigPda(programId, wallet.publicKey);
   const vaultAuthority = vaultAuthorityPda(programId, vaultConfig);
   const wrappedMint = wrappedMintPda(programId, vaultConfig);
@@ -178,6 +181,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   const collateralVault = collateralVaultPda(programId, tokenConfig);
   const tokenVault = tokenVaultPda(programId, tokenConfig);
   const lendingMarketAuthority = lendingMarketAuthorityPda();
+  const allowlist = allowlistPda(programId, vaultConfig);
   const userUsdcAta = getAssociatedTokenAddressSync(
     USDC_MINT,
     wallet.publicKey,
@@ -185,7 +189,15 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   const userWrappedAta = getAssociatedTokenAddressSync(
     wrappedMint,
     wallet.publicKey,
-    true, // allowOwnerOffCurve — wrapped_mint is a PDA's controlled mint
+    true,
+  );
+  // KLend's redeem_reserve_collateral enforces user_destination_liquidity.owner == owner-signer.
+  // Treasury must therefore be a USDC token account owned by the vault_authority PDA.
+  // A plain admin wallet cannot receive redemption proceeds directly.
+  const treasuryUsdcAta = getAssociatedTokenAddressSync(
+    USDC_MINT,
+    vaultAuthority,
+    true,
   );
 
   before(async () => {
@@ -201,6 +213,14 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   });
 
   it("initializes the vault against the cloned USDC reserve", async () => {
+    // Create the vault_authority-owned treasury ATA as a preinstruction so harvest_yield
+    // can redeem into it. Admin can pull from this PDA-owned account via a follow-up flow.
+    const treasuryIx = createAssociatedTokenAccountIdempotentInstruction(
+      wallet.publicKey,
+      treasuryUsdcAta,
+      vaultAuthority,
+      USDC_MINT,
+    );
     const txSig = await program.methods
       .initialize()
       .accountsPartial({
@@ -210,7 +230,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         wrappedMint,
         vaultAuthority,
         lendingMarket: LENDING_MARKET,
-        treasury: wallet.publicKey,
+        lendingMarketAuthority,
+        treasury: treasuryUsdcAta,
         reserve: USDC_RESERVE,
         reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
         collateralMint: RESERVE_COLLATERAL_MINT,
@@ -221,6 +242,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         collateralTokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       } as any)
+      .preInstructions([treasuryIx])
       .rpc();
     console.log(`initialize tx: ${txSig}`);
 
@@ -229,10 +251,10 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     );
     expect(vaultData.admin.toBase58()).to.equal(wallet.publicKey.toBase58());
     expect(vaultData.usdcMint.toBase58()).to.equal(USDC_MINT.toBase58());
+    expect(vaultData.treasury.toBase58()).to.equal(treasuryUsdcAta.toBase58());
   });
 
   it("wraps 100 USDC", async () => {
-    // Create the user's wStable ATA (program won't do it for us).
     const ataIx = createAssociatedTokenAccountIdempotentInstruction(
       wallet.publicKey,
       userWrappedAta,
@@ -240,7 +262,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       wrappedMint,
     );
 
-    const amount = new anchor.BN(100_000_000); // 100 USDC (6 decimals)
+    const amount = new anchor.BN(100_000_000);
     const txSig = await program.methods
       .wrap({ amount } as any)
       .accountsPartial({
@@ -303,13 +325,52 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     expect(Number(collateralBal.amount)).to.be.greaterThan(0);
   });
 
+  it("rejects harvest_yield that would leave the vault underbacked", async () => {
+    // Snapshot state: 50 USDC deposited, backed by ~kTokens at current exchange rate.
+    // Since no new interest has accrued within this test run, redeeming any collateral
+    // leaves remaining value < total_liquidity_in_klend — the invariant must trip.
+    const collateralBal = await getAccount(connection, collateralVault);
+    expect(Number(collateralBal.amount)).to.be.greaterThan(0);
+
+    let threw = false;
+    try {
+      await program.methods
+        .harvestYield({ collateralAmount: new anchor.BN(1) } as any)
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          vaultAuthority,
+          tokenConfig,
+          tokenMint: USDC_MINT,
+          treasury: treasuryUsdcAta,
+          collateralVault,
+          klendProgram: KLEND_PROGRAM_ID,
+          lendingMarket: LENDING_MARKET,
+          lendingMarketAuthority,
+          reserve: USDC_RESERVE,
+          reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
+          reserveCollateralMint: RESERVE_COLLATERAL_MINT,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+        } as any)
+        .preInstructions([refreshReserveIx()])
+        .rpc();
+    } catch (err: any) {
+      threw = true;
+      const msg = err?.error?.errorCode?.code || err?.message || String(err);
+      console.log(`harvest_yield rejected as expected: ${msg}`);
+      expect(msg).to.match(/HarvestLeaves|HarvestRedeemedNothing|Simulation|Math/);
+    }
+    expect(threw).to.equal(true);
+  });
+
   it("withdraws from KLend to restore token_vault liquidity", async () => {
-    // Redeem enough collateral to put the full 50 USDC back in token_vault.
-    // We pass all kTokens currently held; KLend will redeem them at the current
-    // rate, leaving any appreciation as harvestable yield.
     const collateralBal = await getAccount(connection, collateralVault);
     const txSig = await program.methods
-      .withdrawFromKlend({ collateralAmount: new anchor.BN(collateralBal.amount.toString()) } as any)
+      .withdrawFromKlend({
+        collateralAmount: new anchor.BN(collateralBal.amount.toString()),
+      } as any)
       .accountsPartial({
         admin: wallet.publicKey,
         vaultConfig,
@@ -332,18 +393,15 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       .rpc();
     console.log(`withdraw_from_klend tx: ${txSig}`);
 
-    // KLend rounds down by 1 unit on redemption — real behavior, not a bug.
-    // After round-trip: vault holds 100M - ε USDC where ε is typically 1.
     const vaultBal = await getAccount(connection, tokenVault);
     expect(Number(vaultBal.amount)).to.be.greaterThanOrEqual(99_999_999);
   });
 
   it("unwraps wStable back to USDC", async () => {
     const usdcBefore = (await getAccount(connection, userUsdcAta)).amount;
-    const wrappedBefore = (await getAccount(connection, userWrappedAta)).amount;
+    const wrappedBefore = (await getAccount(connection, userWrappedAta))
+      .amount;
 
-    // Unwrap what's actually sitting in token_vault (KLend rounding may leave
-    // us 1 unit short of the wrapped supply).
     const vaultBal = await getAccount(connection, tokenVault);
     const amount = new anchor.BN(vaultBal.amount.toString());
     const txSig = await program.methods
@@ -367,6 +425,238 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     const usdcAfter = (await getAccount(connection, userUsdcAta)).amount;
     const wrappedAfter = (await getAccount(connection, userWrappedAta)).amount;
     expect((usdcAfter - usdcBefore).toString()).to.equal(amount.toString());
-    expect((wrappedBefore - wrappedAfter).toString()).to.equal(amount.toString());
+    expect((wrappedBefore - wrappedAfter).toString()).to.equal(
+      amount.toString(),
+    );
+  });
+
+  describe("admin flows", () => {
+    it("pauses and unpauses the vault", async () => {
+      await program.methods
+        .setPaused(true)
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+      let cfg = await (program.account as any).vaultConfig.fetch(vaultConfig);
+      expect(cfg.paused).to.equal(true);
+
+      // Wrap must fail while paused.
+      let threw = false;
+      try {
+        await program.methods
+          .wrap({ amount: new anchor.BN(1_000_000) } as any)
+          .accountsPartial({
+            user: wallet.publicKey,
+            vaultConfig,
+            vaultAuthority,
+            tokenConfig,
+            tokenMint: USDC_MINT,
+            userToken: userUsdcAta,
+            userWrapped: userWrappedAta,
+            wrappedMint,
+            tokenVault,
+            usdcMint: USDC_MINT,
+            allowlist: null,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          } as any)
+          .rpc();
+      } catch (err: any) {
+        threw = true;
+        const code = err?.error?.errorCode?.code || "";
+        expect(code).to.match(/VaultPaused/);
+      }
+      expect(threw).to.equal(true);
+
+      await program.methods
+        .setPaused(false)
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+      cfg = await (program.account as any).vaultConfig.fetch(vaultConfig);
+      expect(cfg.paused).to.equal(false);
+    });
+
+    it("proposes, cancels, and completes an admin transfer", async () => {
+      const newAdmin = Keypair.generate();
+      // Airdrop a little SOL so accept_authority pays rent for transaction fees.
+      const airdrop = await connection.requestAirdrop(
+        newAdmin.publicKey,
+        1_000_000_000,
+      );
+      await connection.confirmTransaction(airdrop, "confirmed");
+
+      // Propose
+      await program.methods
+        .transferAuthority()
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          newAdmin: newAdmin.publicKey,
+        } as any)
+        .rpc();
+      let cfg = await (program.account as any).vaultConfig.fetch(vaultConfig);
+      expect(cfg.pendingAdmin.toBase58()).to.equal(
+        newAdmin.publicKey.toBase58(),
+      );
+
+      // Cancel
+      await program.methods
+        .cancelTransferAuthority()
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+      cfg = await (program.account as any).vaultConfig.fetch(vaultConfig);
+      expect(cfg.pendingAdmin.toBase58()).to.equal(
+        PublicKey.default.toBase58(),
+      );
+
+      // Accepting with no pending transfer must fail.
+      let threw = false;
+      try {
+        await program.methods
+          .acceptAuthority()
+          .accountsPartial({
+            newAdmin: newAdmin.publicKey,
+            vaultConfig,
+          } as any)
+          .signers([newAdmin])
+          .rpc();
+      } catch (err: any) {
+        threw = true;
+        const code = err?.error?.errorCode?.code || "";
+        expect(code).to.match(/NoPendingTransfer/);
+      }
+      expect(threw).to.equal(true);
+
+      // Propose again, then accept
+      await program.methods
+        .transferAuthority()
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          newAdmin: newAdmin.publicKey,
+        } as any)
+        .rpc();
+      await program.methods
+        .acceptAuthority()
+        .accountsPartial({
+          newAdmin: newAdmin.publicKey,
+          vaultConfig,
+        } as any)
+        .signers([newAdmin])
+        .rpc();
+      cfg = await (program.account as any).vaultConfig.fetch(vaultConfig);
+      expect(cfg.admin.toBase58()).to.equal(newAdmin.publicKey.toBase58());
+      expect(cfg.pendingAdmin.toBase58()).to.equal(
+        PublicKey.default.toBase58(),
+      );
+
+      // Rotate back so later tests keep using the original wallet as admin.
+      await program.methods
+        .transferAuthority()
+        .accountsPartial({
+          admin: newAdmin.publicKey,
+          vaultConfig,
+          newAdmin: wallet.publicKey,
+        } as any)
+        .signers([newAdmin])
+        .rpc();
+      await program.methods
+        .acceptAuthority()
+        .accountsPartial({
+          newAdmin: wallet.publicKey,
+          vaultConfig,
+        } as any)
+        .rpc();
+      cfg = await (program.account as any).vaultConfig.fetch(vaultConfig);
+      expect(cfg.admin.toBase58()).to.equal(wallet.publicKey.toBase58());
+    });
+
+    it("manages an allowlist and gates private wraps", async () => {
+      await program.methods
+        .initAllowlist()
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          allowlist,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+
+      const alice = Keypair.generate().publicKey;
+      await program.methods
+        .addToAllowlist(alice)
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          allowlist,
+        } as any)
+        .rpc();
+
+      let al = await (program.account as any).allowlist.fetch(allowlist);
+      expect(al.allowed.map((k: PublicKey) => k.toBase58())).to.include(
+        alice.toBase58(),
+      );
+
+      // Duplicate must fail.
+      let threw = false;
+      try {
+        await program.methods
+          .addToAllowlist(alice)
+          .accountsPartial({
+            admin: wallet.publicKey,
+            vaultConfig,
+            allowlist,
+          } as any)
+          .rpc();
+      } catch (err: any) {
+        threw = true;
+        expect(err?.error?.errorCode?.code || "").to.match(
+          /AllowlistDuplicate/,
+        );
+      }
+      expect(threw).to.equal(true);
+
+      await program.methods
+        .removeFromAllowlist(alice)
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          allowlist,
+        } as any)
+        .rpc();
+      al = await (program.account as any).allowlist.fetch(allowlist);
+      expect(al.allowed.map((k: PublicKey) => k.toBase58())).to.not.include(
+        alice.toBase58(),
+      );
+
+      // Flip wrap to private and verify admin can still wrap (admin bypasses allowlist).
+      await program.methods
+        .setWrapPublic(false)
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+
+      const amount = new anchor.BN(1_000_000);
+      await program.methods
+        .wrap({ amount } as any)
+        .accountsPartial({
+          user: wallet.publicKey,
+          vaultConfig,
+          vaultAuthority,
+          tokenConfig,
+          tokenMint: USDC_MINT,
+          userToken: userUsdcAta,
+          userWrapped: userWrappedAta,
+          wrappedMint,
+          tokenVault,
+          usdcMint: USDC_MINT,
+          allowlist,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        } as any)
+        .rpc();
+
+      // Restore public wrap so later runs remain clean.
+      await program.methods
+        .setWrapPublic(true)
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+    });
   });
 });
