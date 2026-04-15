@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
 
+pub mod constants;
 pub mod errors;
 pub mod instructions;
 pub mod jupiter;

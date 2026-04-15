@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use anchor_lang::solana_program::program::invoke_signed;
 
-pub const JUPITER_PROGRAM_ID: Pubkey = pubkey!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4");
+pub use crate::constants::JUPITER_PROGRAM_ID;
 
 /// Execute a Jupiter swap using raw instruction data from the client.
 /// The client should fetch the swap route from Jupiter API and pass the instruction data.
