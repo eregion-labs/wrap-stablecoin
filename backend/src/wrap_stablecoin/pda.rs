@@ -13,13 +13,13 @@ pub fn wrapped_mint(program_id: &Pubkey, vault_config: &Pubkey) -> (Pubkey, u8) 
     Pubkey::find_program_address(&[b"wrapped_mint", vault_config.as_ref()], program_id)
 }
 
-pub fn token_config(program_id: &Pubkey, vault_config: &Pubkey, token_mint: &Pubkey) -> (Pubkey, u8) {
+pub fn token_config(
+    program_id: &Pubkey,
+    vault_config: &Pubkey,
+    token_mint: &Pubkey,
+) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[
-            b"token_config",
-            vault_config.as_ref(),
-            token_mint.as_ref(),
-        ],
+        &[b"token_config", vault_config.as_ref(), token_mint.as_ref()],
         program_id,
     )
 }

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::TokenInterface;
+use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
 use crate::errors::ErrorCode;
 use crate::state::{Allowlist, TokenConfig, VaultConfig};
@@ -41,13 +41,19 @@ pub struct Wrap<'info> {
     #[account(address = token_config.token_mint)]
     pub token_mint: AccountInfo<'info>,
 
-    /// CHECK: User's input token account - validated in handler
-    #[account(mut)]
-    pub user_token: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = user_token.mint == token_config.token_mint @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token.owner == user.key() @ ErrorCode::InvalidTokenAccount,
+    )]
+    pub user_token: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// CHECK: User's wrapped token account - validated in handler
-    #[account(mut)]
-    pub user_wrapped: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = user_wrapped.mint == vault_config.wrapped_mint @ ErrorCode::InvalidTokenAccount,
+        constraint = user_wrapped.owner == user.key() @ ErrorCode::InvalidTokenAccount,
+    )]
+    pub user_wrapped: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: Wrapped mint - validated via vault_config
     #[account(mut, address = vault_config.wrapped_mint)]
@@ -65,46 +71,4 @@ pub struct Wrap<'info> {
     pub allowlist: Option<Account<'info, Allowlist>>,
 
     pub token_program: Interface<'info, TokenInterface>,
-}
-
-impl<'info> Wrap<'info> {
-    pub fn validate_user_accounts(&self) -> Result<()> {
-        // Validate user_token: check mint and owner from raw data
-        let user_token_data = self.user_token.try_borrow_data()?;
-        require!(user_token_data.len() >= 72, ErrorCode::InvalidTokenAccount);
-        let user_token_mint = Pubkey::try_from(&user_token_data[0..32])
-            .map_err(|_| ErrorCode::InvalidTokenAccount)?;
-        let user_token_owner = Pubkey::try_from(&user_token_data[32..64])
-            .map_err(|_| ErrorCode::InvalidTokenAccount)?;
-        require!(
-            user_token_mint == self.token_config.token_mint,
-            ErrorCode::InvalidTokenAccount
-        );
-        require!(
-            user_token_owner == self.user.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        drop(user_token_data);
-
-        // Validate user_wrapped: check mint and owner from raw data
-        let user_wrapped_data = self.user_wrapped.try_borrow_data()?;
-        require!(
-            user_wrapped_data.len() >= 72,
-            ErrorCode::InvalidTokenAccount
-        );
-        let user_wrapped_mint = Pubkey::try_from(&user_wrapped_data[0..32])
-            .map_err(|_| ErrorCode::InvalidTokenAccount)?;
-        let user_wrapped_owner = Pubkey::try_from(&user_wrapped_data[32..64])
-            .map_err(|_| ErrorCode::InvalidTokenAccount)?;
-        require!(
-            user_wrapped_mint == self.vault_config.wrapped_mint,
-            ErrorCode::InvalidTokenAccount
-        );
-        require!(
-            user_wrapped_owner == self.user.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-
-        Ok(())
-    }
 }

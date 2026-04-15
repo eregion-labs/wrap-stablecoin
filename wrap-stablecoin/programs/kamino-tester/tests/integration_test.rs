@@ -550,10 +550,7 @@ fn wrapped_wrap_ix(
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(*usdc_mint, false),
-            AccountMeta::new_readonly(
-                *allowlist.unwrap_or(&program_id),
-                false,
-            ),
+            AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,
@@ -599,10 +596,7 @@ fn wrapped_unwrap_ix(
             AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*base_token_config, false),
             AccountMeta::new(*base_token_vault, false),
-            AccountMeta::new_readonly(
-                *allowlist.unwrap_or(&program_id),
-                false,
-            ),
+            AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,
@@ -725,7 +719,11 @@ fn wrapped_withdraw_from_klend_ix(
     collateral_amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "withdraw_from_klend").to_vec();
-    data.extend(WithdrawFromKlendArgs { collateral_amount }.try_to_vec().unwrap());
+    data.extend(
+        WithdrawFromKlendArgs { collateral_amount }
+            .try_to_vec()
+            .unwrap(),
+    );
 
     Instruction {
         program_id,
@@ -1249,7 +1247,9 @@ fn test_full_integration() -> Result<()> {
                 || err_str.contains("Insufficient")
                 || err_str.contains("custom program error")
             {
-                eprintln!("⚠ Harvest skipped: no collateral in KLend (call deposit_to_klend first)");
+                eprintln!(
+                    "⚠ Harvest skipped: no collateral in KLend (call deposit_to_klend first)"
+                );
             } else {
                 eprintln!("⚠ Harvest failed: {}", e);
                 return Err(e);
@@ -1460,8 +1460,11 @@ fn test_flash_mint() -> Result<()> {
 
     // Create admin (flash_authority) wStable account for admin flash mint test
     let flash_authority_wrapped = get_ata(&flash_authority.pubkey(), &wrapped_mint);
-    let create_flash_authority_wrapped_ix =
-        create_ata_ix(&ctx.payer.pubkey(), &flash_authority.pubkey(), &wrapped_mint);
+    let create_flash_authority_wrapped_ix = create_ata_ix(
+        &ctx.payer.pubkey(),
+        &flash_authority.pubkey(),
+        &wrapped_mint,
+    );
     ctx.send_tx(&[create_flash_authority_wrapped_ix], &[&ctx.payer])?;
 
     eprintln!("✓ User wStable account created");
@@ -1598,7 +1601,10 @@ fn test_flash_mint() -> Result<()> {
         &fee_receiver_wrapped,
     );
 
-    match ctx.send_tx(&[flash_start_ix, flash_end_ix], &[&ctx.payer, &flash_authority]) {
+    match ctx.send_tx(
+        &[flash_start_ix, flash_end_ix],
+        &[&ctx.payer, &flash_authority],
+    ) {
         Ok(_) => eprintln!("✓ Admin successfully used flash mint while disabled"),
         Err(e) => {
             let err_str = e.to_string();

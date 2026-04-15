@@ -97,11 +97,9 @@ impl AppState {
         )
         .context("invalid PROGRAM_ID")?;
 
-        let vault_authority_seed = Pubkey::from_str(
-            &std::env::var("VAULT_AUTHORITY").context(
-                "VAULT_AUTHORITY must be set to the vault `authority` pubkey (vault_config PDA seed)",
-            )?,
-        )
+        let vault_authority_seed = Pubkey::from_str(&std::env::var("VAULT_AUTHORITY").context(
+            "VAULT_AUTHORITY must be set to the vault `authority` pubkey (vault_config PDA seed)",
+        )?)
         .context("invalid VAULT_AUTHORITY")?;
 
         let jupiter_quote_api_base = std::env::var("JUPITER_QUOTE_API_BASE")

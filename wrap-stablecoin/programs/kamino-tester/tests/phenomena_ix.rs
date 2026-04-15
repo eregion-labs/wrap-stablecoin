@@ -43,7 +43,11 @@ pub fn init_lending_market_ix(
     lending_market_authority: &Pubkey,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "init_lending_market").to_vec();
-    data.extend(InitLendingMarketArgs { quote_currency }.try_to_vec().unwrap());
+    data.extend(
+        InitLendingMarketArgs { quote_currency }
+            .try_to_vec()
+            .unwrap(),
+    );
 
     Instruction {
         program_id,
@@ -95,17 +99,17 @@ pub fn init_reserve_ix(
     }
 }
 
-pub fn derive_klend_pdas(reserve: &Pubkey, klend_program_id: &Pubkey) -> (Pubkey, Pubkey, Pubkey, Pubkey) {
+pub fn derive_klend_pdas(
+    reserve: &Pubkey,
+    klend_program_id: &Pubkey,
+) -> (Pubkey, Pubkey, Pubkey, Pubkey) {
     let reserve_liquidity_supply = Pubkey::find_program_address(
         &[RESERVE_LIQ_SUPPLY_SEED, reserve.as_ref()],
         klend_program_id,
     )
     .0;
-    let fee_receiver = Pubkey::find_program_address(
-        &[FEE_RECEIVER_SEED, reserve.as_ref()],
-        klend_program_id,
-    )
-    .0;
+    let fee_receiver =
+        Pubkey::find_program_address(&[FEE_RECEIVER_SEED, reserve.as_ref()], klend_program_id).0;
     let collateral_mint = Pubkey::find_program_address(
         &[RESERVE_COLL_MINT_SEED, reserve.as_ref()],
         klend_program_id,
@@ -116,7 +120,12 @@ pub fn derive_klend_pdas(reserve: &Pubkey, klend_program_id: &Pubkey) -> (Pubkey
         klend_program_id,
     )
     .0;
-    (reserve_liquidity_supply, fee_receiver, collateral_mint, reserve_collateral_supply)
+    (
+        reserve_liquidity_supply,
+        fee_receiver,
+        collateral_mint,
+        reserve_collateral_supply,
+    )
 }
 
 pub const LENDING_MARKET_SPACE_BYTES: usize = LENDING_MARKET_SPACE;

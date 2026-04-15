@@ -176,19 +176,13 @@ pub async fn preview_tx(
     use base64::Engine;
     let raw = base64::engine::general_purpose::STANDARD
         .decode(body.transaction_b64.trim())
-        .map_err(|e| {
-            (
-                axum::http::StatusCode::BAD_REQUEST,
-                format!("base64: {e}"),
-            )
-        })?;
-    let vtx: VersionedTransaction =
-        bincode::deserialize(&raw).map_err(|e| {
-            (
-                axum::http::StatusCode::BAD_REQUEST,
-                format!("tx decode: {e}"),
-            )
-        })?;
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, format!("base64: {e}")))?;
+    let vtx: VersionedTransaction = bincode::deserialize(&raw).map_err(|e| {
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("tx decode: {e}"),
+        )
+    })?;
     ensure_tx_targets_program(&vtx, &state.program_id)
         .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     let sim = state
@@ -225,10 +219,7 @@ pub async fn compose_tx(
     let user_str = body.user.clone();
 
     if body.steps.is_empty() {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            "steps empty".into(),
-        ));
+        return Err((axum::http::StatusCode::BAD_REQUEST, "steps empty".into()));
     }
 
     if body.steps.len() == 1 {
@@ -287,21 +278,16 @@ pub async fn compose_tx(
                 *amount,
             )
             .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let wrap_vtx: VersionedTransaction = bincode::deserialize(&wrap_raw).map_err(|e| {
-                (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-            })?;
-            let mut ixs =
-                instructions_from_versioned_tx(state.rpc.as_ref(), &jup).map_err(|e| {
-                    (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-                })?;
+            let wrap_vtx: VersionedTransaction = bincode::deserialize(&wrap_raw)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            let mut ixs = instructions_from_versioned_tx(state.rpc.as_ref(), &jup)
+                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
             ixs.extend(
-                instructions_from_versioned_tx(state.rpc.as_ref(), &wrap_vtx).map_err(|e| {
-                    (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-                })?,
+                instructions_from_versioned_tx(state.rpc.as_ref(), &wrap_vtx)
+                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?,
             );
-            build_versioned_tx(state.rpc.as_ref(), &user, ixs, None).map_err(|e| {
-                (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-            })?
+            build_versioned_tx(state.rpc.as_ref(), &user, ixs, None)
+                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?
         }
         (
             ComposeStep::Unwrap {
@@ -319,27 +305,21 @@ pub async fn compose_tx(
                 *min_out_amount,
             )
             .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let unwrap_vtx: VersionedTransaction =
-                bincode::deserialize(&unwrap_raw).map_err(|e| {
-                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                })?;
+            let unwrap_vtx: VersionedTransaction = bincode::deserialize(&unwrap_raw)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             let swap_b64 = jupiter::fetch_swap_transaction_b64(state.as_ref(), quote, &user_str)
                 .await
                 .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
             let jup = decode_versioned_tx_b64(&swap_b64)
                 .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let mut ixs =
-                instructions_from_versioned_tx(state.rpc.as_ref(), &unwrap_vtx).map_err(|e| {
-                    (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-                })?;
+            let mut ixs = instructions_from_versioned_tx(state.rpc.as_ref(), &unwrap_vtx)
+                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
             ixs.extend(
-                instructions_from_versioned_tx(state.rpc.as_ref(), &jup).map_err(|e| {
-                    (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-                })?,
+                instructions_from_versioned_tx(state.rpc.as_ref(), &jup)
+                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?,
             );
-            build_versioned_tx(state.rpc.as_ref(), &user, ixs, None).map_err(|e| {
-                (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-            })?
+            build_versioned_tx(state.rpc.as_ref(), &user, ixs, None)
+                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?
         }
         _ => {
             return Err((
@@ -351,12 +331,8 @@ pub async fn compose_tx(
 
     ensure_tx_targets_program(&vtx, &state.program_id)
         .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let raw = bincode::serialize(&vtx).map_err(|e| {
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        )
-    })?;
+    let raw = bincode::serialize(&vtx)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(TxResponse {
         transaction_b64: b64_encode_tx(&raw),
     }))

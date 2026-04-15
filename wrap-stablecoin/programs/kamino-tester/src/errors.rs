@@ -20,9 +20,6 @@ pub enum ErrorCode {
     #[msg("Invalid amount")]
     InvalidAmount,
 
-    #[msg("Wrap accepts base token only")]
-    BaseTokenOnly,
-
     #[msg("Insufficient liquidity for redemption")]
     InsufficientLiquidity,
 
@@ -43,24 +40,6 @@ pub enum ErrorCode {
 
     #[msg("Token is disabled")]
     TokenDisabled,
-
-    #[msg("Token has existing deposits, cannot remove")]
-    TokenHasDeposits,
-
-    #[msg("Cannot remove base token")]
-    CannotRemoveBaseToken,
-
-    #[msg("Token already registered")]
-    TokenAlreadyRegistered,
-
-    #[msg("Maximum tokens registered")]
-    MaxTokensReached,
-
-    #[msg("Slippage tolerance exceeded")]
-    SlippageExceeded,
-
-    #[msg("Swap failed")]
-    SwapFailed,
 
     #[msg("Token not found")]
     TokenNotFound,
@@ -83,9 +62,6 @@ pub enum ErrorCode {
     #[msg("Pubkey already in allowlist")]
     AllowlistDuplicate,
 
-    #[msg("is_base_token flag does not match vault base_mint")]
-    InvalidBaseTokenConfig,
-
     #[msg("Harvest amount exceeds available yield")]
     ExceedsHarvestableYield,
 
@@ -94,4 +70,7 @@ pub enum ErrorCode {
 
     #[msg("No pending authority transfer")]
     NoPendingTransfer,
+
+    #[msg("Invalid treasury address")]
+    InvalidTreasury,
 }

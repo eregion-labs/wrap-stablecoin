@@ -7,9 +7,9 @@ use crate::errors::ErrorCode;
 pub mod constants;
 pub mod errors;
 pub mod instructions;
-pub mod jupiter;
 pub mod klend;
 pub mod state;
+pub mod utils;
 
 pub use instructions::*;
 
@@ -17,12 +17,12 @@ declare_id!("5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT");
 
 fn check_access(
     is_public: bool,
-    authority: &Pubkey,
+    admin: &Pubkey,
     user: &Pubkey,
     allowlist: Option<&Account<crate::state::Allowlist>>,
     err: ErrorCode,
 ) -> Result<()> {
-    if is_public || user == authority {
+    if is_public || user == admin {
         return Ok(());
     }
     let allowlist = allowlist.ok_or(err)?;
@@ -36,8 +36,8 @@ fn check_access(
 pub mod kamino_tester {
     use super::*;
     use crate::errors::ErrorCode;
-    use crate::jupiter::get_token_balance;
     use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};
+    use crate::utils::get_token_balance;
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_spl::token_interface::{
         burn, mint_to, transfer_checked, Burn, MintTo, TransferChecked,
@@ -58,7 +58,6 @@ pub mod kamino_tester {
         vault_config.lending_market = ctx.accounts.lending_market.key();
         vault_config.usdc_mint = ctx.accounts.usdc_mint.key();
         vault_config.total_stable_deposited = 0;
-        vault_config.registered_tokens = 1;
         vault_config.paused = false;
         vault_config.wrap_public = true;
         vault_config.unwrap_public = true;
@@ -80,7 +79,7 @@ pub mod kamino_tester {
         token_config.is_base_token = true;
         token_config.enabled = true;
         token_config.reserve_liquidity_supply = ctx.accounts.reserve_liquidity_supply.key();
-        token_config.total_collateral_deposited = 0;
+        token_config.total_liquidity_in_klend = 0;
 
         msg!(
             "Vault initialized with base mint: {}",
@@ -97,19 +96,11 @@ pub mod kamino_tester {
 
         check_access(
             ctx.accounts.vault_config.wrap_public,
-            &ctx.accounts.vault_config.authority,
+            &ctx.accounts.vault_config.admin,
             &ctx.accounts.user.key(),
             ctx.accounts.allowlist.as_ref(),
             ErrorCode::NotAllowedToWrap,
         )?;
-
-        // Validate user token accounts
-        ctx.accounts.validate_user_accounts()?;
-
-        require!(
-            ctx.accounts.token_config.is_base_token,
-            ErrorCode::BaseTokenOnly
-        );
 
         let vault_config = &mut ctx.accounts.vault_config;
         let token_config = &mut ctx.accounts.token_config;
@@ -179,14 +170,11 @@ pub mod kamino_tester {
 
         check_access(
             ctx.accounts.vault_config.unwrap_public,
-            &ctx.accounts.vault_config.authority,
+            &ctx.accounts.vault_config.admin,
             &ctx.accounts.user.key(),
             ctx.accounts.allowlist.as_ref(),
             ErrorCode::NotAllowedToUnwrap,
         )?;
-
-        // Validate user token accounts
-        ctx.accounts.validate_user_accounts()?;
 
         let vault_config = &mut ctx.accounts.vault_config;
         let base_token_config = &mut ctx.accounts.base_token_config;
@@ -261,16 +249,31 @@ pub mod kamino_tester {
 
     pub fn harvest_yield(ctx: Context<HarvestYield>, args: HarvestYieldArgs) -> Result<()> {
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
+        require!(args.min_ktoken_rate_bps > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
         let token_config = &ctx.accounts.token_config;
         let vault_config_key = vault_config.key();
 
-        // Cap harvest to excess collateral (yield only, not user-backed deposits)
+        // Cap harvest so that the remaining kTokens still back user-owned USDC in KLend.
+        // backing_needed = ceil(total_liquidity_in_klend * 10000 / min_ktoken_rate_bps)
+        let rate_bps = args.min_ktoken_rate_bps as u128;
+        let scaled = (token_config.total_liquidity_in_klend as u128)
+            .checked_mul(10_000)
+            .ok_or(ErrorCode::MathOverflow)?;
+        let backing_needed_u128 = scaled
+            .checked_add(rate_bps - 1)
+            .ok_or(ErrorCode::MathOverflow)?
+            .checked_div(rate_bps)
+            .ok_or(ErrorCode::MathOverflow)?;
+        let backing_needed: u64 = backing_needed_u128
+            .try_into()
+            .map_err(|_| ErrorCode::MathOverflow)?;
+
         let collateral_balance =
             get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
         let max_harvestable = collateral_balance
-            .checked_sub(token_config.total_collateral_deposited)
+            .checked_sub(backing_needed)
             .ok_or(ErrorCode::NoYieldAvailable)?;
         require!(
             args.collateral_amount <= max_harvestable,
@@ -338,10 +341,6 @@ pub mod kamino_tester {
             &[vault_config.vault_authority_bump],
         ];
 
-        // Record collateral balance before KLend deposit so we can track kTokens received.
-        let collateral_before =
-            get_token_balance(&ctx.accounts.base_collateral_vault.to_account_info())?;
-
         let ix = deposit_reserve_liquidity_ix(
             ctx.accounts.klend_program.key(),
             ctx.accounts.vault_authority.key(),
@@ -378,16 +377,11 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        // Track kTokens received so harvest_yield's excess-only cap is meaningful.
-        let collateral_after =
-            get_token_balance(&ctx.accounts.base_collateral_vault.to_account_info())?;
-        let collateral_received = collateral_after
-            .checked_sub(collateral_before)
-            .ok_or(ErrorCode::MathOverflow)?;
+        // Track USDC-denominated liability held in KLend so harvest_yield's cap is meaningful.
         let token_config = &mut ctx.accounts.token_config;
-        token_config.total_collateral_deposited = token_config
-            .total_collateral_deposited
-            .checked_add(collateral_received)
+        token_config.total_liquidity_in_klend = token_config
+            .total_liquidity_in_klend
+            .checked_add(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!("Deposited {} to KLend from vault", args.amount);
@@ -407,6 +401,9 @@ pub mod kamino_tester {
             vault_config_key.as_ref(),
             &[vault_config.vault_authority_bump],
         ];
+
+        // Snapshot vault USDC balance before redeem to measure actual liquidity returned.
+        let liquidity_before = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
 
         let ix = redeem_reserve_collateral_ix(
             ctx.accounts.klend_program.key(),
@@ -444,13 +441,23 @@ pub mod kamino_tester {
             &[authority_seeds],
         )?;
 
-        let token_config = &mut ctx.accounts.token_config;
-        token_config.total_collateral_deposited = token_config
-            .total_collateral_deposited
-            .checked_sub(args.collateral_amount)
+        // Decrement USDC tracking by actual liquidity returned. Saturates because after rate
+        // appreciation we may receive more USDC than originally tracked for these kTokens; the
+        // surplus is just extra vault backing and doesn't imply negative principal.
+        let liquidity_after = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+        let liquidity_received = liquidity_after
+            .checked_sub(liquidity_before)
             .ok_or(ErrorCode::MathOverflow)?;
+        let token_config = &mut ctx.accounts.token_config;
+        token_config.total_liquidity_in_klend = token_config
+            .total_liquidity_in_klend
+            .saturating_sub(liquidity_received);
 
-        msg!("Withdrew {} from KLend to vault", args.collateral_amount);
+        msg!(
+            "Withdrew {} kTokens ({} liquidity) from KLend to vault",
+            args.collateral_amount,
+            liquidity_received
+        );
         Ok(())
     }
 
@@ -486,10 +493,7 @@ pub mod kamino_tester {
             allowlist.allowed.len() < crate::state::MAX_ALLOWED,
             ErrorCode::AllowlistFull
         );
-        require!(
-            !allowlist.contains(&pubkey),
-            ErrorCode::AllowlistDuplicate
-        );
+        require!(!allowlist.contains(&pubkey), ErrorCode::AllowlistDuplicate);
         allowlist.allowed.push(pubkey);
         msg!("Added {} to allowlist", pubkey);
         Ok(())
@@ -508,13 +512,14 @@ pub mod kamino_tester {
     }
 
     pub fn update_treasury(ctx: Context<UpdateTreasury>) -> Result<()> {
-        let old_treasury = ctx.accounts.vault_config.treasury;
-        ctx.accounts.vault_config.treasury = ctx.accounts.new_treasury.key();
-        msg!(
-            "Treasury updated from {} to {}",
-            old_treasury,
-            ctx.accounts.new_treasury.key()
+        let new_treasury = ctx.accounts.new_treasury.key();
+        require!(
+            new_treasury != Pubkey::default(),
+            ErrorCode::InvalidTreasury
         );
+        let old_treasury = ctx.accounts.vault_config.treasury;
+        ctx.accounts.vault_config.treasury = new_treasury;
+        msg!("Treasury updated from {} to {}", old_treasury, new_treasury);
         Ok(())
     }
 

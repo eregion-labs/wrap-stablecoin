@@ -1,202 +1,75 @@
-# Kamino Tester
+# wStable — Kamino KLend wrapped stablecoin
 
-A Solana program that wraps stablecoins (USDC) into yield-bearing wrapped tokens (wStable) using Kamino Lending (KLend) as the underlying yield source.
+A Solana program that mints a wrapped stablecoin (wStable) 1:1 against USDC. User deposits stay in an intermediate vault until the admin moves them into Kamino KLend to earn yield. Excess yield above user-backed collateral can be harvested to a treasury.
 
-## Overview
+Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
 
-This program provides:
-- **Wrap**: Deposit USDC, receive wStable tokens (1:1), USDC is deposited into KLend to earn yield
-- **Unwrap**: Burn wStable tokens, receive USDC back from KLend
-- **Harvest Yield**: Authority can harvest accrued yield (excess collateral) to treasury
-- **Flash Mint**: Borrow wStable tokens without collateral, repay within the same transaction (for arbitrage)
+## Flow
 
-## Architecture
+```mermaid
+flowchart LR
+    U([User]) -->|wrap amount| WR[wrap]
+    WR -->|transfer amount| TV[(token_vault)]
+    WR -->|mint amount| WM[(wrapped_mint)]
+    WM -->|amount wStable| U
 
-```
-User USDC ──► Wrap ──► KLend Deposit ──► Collateral Vault
-                              │
-                              ▼
-                         wStable Mint ──► User wStable
+    A([Admin]) -->|deposit_to_klend| DTK[deposit_to_klend]
+    DTK -->|CPI deposit_reserve_liquidity| KL[/KLend reserve/]
+    TV --> DTK
+    DTK -->|kTokens| CV[(collateral_vault)]
 
-User wStable ──► Unwrap ──► Burn wStable
-                              │
-                              ▼
-                         KLend Redeem ──► User USDC
+    A -->|withdraw_from_klend| WTK[withdraw_from_klend]
+    WTK -->|CPI redeem_reserve_collateral| KL
+    CV --> WTK
+    WTK -->|USDC| TV
 
-Flash Mint Flow:
-┌─────────────────────────────────────────────────────────────┐
-│ Transaction                                                  │
-│  [1] flash_mint_start ──► Mint wStable to borrower          │
-│  [2] ... user operations (DEX swaps, arbitrage) ...         │
-│  [3] flash_mint_end ──► Burn principal + transfer fee       │
-└─────────────────────────────────────────────────────────────┘
-```
+    U -->|unwrap amount| UW[unwrap]
+    UW -->|burn amount| WM
+    UW -->|transfer amount| U2([User])
+    TV --> UW
 
-## Program Instructions
-
-| Instruction | Description |
-|------------|-------------|
-| `initialize` | Initialize vault config, wrapped mint, and collateral vault |
-| `wrap` | Deposit USDC, mint wStable, deposit to KLend |
-| `unwrap` | Burn wStable, redeem from KLend, return USDC |
-| `harvest_yield` | Redeem excess collateral to treasury (authority only) |
-| `set_paused` | Pause/unpause the vault (authority only) |
-| `update_treasury` | Update treasury address (authority only) |
-| `transfer_authority` | Transfer vault authority (authority only) |
-| `flash_mint_start` | Start flash mint - mint tokens to borrower |
-| `flash_mint_end` | End flash mint - burn principal, transfer fee |
-| `set_flash_mint_fee` | Set flash mint fee in basis points (authority only) |
-| `set_flash_mint_enabled` | Enable/disable flash mint for public (authority only) |
-
-## Flash Mint
-
-Flash mint allows users to borrow wStable tokens without collateral, use them within the same transaction, and repay with a fee. This is useful for arbitrage opportunities.
-
-### How It Works
-
-1. **Start**: `flash_mint_start` mints tokens to borrower and creates a temporary `FlashLoanState` PDA
-2. **Use**: Borrower executes operations (DEX swaps, arbitrage, etc.)
-3. **End**: `flash_mint_end` burns the principal, transfers fee to treasury, and closes the loan state
-
-### Configuration
-
-- **Fee**: Configurable in basis points (e.g., 50 bps = 0.5%)
-- **Access Control**:
-  - When disabled: Only admin (authority) can use flash mint
-  - When enabled: Anyone can use flash mint
-- **Default**: Disabled with 0 fee
-
-### Security
-
-| Protection | Mechanism |
-|------------|-----------|
-| Missing `flash_mint_end` | Transaction introspection verifies end instruction exists before minting |
-| Mismatched accounts | Introspection verifies borrower, vault_config, and flash_loan_state match |
-| Double mint attack | PDA `init` constraint prevents creating same flash_loan_state twice |
-| Reentrancy | One flash loan per user per vault at a time (PDA uniqueness) |
-
-### Usage Example
-
-```typescript
-// Arbitrage transaction
-const tx = new Transaction();
-tx.add(flashMintStartIx(amount));      // Borrow 1000 wStable
-tx.add(swapOnDexA(wStable, tokenX));   // Swap wStable -> Token X
-tx.add(swapOnDexB(tokenX, wStable));   // Swap Token X -> wStable (profit)
-tx.add(flashMintEndIx());              // Repay 1000 + fee
-await sendTransaction(tx);
+    A -->|harvest_yield| HY[harvest_yield]
+    HY -->|CPI redeem_reserve_collateral| KL
+    CV --> HY
+    HY -->|excess USDC| TR([treasury])
 ```
 
-## Building
+The design splits user-facing flows from KLend interaction. `wrap` and `unwrap` only burn/mint wStable and move USDC between user and `token_vault`. The admin rebalances between `token_vault` and KLend via `deposit_to_klend` / `withdraw_from_klend`, and skims yield via `harvest_yield`. This means users can always unwrap as long as `token_vault` holds enough USDC; admins are responsible for keeping reserves high enough to service redemptions.
+
+## Accounts
+
+- **VaultConfig** — global config (authority, admin, pending_admin, treasury, wrapped_mint, lending_market, usdc_mint, flags, flash-mint params).
+- **TokenConfig** — per-reserve config; currently a single instance (base USDC). Tracks `total_deposited` (user principal in USDC held in `token_vault`) and `total_liquidity_in_klend` (USDC-denominated liability deposited into KLend). `harvest_yield` uses an admin-supplied conservative kToken exchange rate to derive the kToken count that must remain as backing; anything above that is yield.
+- **Allowlist** — optional list of pubkeys permitted to wrap/unwrap when the vault is private.
+- **FlashLoanState** — transient PDA created by `flash_mint_start` and required by `flash_mint_end` to close a flash mint.
+
+## Access control
+
+Two permission axes:
+
+1. **Admin / authority split.** `authority` is set at init and used only as the immutable PDA seed root. `admin` is mutable and gates every privileged instruction (pause, treasury update, KLend movement, harvest, flash-mint config). Admin is rotated via a two-step `transfer_authority` → `accept_authority` flow.
+2. **Public vs allowlist.** `wrap_public` and `unwrap_public` flags control whether arbitrary users can wrap or unwrap. When a flag is false, the caller must either be the admin or present an `Allowlist` PDA that contains their pubkey.
+
+## Flash mint
+
+`flash_mint_start` mints wStable to a borrower and writes a transient `FlashLoanState`. `flash_mint_end` must run in the same transaction — it verifies the borrower holds `amount + fee`, burns the principal, and transfers the fee to the treasury. Transaction-introspection in `flash_mint_start` confirms the matching `flash_mint_end` is present before minting.
+
+Knobs: `flash_mint_enabled`, `flash_mint_fee_bps` (max 10000), and `flash_mint_max_amount` (0 = no cap).
+
+## Layout
+
+- `wrap-stablecoin/programs/kamino-tester/` — on-chain Anchor program.
+- `backend/` — Rust HTTP service that builds transactions for the frontend.
+- `frontend/` — Next.js app (wallet adapter, wrap/unwrap UI).
+
+## Build & test
 
 ```bash
-anchor build
+# Build the program
+cd wrap-stablecoin && anchor build
+
+# Run integration tests (local validator)
+cd wrap-stablecoin && anchor test
 ```
 
-## Testing
-
-```bash
-anchor test
-```
-
-### Integration Test Coverage
-
-The integration test (`programs/kamino-tester/tests/integration_test.rs`) verifies:
-
-| Component | Status | Description |
-|-----------|--------|-------------|
-| KLend Lending Market | ✓ | Creates and initializes a new lending market |
-| KLend Reserve | ✓ | Creates USDC reserve with collateral mint |
-| KLend Global Config | ✓ | Initializes global config for reserve updates |
-| Reserve Config Update | ✓ | Verifies `update_reserve_config` instruction serialization |
-| Vault Initialization | ✓ | Creates vault_config, wrapped_mint, collateral_vault PDAs |
-| Wrap CPI | ✓ | Verifies CPI to KLend's `deposit_reserve_liquidity` |
-| Unwrap CPI | ✓ | Verifies CPI to KLend's `redeem_reserve_collateral` |
-| Harvest Yield CPI | ✓ | Verifies CPI to KLend's `redeem_reserve_collateral` for treasury |
-
-### Flash Mint Test Coverage
-
-The flash mint tests (`test_flash_mint`) verify:
-
-| Test | Description |
-|------|-------------|
-| Set flash mint fee | Admin can configure fee in basis points |
-| Non-admin blocked when disabled | Regular users cannot flash mint when feature is disabled |
-| Admin bypass when disabled | Authority can use flash mint even when disabled |
-| Enable flash mint | Admin can enable flash mint for all users |
-| Missing flash_mint_end rejected | Transaction fails if flash_mint_end is not in same transaction |
-| Complete flash mint flow | Full start → end flow with fee payment |
-| Double mint attack rejected | Cannot call flash_mint_start twice with one end |
-| Disable flash mint | Admin can disable flash mint |
-
-### Test Limitations
-
-The local test environment has limitations due to KLend's validation requirements:
-
-1. **Deposit Limit**: KLend's `init_reserve` initializes `deposit_limit = 0`. Updating it requires:
-   - `update_reserve_config` with `skip_validation = true`
-   - Specific reserve state validation that requires oracle setup
-
-2. **Oracle Configuration**: KLend validates oracle configuration for deposits, which requires:
-   - Pyth/Switchboard price feeds
-   - Scope oracle configuration
-
-**For full end-to-end testing**, use one of these approaches:
-- Fork devnet/mainnet to use existing reserves with configured oracles
-- Set up mock oracle accounts locally
-
-### KLend CPI Serialization Notes
-
-When building CPI instructions to KLend:
-
-```rust
-// UpdateConfigMode enum is #[repr(u64)] but Anchor serializes as u8 variant index
-struct UpdateReserveConfigArgs {
-    mode: u8,  // NOT u64
-    value: Vec<u8>,
-    skip_validation: bool,
-}
-
-// Mode values (may vary between KLend versions):
-const UPDATE_CONFIG_MODE_DEPOSIT_LIMIT: u8 = 8;
-const UPDATE_CONFIG_MODE_BORROW_LIMIT: u8 = 9;
-```
-
-## Project Structure
-
-```
-kamino-tester/
-├── programs/kamino-tester/
-│   ├── src/
-│   │   ├── lib.rs              # Program entrypoint and instruction handlers
-│   │   ├── instructions/       # Instruction account contexts
-│   │   │   ├── initialize.rs
-│   │   │   ├── wrap.rs
-│   │   │   ├── unwrap.rs
-│   │   │   ├── harvest_yield.rs
-│   │   │   ├── admin.rs
-│   │   │   └── flash_mint.rs   # Flash mint instructions and introspection
-│   │   ├── state/              # Account structures
-│   │   │   ├── vault_config.rs # VaultConfig with flash mint settings
-│   │   │   └── flash_loan_state.rs # Temporary flash loan tracking
-│   │   ├── errors.rs           # Custom error codes
-│   │   └── klend/              # KLend CPI helpers
-│   │       └── cpi.rs
-│   └── tests/
-│       ├── integration_test.rs # Full integration test + flash mint tests
-│       ├── klend_init.rs       # KLend initialization tests
-│       └── wrapped_token_test.rs
-├── so/
-│   └── klend.so                # KLend program binary for local testing
-└── Anchor.toml
-```
-
-## Dependencies
-
-- Anchor Framework
-- SPL Token / Token-2022
-- Kamino Lending (KLend) Program
-
-## License
-
-[Add license information]
+End-to-end testing against live KLend requires forking devnet or mainnet reserves — local `init_reserve` leaves `deposit_limit = 0` and has no oracle.

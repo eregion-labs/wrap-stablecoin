@@ -6,11 +6,11 @@ use serde_json::Value;
 use crate::app_state::AppState;
 
 /// GET `/quote` — returns JSON quote (pass-through for swap step).
-pub async fn fetch_quote(
-    state: &AppState,
-    query: &str,
-) -> Result<Value> {
-    let url = format!("{}/quote?{query}", state.jupiter_quote_api_base.trim_end_matches('/'));
+pub async fn fetch_quote(state: &AppState, query: &str) -> Result<Value> {
+    let url = format!(
+        "{}/quote?{query}",
+        state.jupiter_quote_api_base.trim_end_matches('/')
+    );
     let v = state
         .http
         .get(&url)

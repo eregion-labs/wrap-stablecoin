@@ -8,6 +8,12 @@ use crate::state::{TokenConfig, VaultConfig};
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct HarvestYieldArgs {
     pub collateral_amount: u64,
+    /// Admin-attested minimum KLend exchange rate, in basis points (10000 = 1.00x). The harvest
+    /// cap uses this to convert the USDC-denominated `total_liquidity_in_klend` liability into a
+    /// kToken backing requirement. Admin MUST pass a rate no higher than the reserve's current
+    /// rate (a conservative lower bound); otherwise the cap is too loose and excess kTokens get
+    /// drained. Protected by admin signer + `has_one`.
+    pub min_ktoken_rate_bps: u64,
 }
 
 #[derive(Accounts)]
@@ -24,7 +30,6 @@ pub struct HarvestYield<'info> {
 
     /// CHECK: PDA authority for signing
     #[account(
-        mut,
         seeds = [b"vault_authority", vault_config.key().as_ref()],
         bump = vault_config.vault_authority_bump
     )]

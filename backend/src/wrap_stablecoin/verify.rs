@@ -12,11 +12,17 @@ pub fn tx_targets_program(vtx: &VersionedTransaction, program_id: &Pubkey) -> bo
     let (keys, ix_program_indexes): (&[Pubkey], Vec<u8>) = match &vtx.message {
         VersionedMessage::Legacy(m) => (
             &m.account_keys,
-            m.instructions.iter().map(|ix| ix.program_id_index).collect(),
+            m.instructions
+                .iter()
+                .map(|ix| ix.program_id_index)
+                .collect(),
         ),
         VersionedMessage::V0(m) => (
             &m.account_keys,
-            m.instructions.iter().map(|ix| ix.program_id_index).collect(),
+            m.instructions
+                .iter()
+                .map(|ix| ix.program_id_index)
+                .collect(),
         ),
     };
 
@@ -28,10 +34,7 @@ pub fn tx_targets_program(vtx: &VersionedTransaction, program_id: &Pubkey) -> bo
 /// Reject a transaction that does not invoke our wStable program. Every tx the
 /// backend builds, previews, or returns must route through our program so a
 /// client can never coerce the API into endorsing an unrelated transaction.
-pub fn ensure_tx_targets_program(
-    vtx: &VersionedTransaction,
-    program_id: &Pubkey,
-) -> Result<()> {
+pub fn ensure_tx_targets_program(vtx: &VersionedTransaction, program_id: &Pubkey) -> Result<()> {
     if tx_targets_program(vtx, program_id) {
         Ok(())
     } else {

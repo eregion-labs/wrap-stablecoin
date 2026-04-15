@@ -13,12 +13,12 @@ pub struct DepositToKlendArgs {
 #[derive(Accounts)]
 pub struct DepositToKlend<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized,
+        has_one = admin @ ErrorCode::Unauthorized,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
     pub vault_config: Account<'info, VaultConfig>,

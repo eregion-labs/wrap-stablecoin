@@ -17,7 +17,6 @@ pub struct VaultConfig {
     pub lending_market: Pubkey,
     pub usdc_mint: Pubkey,
     pub total_stable_deposited: u64,
-    pub registered_tokens: u8,
     pub paused: bool,
     pub wrap_public: bool,
     pub unwrap_public: bool,

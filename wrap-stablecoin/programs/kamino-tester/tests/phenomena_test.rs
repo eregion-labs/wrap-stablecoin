@@ -18,25 +18,16 @@ use solana_sdk::{
     system_instruction,
 };
 
-pub mod utils;
 pub mod phenomena_ix;
+pub mod utils;
 
 use phenomena_ix::{
-    derive_klend_pdas,
-    init_lending_market_ix,
-    init_reserve_ix,
-    wrapped_initialize_ix,
-    wrapped_unwrap_ix,
-    wrapped_wrap_ix,
-    LENDING_MARKET_AUTH_SEED_BYTES,
-    LENDING_MARKET_SPACE_BYTES,
+    derive_klend_pdas, init_lending_market_ix, init_reserve_ix, wrapped_initialize_ix,
+    wrapped_unwrap_ix, wrapped_wrap_ix, LENDING_MARKET_AUTH_SEED_BYTES, LENDING_MARKET_SPACE_BYTES,
     RESERVE_SPACE_BYTES,
 };
 use utils::{
-    airdrop_sol_to_users,
-    send_tx,
-    setup_token_mint,
-    setup_token_mint_ata_and_mint_to_many_users,
+    airdrop_sol_to_users, send_tx, setup_token_mint, setup_token_mint_ata_and_mint_to_many_users,
 };
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
@@ -112,14 +103,19 @@ fn test_setup_wrap_unwrap() {
     println!("\n[2/7] Creating KLend lending market...");
     let lending_market = Keypair::new();
     let (lending_market_authority, _) = Pubkey::find_program_address(
-        &[LENDING_MARKET_AUTH_SEED_BYTES, lending_market.pubkey().as_ref()],
+        &[
+            LENDING_MARKET_AUTH_SEED_BYTES,
+            lending_market.pubkey().as_ref(),
+        ],
         &klend_program_id,
     );
 
     let mut quote_currency = [0u8; 32];
     quote_currency[..3].copy_from_slice(b"USD");
 
-    let rent = rpc.get_minimum_balance_for_rent_exemption(LENDING_MARKET_SPACE_BYTES).unwrap();
+    let rent = rpc
+        .get_minimum_balance_for_rent_exemption(LENDING_MARKET_SPACE_BYTES)
+        .unwrap();
     let create_market_ix = system_instruction::create_account(
         &payer.pubkey(),
         &lending_market.pubkey(),
@@ -152,7 +148,9 @@ fn test_setup_wrap_unwrap() {
     let (reserve_liquidity_supply, fee_receiver, collateral_mint, reserve_collateral_supply) =
         derive_klend_pdas(&reserve.pubkey(), &klend_program_id);
 
-    let rent = rpc.get_minimum_balance_for_rent_exemption(RESERVE_SPACE_BYTES).unwrap();
+    let rent = rpc
+        .get_minimum_balance_for_rent_exemption(RESERVE_SPACE_BYTES)
+        .unwrap();
     let create_reserve_ix = system_instruction::create_account(
         &payer.pubkey(),
         &reserve.pubkey(),
@@ -190,7 +188,9 @@ fn test_setup_wrap_unwrap() {
             println!("⚠ init_reserve failed (expected on localnet): {}", e);
             println!("  Using vault-only path: creating our own collateral mint...");
             let collateral_mint_kp = Keypair::new();
-            let collateral_rent = rpc.get_minimum_balance_for_rent_exemption(MINT_SIZE as usize).unwrap();
+            let collateral_rent = rpc
+                .get_minimum_balance_for_rent_exemption(MINT_SIZE as usize)
+                .unwrap();
             let create_coll_ix = system_instruction::create_account(
                 &payer.pubkey(),
                 &collateral_mint_kp.pubkey(),
@@ -235,7 +235,11 @@ fn test_setup_wrap_unwrap() {
         &wrapped_program_id,
     );
     let (token_config, _) = Pubkey::find_program_address(
-        &[b"token_config", vault_config.as_ref(), usdc_mint.pubkey().as_ref()],
+        &[
+            b"token_config",
+            vault_config.as_ref(),
+            usdc_mint.pubkey().as_ref(),
+        ],
         &wrapped_program_id,
     );
     let (token_collateral_vault, _) = Pubkey::find_program_address(
@@ -263,7 +267,13 @@ fn test_setup_wrap_unwrap() {
         &token_collateral_vault,
         &token_vault,
     );
-    send_tx(&rpc, vec![init_vault_ix], &payer.pubkey(), &[&payer, &authority]).unwrap();
+    send_tx(
+        &rpc,
+        vec![init_vault_ix],
+        &payer.pubkey(),
+        &[&payer, &authority],
+    )
+    .unwrap();
     println!("✓ Vault config: {}", vault_config);
     println!("✓ Wrapped mint (wStable): {}", wrapped_mint);
     println!("✓ Base token (USDC) registered");
@@ -274,7 +284,13 @@ fn test_setup_wrap_unwrap() {
     println!("\n[6/7] Wrapping USDC → wStable...");
     let user_wrapped = get_ata(&payer.pubkey(), &wrapped_mint);
     let create_user_wrapped_ix = create_ata_ix(&payer.pubkey(), &payer.pubkey(), &wrapped_mint);
-    send_tx(&rpc, vec![create_user_wrapped_ix], &payer.pubkey(), &[&payer]).unwrap();
+    send_tx(
+        &rpc,
+        vec![create_user_wrapped_ix],
+        &payer.pubkey(),
+        &[&payer],
+    )
+    .unwrap();
 
     let wrap_amount = 100_000_000u64; // 100 USDC
     let wrap_ix = wrapped_wrap_ix(
@@ -293,7 +309,10 @@ fn test_setup_wrap_unwrap() {
         wrap_amount,
     );
     send_tx(&rpc, vec![wrap_ix], &payer.pubkey(), &[&payer]).unwrap();
-    println!("✓ Wrapped {} USDC into wStable", wrap_amount / USDC_LAMPORTS_PER_USDC);
+    println!(
+        "✓ Wrapped {} USDC into wStable",
+        wrap_amount / USDC_LAMPORTS_PER_USDC
+    );
 
     // ========================================
     // Step 7: Unwrap (redeem wStable → USDC)
@@ -315,7 +334,10 @@ fn test_setup_wrap_unwrap() {
         unwrap_amount,
     );
     send_tx(&rpc, vec![unwrap_ix], &payer.pubkey(), &[&payer]).unwrap();
-    println!("✓ Unwrapped {} wStable back to USDC", unwrap_amount / USDC_LAMPORTS_PER_USDC);
+    println!(
+        "✓ Unwrapped {} wStable back to USDC",
+        unwrap_amount / USDC_LAMPORTS_PER_USDC
+    );
 
     println!("\n========================================");
     println!("✓ Full flow: setup → wrap → unwrap PASSED");

@@ -68,13 +68,13 @@ pub struct AcceptAuthority<'info> {
 #[derive(Accounts)]
 pub struct SetWrapPublic<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 }
@@ -82,13 +82,13 @@ pub struct SetWrapPublic<'info> {
 #[derive(Accounts)]
 pub struct SetUnwrapPublic<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 }
@@ -96,19 +96,19 @@ pub struct SetUnwrapPublic<'info> {
 #[derive(Accounts)]
 pub struct InitAllowlist<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
     #[account(
         init,
-        payer = authority,
+        payer = admin,
         space = 8 + Allowlist::INIT_SPACE,
         seeds = [b"allowlist", vault_config.key().as_ref()],
         bump
@@ -121,13 +121,13 @@ pub struct InitAllowlist<'info> {
 #[derive(Accounts)]
 pub struct AddToAllowlist<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
@@ -142,13 +142,13 @@ pub struct AddToAllowlist<'info> {
 #[derive(Accounts)]
 pub struct RemoveFromAllowlist<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds = [b"vault_config", vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = authority @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
 
