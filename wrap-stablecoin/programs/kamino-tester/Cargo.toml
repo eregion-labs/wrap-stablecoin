@@ -1,0 +1,44 @@
+[package]
+name = "kamino-tester"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "kamino_tester"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(feature, values("anchor-debug", "custom-heap", "custom-panic"))',
+    'cfg(target_os, values("solana"))',
+]
+
+
+[dependencies]
+anchor-lang = "0.31.1"
+anchor-spl = "0.31.1"
+sha2 = "0.10"
+
+[dev-dependencies]
+anchor-client = "0.31.1"
+
+anyhow = "1.0"
+sha2 = "0.10"
+shellexpand = "3.1"
+borsh = "0.10"
+spl-token = "7.0"
+spl-associated-token-account = "6.0"
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+solana-sdk = "2.2.1"
+solana-client = "2.2.1"

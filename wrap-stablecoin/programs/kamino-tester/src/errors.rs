@@ -1,0 +1,91 @@
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum ErrorCode {
+    #[msg("Vault is currently paused")]
+    VaultPaused,
+
+    #[msg("Insufficient balance for operation")]
+    InsufficientBalance,
+
+    #[msg("No yield available to harvest")]
+    NoYieldAvailable,
+
+    #[msg("Unauthorized access")]
+    Unauthorized,
+
+    #[msg("Math overflow")]
+    MathOverflow,
+
+    #[msg("Invalid amount")]
+    InvalidAmount,
+
+    #[msg("Insufficient liquidity for redemption")]
+    InsufficientLiquidity,
+
+    #[msg("Flash mint feature is disabled")]
+    FlashMintDisabled,
+
+    #[msg("Missing flash_mint_end instruction in transaction")]
+    MissingFlashMintEnd,
+
+    #[msg("Invalid flash loan state")]
+    InvalidFlashLoan,
+
+    #[msg("Insufficient balance to repay flash loan")]
+    InsufficientRepayment,
+
+    #[msg("Flash mint fee exceeds maximum")]
+    InvalidFlashMintFee,
+
+    #[msg("Token is disabled")]
+    TokenDisabled,
+
+    #[msg("Token not found")]
+    TokenNotFound,
+
+    #[msg("Invalid token account")]
+    InvalidTokenAccount,
+
+    #[msg("Not allowed to wrap")]
+    NotAllowedToWrap,
+
+    #[msg("Not allowed to unwrap")]
+    NotAllowedToUnwrap,
+
+    #[msg("Allowlist full")]
+    AllowlistFull,
+
+    #[msg("Pubkey not in allowlist")]
+    NotInAllowlist,
+
+    #[msg("Pubkey already in allowlist")]
+    AllowlistDuplicate,
+
+    #[msg("Harvest amount exceeds available yield")]
+    ExceedsHarvestableYield,
+
+    #[msg("Flash mint amount exceeds configured maximum")]
+    FlashMintAmountExceeded,
+
+    #[msg("No pending authority transfer")]
+    NoPendingTransfer,
+
+    #[msg("Invalid treasury address")]
+    InvalidTreasury,
+
+    #[msg("Reserve account not owned by KLend program")]
+    InvalidReserveOwner,
+
+    #[msg("Token account data invalid or unexpected owner")]
+    InvalidTokenAccountData,
+
+    #[msg("Flash mint introspection scan exceeded bound")]
+    FlashMintScanLimit,
+
+    #[msg("Harvest would leave insufficient backing for tracked liability")]
+    HarvestLeavesUnderbacked,
+
+    #[msg("Harvest redeem produced no collateral movement")]
+    HarvestRedeemedNothing,
+}

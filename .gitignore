@@ -1,7 +1,56 @@
-.anchor
+# --- OS ---
 .DS_Store
-target
+**/.DS_Store
+Thumbs.db
+
+# --- IDE / editors ---
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Environment & secrets ---
+.env
+.env.local
+.env.*.local
+!.env.example
+!**/.env.example
+
+# --- Node (any workspace / app) ---
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- Next.js / frontends ---
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# --- Anchor / Solana / Rust ---
+.anchor/
+**/target/
+target/
+so/
+test-ledger/
 **/*.rs.bk
-node_modules
-test-ledger
-.yarn
+*.so
+
+# --- Yarn (Berry) ---
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# --- Coverage / caches ---
+coverage/
+.nyc_output/
+.eslintcache
+
+# --- Misc logs ---
+*.log

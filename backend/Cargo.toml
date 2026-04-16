@@ -1,0 +1,44 @@
+[package]
+name = "wrap-stablecoin-api"
+version = "0.1.0"
+edition = "2021"
+default-run = "wrap-stablecoin-api"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["macros", "json"] }
+tokio = { version = "1.41", features = ["full"] }
+tower = "0.5.1"
+tower-http = { version = "0.6.2", features = [
+    "cors",
+    "trace",
+    "timeout",
+    "compression-gzip",
+    "catch-panic",
+] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dotenvy = "0.15.7"
+anyhow = "1.0.91"
+thiserror = "2.0"
+utoipa = { version = "5.2", features = ["axum_extras"] }
+utoipa-axum = "0.2.0"
+utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
+kamino-tester = { path = "../wrap-stablecoin/programs/kamino-tester", default-features = false, features = [
+    "no-entrypoint",
+] }
+anchor-lang = "0.31.1"
+solana-client = "2.2.1"
+solana-sdk = "2.2.1"
+spl-associated-token-account = "6.0.0"
+spl-token = "7.0.0"
+borsh = "1.5"
+sha2 = "0.10"
+base64 = "0.22"
+reqwest = { version = "0.12", features = ["json"] }
+bincode = "1.3"
+
+[[bin]]
+name = "wrap-stablecoin-api"
+path = "src/main.rs"
