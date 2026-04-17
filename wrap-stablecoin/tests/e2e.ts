@@ -658,5 +658,143 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
         .rpc();
     });
+
+    it("rejects a foreign allowlist PDA used to bypass a private-wrap gate", async () => {
+      // Attacker spins up a parallel vault and seeds its allowlist with themselves.
+      // Without PDA-derivation checks in `check_access`, they could pass this
+      // attacker-controlled allowlist to the victim vault's `wrap` to bypass the gate.
+      const attacker = Keypair.generate();
+      const airdrop = await connection.requestAirdrop(
+        attacker.publicKey,
+        2_000_000_000,
+      );
+      await connection.confirmTransaction(airdrop, "confirmed");
+
+      const atkVault = vaultConfigPda(programId, attacker.publicKey);
+      const atkVaultAuthority = vaultAuthorityPda(programId, atkVault);
+      const atkWrappedMint = wrappedMintPda(programId, atkVault);
+      const atkTokenConfig = tokenConfigPda(programId, atkVault, USDC_MINT);
+      const atkCollateralVault = collateralVaultPda(programId, atkTokenConfig);
+      const atkTokenVault = tokenVaultPda(programId, atkTokenConfig);
+      const atkTreasury = getAssociatedTokenAddressSync(
+        USDC_MINT,
+        atkVaultAuthority,
+        true,
+      );
+      const atkAllowlist = allowlistPda(programId, atkVault);
+
+      const atkTreasuryIx = createAssociatedTokenAccountIdempotentInstruction(
+        attacker.publicKey,
+        atkTreasury,
+        atkVaultAuthority,
+        USDC_MINT,
+      );
+
+      await program.methods
+        .initialize()
+        .accountsPartial({
+          authority: attacker.publicKey,
+          usdcMint: USDC_MINT,
+          vaultConfig: atkVault,
+          wrappedMint: atkWrappedMint,
+          vaultAuthority: atkVaultAuthority,
+          lendingMarket: LENDING_MARKET,
+          lendingMarketAuthority,
+          treasury: atkTreasury,
+          reserve: USDC_RESERVE,
+          reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
+          collateralMint: RESERVE_COLLATERAL_MINT,
+          tokenConfig: atkTokenConfig,
+          collateralVault: atkCollateralVault,
+          tokenVault: atkTokenVault,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .preInstructions([atkTreasuryIx])
+        .signers([attacker])
+        .rpc();
+
+      await program.methods
+        .initAllowlist()
+        .accountsPartial({
+          admin: attacker.publicKey,
+          vaultConfig: atkVault,
+          allowlist: atkAllowlist,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .signers([attacker])
+        .rpc();
+
+      await program.methods
+        .addToAllowlist(attacker.publicKey)
+        .accountsPartial({
+          admin: attacker.publicKey,
+          vaultConfig: atkVault,
+          allowlist: atkAllowlist,
+        } as any)
+        .signers([attacker])
+        .rpc();
+
+      // Gate the victim vault.
+      await program.methods
+        .setWrapPublic(false)
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+
+      const atkUsdcAta = getAssociatedTokenAddressSync(
+        USDC_MINT,
+        attacker.publicKey,
+      );
+      const atkWrappedAta = getAssociatedTokenAddressSync(
+        wrappedMint,
+        attacker.publicKey,
+      );
+      const atkUsdcAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+        attacker.publicKey,
+        atkUsdcAta,
+        attacker.publicKey,
+        USDC_MINT,
+      );
+      const atkWrappedAtaIx = createAssociatedTokenAccountIdempotentInstruction(
+        attacker.publicKey,
+        atkWrappedAta,
+        attacker.publicKey,
+        wrappedMint,
+      );
+
+      let threw = false;
+      try {
+        await program.methods
+          .wrap({ amount: new anchor.BN(1_000_000) } as any)
+          .accountsPartial({
+            user: attacker.publicKey,
+            vaultConfig, // victim vault
+            vaultAuthority,
+            tokenConfig,
+            tokenMint: USDC_MINT,
+            userToken: atkUsdcAta,
+            userWrapped: atkWrappedAta,
+            wrappedMint, // victim wrapped mint
+            tokenVault,
+            usdcMint: USDC_MINT,
+            allowlist: atkAllowlist, // foreign allowlist — must be rejected
+            tokenProgram: TOKEN_PROGRAM_ID,
+          } as any)
+          .preInstructions([atkUsdcAtaIx, atkWrappedAtaIx])
+          .signers([attacker])
+          .rpc();
+      } catch (err: any) {
+        threw = true;
+        const code = err?.error?.errorCode?.code || err?.message || String(err);
+        expect(code).to.match(/NotAllowedToWrap/);
+      }
+      expect(threw).to.equal(true);
+
+      await program.methods
+        .setWrapPublic(true)
+        .accountsPartial({ admin: wallet.publicKey, vaultConfig } as any)
+        .rpc();
+    });
   });
 });

@@ -20,12 +20,27 @@ fn check_access(
     admin: &Pubkey,
     user: &Pubkey,
     allowlist: Option<&Account<crate::state::Allowlist>>,
+    vault_config: &Pubkey,
+    program_id: &Pubkey,
     err: ErrorCode,
 ) -> Result<()> {
     if is_public || user == admin {
         return Ok(());
     }
     let allowlist = allowlist.ok_or(err)?;
+    // The Option<Account> in the Accounts struct does not validate PDA seeds on
+    // its own — Anchor only checks ownership + discriminator. Without this check
+    // any caller could pass an Allowlist they seeded under a different vault
+    // (e.g. one they control) to bypass the gate. Verify the passed account is
+    // *this* vault's allowlist PDA.
+    let expected = Pubkey::create_program_address(
+        &[b"allowlist", vault_config.as_ref(), &[allowlist.bump]],
+        program_id,
+    )
+    .map_err(|_| err)?;
+    if allowlist.key() != expected {
+        return Err(err.into());
+    }
     if !allowlist.contains(user) {
         return Err(err.into());
     }
@@ -99,6 +114,8 @@ pub mod kamino_tester {
             &ctx.accounts.vault_config.admin,
             &ctx.accounts.user.key(),
             ctx.accounts.allowlist.as_ref(),
+            &ctx.accounts.vault_config.key(),
+            ctx.program_id,
             ErrorCode::NotAllowedToWrap,
         )?;
 
@@ -181,6 +198,8 @@ pub mod kamino_tester {
             &ctx.accounts.vault_config.admin,
             &ctx.accounts.user.key(),
             ctx.accounts.allowlist.as_ref(),
+            &ctx.accounts.vault_config.key(),
+            ctx.program_id,
             ErrorCode::NotAllowedToUnwrap,
         )?;
 
