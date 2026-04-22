@@ -13,6 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::VersionedTransaction;
 use spl_associated_token_account::get_associated_token_address;
+use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::id as spl_token_program_id;
 
 use super::{token_config, vault_authority, vault_config};
@@ -47,8 +48,9 @@ pub fn unwrap_ix_data(amount: u64) -> Result<Vec<u8>> {
 }
 
 /// Accounts order mirrors `Wrap<'info>` in `programs/kamino-tester/src/instructions/wrap.rs`.
-/// `allowlist` is skipped — the wrap handler accepts `Option<Account<Allowlist>>` and the
-/// user is on the permissionless path when `wrap_public` is true.
+/// `allowlist` is `Option<Account<Allowlist>>`; to signal `None` on the permissionless path
+/// (`wrap_public == true`) we pass the program ID as the sentinel per Anchor convention —
+/// the slot must still be present in the account list.
 pub fn build_wrap_instruction(
     program_id: &Pubkey,
     user: &Pubkey,
@@ -78,6 +80,7 @@ pub fn build_wrap_instruction(
         AccountMeta::new(vault.wrapped_mint, false),
         AccountMeta::new(token_cfg.token_vault, false),
         AccountMeta::new_readonly(vault.usdc_mint, false),
+        AccountMeta::new_readonly(*program_id, false),
         AccountMeta::new_readonly(spl_token_program_id(), false),
     ];
 
@@ -89,6 +92,9 @@ pub fn build_wrap_instruction(
 }
 
 /// Accounts order mirrors `Unwrap<'info>` in `programs/kamino-tester/src/instructions/unwrap.rs`.
+/// `allowlist` is `Option<Account<Allowlist>>`; to signal `None` on the permissionless path
+/// (`unwrap_public == true`) we pass the program ID as the sentinel per Anchor convention —
+/// the slot must still be present in the account list.
 pub fn build_unwrap_instruction(
     program_id: &Pubkey,
     user: &Pubkey,
@@ -114,6 +120,7 @@ pub fn build_unwrap_instruction(
         AccountMeta::new_readonly(vault.usdc_mint, false),
         AccountMeta::new(*base_token_config_key, false),
         AccountMeta::new(base_token_cfg.token_vault, false),
+        AccountMeta::new_readonly(*program_id, false),
         AccountMeta::new_readonly(spl_token_program_id(), false),
     ];
 
@@ -195,7 +202,14 @@ pub fn unsigned_wrap_tx_bytes(
         return Err(anyhow!("token config disabled"));
     }
 
-    let ix = build_wrap_instruction(
+    let create_user_wrapped_ata = create_associated_token_account_idempotent(
+        user,
+        user,
+        &vault.wrapped_mint,
+        &spl_token_program_id(),
+    );
+
+    let wrap_ix = build_wrap_instruction(
         program_id,
         user,
         &vault,
@@ -206,7 +220,7 @@ pub fn unsigned_wrap_tx_bytes(
         amount,
     )?;
 
-    let tx = build_versioned_tx(rpc, user, vec![ix], None)?;
+    let tx = build_versioned_tx(rpc, user, vec![create_user_wrapped_ata, wrap_ix], None)?;
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
@@ -229,7 +243,14 @@ pub fn unsigned_unwrap_tx_bytes(
         return Err(anyhow!("base token config row invalid"));
     }
 
-    let ix = build_unwrap_instruction(
+    let create_user_base_ata = create_associated_token_account_idempotent(
+        user,
+        user,
+        &vault.usdc_mint,
+        &spl_token_program_id(),
+    );
+
+    let unwrap_ix = build_unwrap_instruction(
         program_id,
         user,
         &vault,
@@ -240,7 +261,7 @@ pub fn unsigned_unwrap_tx_bytes(
         amount,
     )?;
 
-    let tx = build_versioned_tx(rpc, user, vec![ix], None)?;
+    let tx = build_versioned_tx(rpc, user, vec![create_user_base_ata, unwrap_ix], None)?;
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
