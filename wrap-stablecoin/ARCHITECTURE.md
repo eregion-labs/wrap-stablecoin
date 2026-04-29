@@ -2,196 +2,219 @@
 
 ## Purpose
 
-Olympus Complex is a Solana protocol that issues **yield-bearing wrapped stablecoins (wStable)** backed by one or more base stablecoins (e.g., USDC). Users deposit stablecoins and receive wStable tokens 1:1; underlying assets are deposited into **Kamino KLend** to earn yield. The protocol unifies multiple stablecoins into a single wrapped token, routes non-base tokens through **Jupiter** for swaps, and supports **flash mint** for uncollateralized, same-transaction borrowing.
+Olympus Complex is a Solana protocol that issues a **yield-bearing wrapped stablecoin (wStable)** backed 1:1 by a base stablecoin (USDC). Users deposit USDC and receive wStable; the underlying USDC is supplied to **Kamino KLend** to earn yield. Yield accrues to a treasury account controlled by the protocol, not to wStable supply. The protocol also offers a permissioned **flash mint** of wStable for same-transaction borrowing.
 
-**Core value proposition:** Hold a single wStable token that accrues yield from lending markets while supporting multiple input stablecoins and enabling flash-loan-style arbitrage.
+**Core value proposition:** A simple, single-mint wrapped stablecoin that earns lending yield for the treasury and exposes a flash-mint primitive on its own supply.
 
 ---
 
 ## Design Philosophy
 
-### 1. **Composability Over Isolation**
+### 1. Composability over isolation
 
-The protocol is built to integrate with existing Solana DeFi primitives rather than reimplement them:
+The on-chain program is intentionally thin. KLend handles lending; the backend (off-chain) routes non-USDC inputs through Jupiter and bundles them with `wrap` / `unwrap` into a single user-signed transaction. The on-chain program never CPIs into Jupiter.
 
-- **KLend** — All stablecoin deposits are lent via KLend; the protocol does not run its own lending logic.
-- **Jupiter** — Non-base tokens (USDT, etc.) are swapped to the base token via Jupiter; no built-in AMM.
-- **SPL Token** — Standard token interfaces for mints and accounts.
+### 2. Single base token, multi-input via off-chain swap
 
-The design favors **CPI (Cross-Program Invocation)** into battle-tested programs instead of custom logic.
+The on-chain `wrap` instruction accepts only the base token (USDC). Multi-stablecoin support is a **backend/UX concern**: the backend builds a Jupiter swap → wrap (or unwrap → Jupiter swap) bundle so users can interact with the protocol while holding USDT, etc. This keeps the on-chain accounting unambiguous.
 
-### 2. **Single Wrapped Token, Multiple Inputs**
+### 3. Authority-centric configuration with rotatable admin
 
-One wStable mint represents the unified vault. Users can wrap USDC directly or wrap USDT (and other stablecoins) after an automatic swap to the base token. This reduces fragmentation: one token for users to hold and integrate with, while the vault manages multiple reserves and swap routes.
+Each vault is keyed by an immutable **authority** (the PDA-seed creator). A separate, rotatable **admin** field controls operational policy: pause, treasury, allowlist, flash-mint settings. Admin transfer is a two-step propose/accept flow.
 
-### 3. **Authority-Centric Configuration**
+### 4. Security through constraints
 
-Each vault is tied to an **authority** (admin). PDAs are derived from `authority` rather than mints or markets, so:
+- **Transaction introspection** — `flash_mint_start` walks the instructions sysvar to confirm a matching `flash_mint_end` exists later in the same transaction before it mints.
+- **One-shot flash-loan PDA** — `flash_mint_start` creates a unique PDA per (borrower, vault) and `flash_mint_end` closes it; same tx can't double-mint, future tx can't reuse.
+- **CPI-as-oracle harvest** — `harvest_yield` derives the kToken→USDC rate from the redeem CPI itself; the admin never attests a rate, and KLend's downward rounding makes the residual-backing check strictly conservative.
+- **Pinned KLend accounts** — `lending_market`, `reserve`, `reserve_liquidity_supply`, `collateral_mint`, and `lending_market_authority` are all bound at `initialize` and pinned by `address` constraints on every later CPI; admin cannot substitute reserves post-init.
+- **Allowlist PDA validation** — `check_access` re-derives the allowlist address from `(vault_config, bump)`, blocking attempts to bypass the gate by passing an allowlist seeded under a different vault.
+- **Pause** — Emergency stop covers wrap, unwrap, deposit/withdraw KLend, harvest, and flash-mint start.
 
-- One authority can run multiple vaults (different authorities → different vault_config PDAs).
-- Admin controls treasury, pause, flash mint settings, and token registration.
-- Clear separation between protocol logic and admin policy.
+### 5. Yield to treasury, not to wrapped supply
 
-### 4. **Security Through Constraints**
-
-- **Transaction introspection** — Flash mint verifies that `flash_mint_end` exists in the same transaction before minting.
-- **PDA uniqueness** — Flash loan state is a one-time PDA per (borrower, vault); prevents double-mint and reentrancy.
-- **Slippage protection** — Wrap and unwrap accept `min_out_amount` to guard against unfavorable swaps.
-- **Fee caps** — Flash mint fee is capped (e.g., 10000 bps max).
-- **Pause** — Emergency stop for wrap/unwrap without affecting admin operations.
-
-### 5. **Yield to Treasury, Not to Wrapped Supply**
-
-Accrued yield from KLend is harvested by the authority into a **treasury** account. The wrapped token remains 1:1 with deposited principal; yield is not automatically compounded into wStable. This keeps the accounting simple and lets the protocol/DAO decide how to use yield (buybacks, grants, etc.).
+wStable supply tracks deposited USDC 1:1. Lending yield accumulates in KLend kTokens; the admin redeems the surplus into the treasury via `harvest_yield`. wStable's redemption value never floats above 1:1 — yield is a separate cashflow.
 
 ---
 
-## General Architecture
+## Account Topology
 
-### High-Level Flow
+Related types: `VaultConfig`, `TokenConfig`, `Allowlist`, `FlashLoanState`.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              WRAP FLOW                                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Base token (USDC):                                                          │
-│    User USDC ──► token_vault ──► KLend deposit ──► collateral_vault          │
-│                                         │                                    │
-│                                         └──► mint wStable to user            │
-│                                                                             │
-│  Non-base token (USDT, etc.):                                                 │
-│    User USDT ──► token_vault ──► Jupiter swap ──► base_token_vault            │
-│                                         │                                    │
-│                                         └──► KLend deposit ──► mint wStable   │
-└─────────────────────────────────────────────────────────────────────────────┘
+`VaultConfig` carries the vault's identity (immutable `authority`, rotatable `admin`/`pending_admin`), the wrapped mint and base mint, the pinned KLend market, the **two distinct payout accounts** (`treasury` for harvested USDC, `flash_mint_fee_receiver` for flash-mint wStable fees), the live wStable supply (`total_stable_deposited`), and policy flags (`paused`, `wrap_public`, `unwrap_public`, `flash_mint_enabled`, `flash_mint_fee_bps`, `flash_mint_max_amount`).
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             UNWRAP FLOW                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  burn wStable ──► KLend redeem (collateral → base_token_vault)              │
-│                         │                                                    │
-│                         └──► (optional) Jupiter swap for multi-token        │
-│                         │                                                    │
-│                         └──► transfer base token to user                     │
-└─────────────────────────────────────────────────────────────────────────────┘
+`TokenConfig` is a single instance for the base token. It pins the KLend reserve, the collateral mint, the reserve's liquidity supply, the two vault-authority-owned accounts (`token_vault` for free USDC, `collateral_vault` for KLend kTokens), the token decimals captured at init, and `total_liquidity_in_klend` — the principal sent to KLend net of liquidity recovered.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           FLASH MINT FLOW                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Transaction: [flash_mint_start] ... [user ops] ... [flash_mint_end]         │
-│                                                                             │
-│  Start: mint wStable to borrower, create FlashLoanState PDA                 │
-│  Use:  borrower executes arbitrage (DEX swaps, etc.)                         │
-│  End:  burn principal, transfer fee to treasury, close PDA                   │
-└─────────────────────────────────────────────────────────────────────────────┘
+### PDA seeds
+
+| PDA                      | Seeds                                        | Role                            |
+| ------------------------ | -------------------------------------------- | ------------------------------- |
+| `vault_config`           | `["vault_config", authority]`                | Vault state, admin policy       |
+| `vault_authority`        | `["vault_authority", vault_config]`          | Signer for token + KLend CPIs   |
+| `wrapped_mint`           | `["wrapped_mint", vault_config]`             | wStable mint                    |
+| `token_config`           | `["token_config", vault_config, token_mint]` | Per-token registry (base only)  |
+| `token_collateral_vault` | `["token_collateral_vault", token_config]`   | KLend kToken vault              |
+| `token_vault`            | `["token_vault", token_config]`              | Free USDC vault                 |
+| `allowlist`              | `["allowlist", vault_config]`                | Optional gate for non-public IO |
+| `flash_loan`             | `["flash_loan", borrower, vault_config]`     | Ephemeral flash-mint state      |
+
+---
+
+## High-Level Flows
+
+### Wrap (base token only)
+
+```mermaid
+flowchart LR
+    User -->|USDC transfer_checked| TokenVault[token_vault]
+    Program -->|mint 1:1 of received| UserWStable[user wStable ATA]
+    Program -. updates .-> Totals[total_stable_deposited / total_deposited]
 ```
 
-### Account Hierarchy
+Wrap snapshots `token_vault`'s balance before and after the user's transfer, then mints wStable based on the **delta received** — fee-on-transfer mints can never over-mint. Wrap rejects non-base tokens via `is_base_token`.
 
-```
-VaultConfig (per authority)
-├── usdc_mint          — Base stablecoin (USDC)
-├── wrapped_mint       — wStable mint
-├── lending_market     — KLend market
-├── treasury           — Yield recipient
-└── TokenConfig[]      — Per-token registry
+### Unwrap
 
-TokenConfig (per supported token)
-├── token_mint         — Input token (USDC, USDT, …)
-├── reserve            — KLend reserve for this token
-├── collateral_vault   — Holds KLend kTokens
-├── token_vault        — Intermediate storage before KLend/swap
-└── is_base_token      — True for USDC (no swap)
+```mermaid
+flowchart LR
+    User -->|wStable| Burn((burn))
+    TokenVault[token_vault] -->|USDC 1:1| User
+    Program -. updates .-> Totals
 ```
 
-### PDA Structure
+Unwrap requires `token_vault` to hold enough free USDC to satisfy the redemption. If too much USDC sits in KLend, the admin must first call `withdraw_from_klend` to refill the vault.
 
-| PDA                      | Seeds                                        | Role                         |
-| ------------------------ | -------------------------------------------- | ---------------------------- |
-| `vault_config`           | `["vault_config", authority]`                | Vault state, admin settings  |
-| `vault_authority`        | `["vault_authority", vault_config]`          | Signs token CPIs             |
-| `wrapped_mint`           | `["wrapped_mint", vault_config]`             | wStable mint                 |
-| `token_config`           | `["token_config", vault_config, token_mint]` | Per-token config             |
-| `token_collateral_vault` | `["token_collateral_vault", token_config]`   | KLend kToken vault           |
-| `token_vault`            | `["token_vault", token_config]`              | Pre-deposit/swap vault       |
-| `flash_loan`             | `["flash_loan", borrower, vault_config]`     | Flash loan state (ephemeral) |
+### Off-chain multi-token wrap (backend `/v1/tx/compose`)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant BE as Backend
+    participant J as Jupiter
+    participant P as Program
+    U->>BE: wrap from USDT (or other)
+    BE->>J: Quote USDT->USDC
+    BE-->>U: Unsigned tx [Jupiter swap, wrap]
+    U->>P: Sign + submit single tx
+    P-->>U: USDC swapped, wStable minted
+```
+
+Jupiter integration is owned entirely by the backend. The on-chain program sees only USDC at the `wrap` entry point.
+
+### Admin liquidity flow
+
+```mermaid
+flowchart TB
+    subgraph Vault
+      TV[token_vault]
+      CV[collateral_vault]
+    end
+    KLend[(KLend reserve)]
+    Treasury[treasury USDC ATA]
+
+    TV -- deposit_to_klend --> KLend
+    KLend -- withdraw_from_klend --> TV
+    KLend -- harvest_yield --> Treasury
+```
+
+`deposit_to_klend` increments `total_liquidity_in_klend` by the principal sent. `withdraw_from_klend` decrements it (saturating) by the **liquidity actually returned**, so rate appreciation is absorbed correctly without producing negative principal. `harvest_yield` does not touch `total_liquidity_in_klend`; instead it enforces the residual-backing invariant directly from the CPI's measured exchange rate:
+
+```
+collateral_after × (liquidity_received / ktokens_redeemed) ≥ total_liquidity_in_klend
+```
+
+KLend rounds `liquidity_received` down, which makes the implied rate an upper bound on truth and the inequality strictly conservative — admin cannot harvest into user backing.
+
+### Flash mint
+
+```mermaid
+sequenceDiagram
+    participant B as Borrower
+    participant P as Program
+    participant Sysvar as Instructions sysvar
+    Note over B,P: Single transaction
+    B->>P: flash_mint_start(amount)
+    P->>Sysvar: scan forward for flash_mint_end
+    Sysvar-->>P: matching ix at later index
+    P-->>B: mint amount wStable, create FlashLoanState
+    B->>B: arbitrage / strategy
+    B->>P: flash_mint_end
+    P-->>P: burn principal, send fee to flash_mint_fee_receiver, close PDA
+```
+
+`flash_mint_start` accepts the call only if `flash_mint_enabled` is true or the caller is the admin. Introspection binds the matched `flash_mint_end` to (borrower, vault_config, flash_loan_state, wrapped_mint); any mismatch fails the tx atomically, which also reverts the start's mint. `flash_mint_end` is callable by anyone holding the FlashLoanState PDA, but constraints pin both `borrower_wrapped` (owner = borrower, mint = wStable) and `fee_receiver` (key = `flash_mint_fee_receiver`, mint = wStable).
+
+If `flash_mint_fee_bps > 0` and `flash_mint_fee_receiver` is unset, `flash_mint_start` fails fast (`FlashMintFeeReceiverUnset`) instead of letting the whole tx revert at end-time.
+
+### Why two payout accounts
+
+`treasury` is the destination of `harvest_yield`'s KLend redeem CPI, so it must be a **USDC token account** (KLend writes liquidity into it directly, with the vault_authority as the signer that owns it). `flash_mint_fee_receiver` is the destination of `flash_mint_end`'s fee transfer, so it must be a **wStable token account**. The two roles can never be served by the same account: a single Pubkey cannot be simultaneously an SPL token account address (for harvest) and a wallet authority of another token account (for the fee transfer constraint). The fields are managed independently, with separate admin setters.
 
 ---
 
 ## Key Components
 
-### 1. **Vault & Token Registry**
+### Vault initialization
 
-- **initialize** — Creates vault_config, wrapped_mint, vault_authority. No tokens registered yet.
-- **add_token** — Registers a stablecoin with its KLend reserve, collateral vault, and token vault. One token must be marked `is_base_token` (typically USDC).
-- **remove_token** — Closes collateral and token vaults, decrements registry. Admin only.
+`initialize` is single-shot and bootstraps the entire vault: vault_config, wrapped_mint, vault_authority, the base token_config, the token_vault, and the collateral_vault — all in one call. There is no separate `add_token` / `remove_token`.
 
-### 2. **Wrap**
+### Wrap / Unwrap
 
-- Accepts any registered token.
-- Base token: direct deposit to KLend.
-- Non-base: swap to base via Jupiter, then deposit.
-- Mints wStable 1:1 with base amount deposited.
-- Enforces `min_out_amount` for swap slippage.
+Both gated by `paused`, by `check_access` (admin-bypass + optional allowlist when `wrap_public` / `unwrap_public` is false), and by `is_base_token` on the token_config. Decimals are pinned to USDC at init, so wrap and unwrap are unambiguously 1:1.
 
-### 3. **Unwrap**
+### Admin liquidity management
 
-- Burns wStable.
-- Redeems collateral from KLend into base_token_vault.
-- Optional Jupiter swap for multi-token unwrap.
-- Transfers base token to user.
-- Enforces `min_out_amount` for slippage.
+`deposit_to_klend`, `withdraw_from_klend`, and `harvest_yield` are admin-only. All KLend CPI accounts are bound to values captured at `initialize` so admin cannot redirect reserve interactions post-init.
 
-### 4. **Harvest Yield**
+### Flash mint
 
-- Authority redeems excess collateral from KLend for a given token.
-- Proceeds go to treasury.
-- Used to capture yield beyond what backs wStable supply.
+Four admin levers — `flash_mint_enabled`, `flash_mint_fee_bps` (capped at 100%), `flash_mint_max_amount`, and `flash_mint_fee_receiver`. Disabled by default. When disabled, only the admin can start a flash mint; when enabled, any account can.
 
-### 5. **Flash Mint**
+### Allowlist
 
-- **Start** — Mints wStable to borrower, creates FlashLoanState PDA. Requires `flash_mint_end` in same transaction (introspection).
-- **End** — Burns principal, transfers fee to treasury, closes PDA.
-- **Access** — When disabled, only authority can flash mint; when enabled, anyone can.
-- **Fee** — Configurable in basis points, capped.
+A single allowlist per vault, capped at 64 entries, seeded under `vault_config`. `check_access` re-derives the expected PDA from the passed account's `bump` and the vault_config key, blocking allowlists from foreign vaults.
+
+### Two-step admin transfer
+
+`transfer_authority` records `pending_admin`; `accept_authority` requires the pending key to sign and rejects `Pubkey::default()`. The immutable `authority` (PDA-seed key) is unchanged by this flow — only operational control rotates.
 
 ---
 
 ## External Dependencies
 
-| Dependency               | Role                                                                     |
-| ------------------------ | ------------------------------------------------------------------------ |
-| **KLend**                | Lending market; `deposit_reserve_liquidity`, `redeem_reserve_collateral` |
-| **Jupiter**              | Swap aggregator for non-base tokens                                      |
-| **SPL Token**            | Mint, transfer, burn                                                     |
-| **Sysvar: Instructions** | Transaction introspection for flash mint                                 |
+| Dependency               | Role                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| **KLend**                | Lending; `deposit_reserve_liquidity` and `redeem_reserve_collateral` via CPI      |
+| **SPL Token / Token-22** | Mint, transfer_checked, burn (via Anchor's TokenInterface)                        |
+| **Sysvar: Instructions** | Forward-scan introspection for `flash_mint_end`                                   |
+| **Jupiter** *(backend)*  | Off-chain swap aggregation, bundled with wrap/unwrap by `/v1/tx/compose`          |
 
 ---
 
 ## Security Model
 
-| Threat                             | Mitigation                                            |
-| ---------------------------------- | ----------------------------------------------------- |
-| Missing `flash_mint_end`           | Transaction introspection before mint                 |
-| Wrong borrower/vault in flash mint | Introspection validates accounts                      |
-| Double flash mint                  | PDA `init` — one FlashLoanState per (borrower, vault) |
-| Swap slippage                      | `min_out_amount` on wrap/unwrap                       |
-| Unauthorized admin actions         | `has_one = authority` on admin instructions           |
-| Oracle/manipulation                | Delegated to KLend and Jupiter                        |
+| Threat                                | Mitigation                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Missing `flash_mint_end`              | Forward instructions-sysvar scan in `flash_mint_start`, scan-limit error on overflow        |
+| Wrong borrower / vault on flash end   | Introspection binds (borrower, vault_config, flash_loan_state, wrapped_mint)                |
+| Flash-loan replay or double-mint      | `init` PDA per (borrower, vault) plus `close = borrower` on end                             |
+| Foreign-allowlist bypass              | `check_access` re-derives `["allowlist", vault_config, bump]` and rejects mismatches        |
+| Fee-on-transfer over-mint             | Wrap mints based on `vault_after − vault_before`, not the user's claimed amount             |
+| Admin under-backing via harvest       | Residual-backing invariant computed from the CPI's own rate, KLend rounds down              |
+| Reserve substitution post-init        | All KLend CPI accounts pinned via `address = vault_config / token_config.<field>`           |
+| Decimal / mint mismatch on wrap       | `is_base_token` plus `token_config.token_decimals` set at init                              |
+| Unauthorized admin actions            | `has_one = admin` on every admin instruction                                                |
+| Flash-mint fee mis-routing            | `fee_receiver.key() == vault_config.flash_mint_fee_receiver` plus mint check                |
+| Oracle manipulation                   | Delegated to KLend's pricing for deposit/redeem; protocol does not consume external oracles |
 
 ---
 
 ## Summary
 
-Olympus Complex is a **wrapped stablecoin vault** that:
+Olympus Complex is a **single-base-token wrapper** that:
 
-1. **Unifies** multiple stablecoins into one yield-bearing wStable token.
-2. **Composes** with KLend for yield and Jupiter for swaps.
-3. **Separates** admin policy (authority) from core logic.
-4. **Protects** users with slippage limits and flash mint safeguards.
-5. **Routes** yield to a configurable treasury instead of auto-compounding into wStable.
-
-The design prioritizes composability, clarity of roles, and reuse of existing Solana DeFi infrastructure over custom, monolithic implementations.
+1. Mints wStable 1:1 against USDC and supplies the principal to KLend.
+2. Routes lending yield to a separately-tracked treasury account; wStable supply stays at par.
+3. Exposes a permissioned flash-mint with introspection-based same-tx repayment.
+4. Separates immutable `authority` (PDA seed) from rotatable `admin` (operational policy).
+5. Defers swap aggregation to the backend's Jupiter bundler, keeping the on-chain surface narrow.
