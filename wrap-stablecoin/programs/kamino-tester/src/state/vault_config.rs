@@ -24,4 +24,9 @@ pub struct VaultConfig {
     pub flash_mint_fee_bps: u16,
     /// Maximum amount for a single flash mint. 0 means no limit.
     pub flash_mint_max_amount: u64,
+    /// Wrapped-mint token account that receives flash-mint fees. Distinct from `treasury`,
+    /// which is a USDC account used by `harvest_yield`. `Pubkey::default()` means unset:
+    /// flash mints with non-zero fee are rejected until admin sets this via
+    /// `set_flash_mint_fee_receiver`.
+    pub flash_mint_fee_receiver: Pubkey,
 }

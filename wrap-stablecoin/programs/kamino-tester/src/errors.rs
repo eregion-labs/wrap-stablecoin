@@ -88,4 +88,7 @@ pub enum ErrorCode {
 
     #[msg("Harvest redeem produced no collateral movement")]
     HarvestRedeemedNothing,
+
+    #[msg("Flash mint fee receiver is not configured")]
+    FlashMintFeeReceiverUnset,
 }

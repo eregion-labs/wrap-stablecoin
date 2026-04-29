@@ -33,6 +33,7 @@ pub struct Wrap<'info> {
         mut,
         seeds = [b"token_config", vault_config.key().as_ref(), token_config.token_mint.as_ref()],
         bump = token_config.bump,
+        constraint = token_config.is_base_token @ ErrorCode::TokenNotFound,
         constraint = token_config.enabled @ ErrorCode::TokenDisabled
     )]
     pub token_config: Box<Account<'info, TokenConfig>>,

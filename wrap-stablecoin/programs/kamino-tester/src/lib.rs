@@ -79,6 +79,7 @@ pub mod kamino_tester {
         vault_config.flash_mint_enabled = false;
         vault_config.flash_mint_fee_bps = 0;
         vault_config.flash_mint_max_amount = 0;
+        vault_config.flash_mint_fee_receiver = Pubkey::default();
 
         token_config.bump = ctx.bumps.token_config;
         token_config.vault_config = vault_config.key();
@@ -628,6 +629,15 @@ pub mod kamino_tester {
             .checked_div(10000)
             .ok_or(ErrorCode::MathOverflow)?;
 
+        // If a fee will be charged, the admin must have configured a fee receiver. Fail fast
+        // instead of letting flash_mint_end revert the whole transaction at the very end.
+        if fee > 0 {
+            require!(
+                vault_config.flash_mint_fee_receiver != Pubkey::default(),
+                ErrorCode::FlashMintFeeReceiverUnset
+            );
+        }
+
         let flash_loan_state = &mut ctx.accounts.flash_loan_state;
         flash_loan_state.bump = ctx.bumps.flash_loan_state;
         flash_loan_state.borrower = ctx.accounts.borrower.key();
@@ -738,6 +748,18 @@ pub mod kamino_tester {
             "Flash mint max amount updated from {} to {} (0 = no limit)",
             old,
             max_amount
+        );
+        Ok(())
+    }
+
+    pub fn set_flash_mint_fee_receiver(ctx: Context<SetFlashMintFeeReceiver>) -> Result<()> {
+        let new_receiver = ctx.accounts.fee_receiver.key();
+        let old = ctx.accounts.vault_config.flash_mint_fee_receiver;
+        ctx.accounts.vault_config.flash_mint_fee_receiver = new_receiver;
+        msg!(
+            "Flash mint fee receiver updated from {} to {}",
+            old,
+            new_receiver
         );
         Ok(())
     }

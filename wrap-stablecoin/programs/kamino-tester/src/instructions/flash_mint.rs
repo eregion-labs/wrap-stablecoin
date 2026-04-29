@@ -94,8 +94,8 @@ pub struct FlashMintEnd<'info> {
 
     #[account(
         mut,
-        constraint = fee_receiver.mint == vault_config.wrapped_mint,
-        constraint = fee_receiver.owner == vault_config.treasury @ ErrorCode::Unauthorized
+        constraint = fee_receiver.mint == vault_config.wrapped_mint @ ErrorCode::InvalidTokenAccount,
+        constraint = fee_receiver.key() == vault_config.flash_mint_fee_receiver @ ErrorCode::Unauthorized
     )]
     pub fee_receiver: InterfaceAccount<'info, TokenAccount>,
 
@@ -142,6 +142,26 @@ pub struct SetFlashMintMaxAmount<'info> {
         has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
+}
+
+#[derive(Accounts)]
+pub struct SetFlashMintFeeReceiver<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        bump = vault_config.bump,
+        has_one = admin @ ErrorCode::Unauthorized
+    )]
+    pub vault_config: Account<'info, VaultConfig>,
+
+    /// Token account that will receive flash-mint fees. Must hold the wrapped mint.
+    #[account(
+        constraint = fee_receiver.mint == vault_config.wrapped_mint @ ErrorCode::InvalidTokenAccount
+    )]
+    pub fee_receiver: InterfaceAccount<'info, TokenAccount>,
 }
 
 /// Max forward scan for the matching flash_mint_end in the current transaction. A v0 tx can
