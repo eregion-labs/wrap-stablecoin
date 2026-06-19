@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-kamino_tester = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT"
+wrap_stablecoin = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT"
 
 [registry]
 url = "https://api.apr.dev"

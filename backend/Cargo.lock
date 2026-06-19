@@ -2294,15 +2294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kamino-tester"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
- "sha2 0.10.9",
-]
-
-[[package]]
 name = "keccak"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7351,6 +7342,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wrap-stablecoin"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "wrap-stablecoin-api"
 version = "0.1.0"
 dependencies = [
@@ -7361,7 +7361,6 @@ dependencies = [
  "bincode",
  "borsh 1.6.1",
  "dotenvy",
- "kamino-tester",
  "reqwest",
  "serde",
  "serde_json",
@@ -7379,6 +7378,7 @@ dependencies = [
  "utoipa",
  "utoipa-axum",
  "utoipa-swagger-ui",
+ "wrap-stablecoin",
 ]
 
 [[package]]

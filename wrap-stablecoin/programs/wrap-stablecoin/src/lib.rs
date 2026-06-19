@@ -48,7 +48,7 @@ fn check_access(
 }
 
 #[program]
-pub mod kamino_tester {
+pub mod wrap_stablecoin {
     use super::*;
     use crate::errors::ErrorCode;
     use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};

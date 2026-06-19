@@ -1,8 +1,8 @@
 use anchor_lang::AccountDeserialize;
 use anchor_lang::AnchorSerialize;
 use anyhow::{anyhow, Context, Result};
-use kamino_tester::state::{TokenConfig, VaultConfig};
-use kamino_tester::{UnwrapArgs, WrapArgs};
+use wrap_stablecoin::state::{TokenConfig, VaultConfig};
+use wrap_stablecoin::{UnwrapArgs, WrapArgs};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::hash::Hash;
@@ -47,7 +47,7 @@ pub fn unwrap_ix_data(amount: u64) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-/// Accounts order mirrors `Wrap<'info>` in `programs/kamino-tester/src/instructions/wrap.rs`.
+/// Accounts order mirrors `Wrap<'info>` in `programs/wrap-stablecoin/src/instructions/wrap.rs`.
 /// `allowlist` is `Option<Account<Allowlist>>`; to signal `None` on the permissionless path
 /// (`wrap_public == true`) we pass the program ID as the sentinel per Anchor convention —
 /// the slot must still be present in the account list.
@@ -91,7 +91,7 @@ pub fn build_wrap_instruction(
     })
 }
 
-/// Accounts order mirrors `Unwrap<'info>` in `programs/kamino-tester/src/instructions/unwrap.rs`.
+/// Accounts order mirrors `Unwrap<'info>` in `programs/wrap-stablecoin/src/instructions/unwrap.rs`.
 /// `allowlist` is `Option<Account<Allowlist>>`; to signal `None` on the permissionless path
 /// (`unwrap_public == true`) we pass the program ID as the sentinel per Anchor convention —
 /// the slot must still be present in the account list.

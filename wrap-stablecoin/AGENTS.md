@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- On-chain program: `programs/kamino-tester/src/lib.rs` (Rust Anchor entrypoint) with crate metadata in `programs/kamino-tester/Cargo.toml`.
+- On-chain program: `programs/wrap-stablecoin/src/lib.rs` (Rust Anchor entrypoint) with crate metadata in `programs/wrap-stablecoin/Cargo.toml`.
 - Client tests: `tests/*.ts` executed against the built IDL; `Anchor.toml` points to the generated ID under `[programs.localnet]`.
 - Scripts: `migrations/deploy.ts` for deployment automation; adjust if you add custom setup.
 - Build artifacts land in `target/` and `so/`; keep source edits inside `programs/` and `tests/` only.
@@ -18,7 +18,7 @@
 - IDs and public API names should match the Anchor ID in `lib.rs` and `Anchor.toml`.
 
 ## Testing Guidelines
-- Framework: ts-mocha with chai assertions. Test files live under `tests/` and should mirror program APIs (`kamino-tester` example provided).
+- Framework: ts-mocha with chai assertions. Test files live under `tests/` and should mirror program APIs (`wrap-stablecoin` example provided).
 - Write isolated integration tests that set up providers via `anchor.AnchorProvider.env()`. Prefer `program.methods.<ix>().rpc()` for clarity.
 - When adding new instructions, include at least one happy-path test and, where possible, a failure case with meaningful error matching.
 

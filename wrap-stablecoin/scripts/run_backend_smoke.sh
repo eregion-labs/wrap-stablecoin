@@ -51,7 +51,7 @@ cd "$ROOT"
 # Sanity: fixtures and built programs must exist.
 for f in \
   "so/klend.so" \
-  "target/deploy/kamino_tester.so" \
+  "target/deploy/wrap_stablecoin.so" \
   "fixtures/klend/lending_market.json" \
   "fixtures/klend/reserve.json" \
   "fixtures/klend/reserve_liquidity_supply.json" \
@@ -72,7 +72,7 @@ solana-test-validator --reset --quiet \
   --ledger "$LEDGER_DIR" \
   --warp-slot "$WARP_SLOT" \
   --bpf-program "$KLEND_PROGRAM_ID" so/klend.so \
-  --bpf-program "$PROGRAM_ID" target/deploy/kamino_tester.so \
+  --bpf-program "$PROGRAM_ID" target/deploy/wrap_stablecoin.so \
   --account 7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF fixtures/klend/lending_market.json \
   --account D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59 fixtures/klend/reserve.json \
   --account Bgq7trRgVMeq33yt235zM2onQ4bRDBsY5EWiTetF4qw6 fixtures/klend/reserve_liquidity_supply.json \

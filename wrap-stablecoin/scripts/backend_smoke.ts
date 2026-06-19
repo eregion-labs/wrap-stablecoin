@@ -4,7 +4,7 @@
  * Assumes:
  *   - solana-test-validator is running on :8899 (via `anchor localnet`)
  *     with the fixtures from Anchor.toml (KLend state + fixture wallet).
- *   - The kamino_tester program is deployed.
+ *   - The wrap_stablecoin program is deployed.
  *   - The backend API is running on :8080 with
  *       SOLANA_RPC_URL=http://127.0.0.1:8899
  *       SOLANA_NETWORK=localnet
@@ -40,7 +40,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import * as fs from "node:fs";
-import { KaminoTester } from "../target/types/kamino_tester";
+import { WrapStablecoin } from "../target/types/wrap_stablecoin";
 
 const BACKEND_BASE = process.env.BACKEND_BASE || "http://127.0.0.1:8080";
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8899";
@@ -104,7 +104,7 @@ async function main() {
   );
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.kaminoTester as Program<KaminoTester>;
+  const program = anchor.workspace.wrapStablecoin as Program<WrapStablecoin>;
   const programId = program.programId;
 
   const vaultConfig = pda(programId, [

@@ -1,4 +1,4 @@
-//! PDAs, account fetch, and unsigned transaction building for `kamino_tester` wrap / unwrap.
+//! PDAs, account fetch, and unsigned transaction building for `wrap_stablecoin` wrap / unwrap.
 
 mod builder;
 mod pda;

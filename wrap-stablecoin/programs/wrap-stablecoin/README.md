@@ -1,4 +1,4 @@
-# kamino-tester
+# wrap-stablecoin
 
 Anchor program implementing wStable — a USDC-backed wrapped token with Kamino KLend as the yield source. See [../../README.md](../../README.md) for the high-level flow and design.
 

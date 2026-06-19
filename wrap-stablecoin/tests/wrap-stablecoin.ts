@@ -1,12 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { KaminoTester } from "../target/types/kamino_tester";
+import { WrapStablecoin } from "../target/types/wrap_stablecoin";
 
-describe("kamino-tester", () => {
+describe("wrap-stablecoin", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const program = anchor.workspace.kaminoTester as Program<KaminoTester>;
+  const program = anchor.workspace.wrapStablecoin as Program<WrapStablecoin>;
 
   it("Is initialized!", async () => {
     // Add your test here.

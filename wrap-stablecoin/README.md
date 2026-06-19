@@ -58,7 +58,7 @@ Knobs: `flash_mint_enabled`, `flash_mint_fee_bps` (max 10000), and `flash_mint_m
 
 ## Layout
 
-- `wrap-stablecoin/programs/kamino-tester/` — on-chain Anchor program.
+- `wrap-stablecoin/programs/wrap-stablecoin/` — on-chain Anchor program.
 - `backend/` — Rust HTTP service that builds transactions for the frontend.
 - `frontend/` — Next.js app (wallet adapter, wrap/unwrap UI).
 

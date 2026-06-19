@@ -17,7 +17,7 @@ import {
 import * as fs from "node:fs";
 import { expect } from "chai";
 import * as crypto from "node:crypto";
-import { KaminoTester } from "../target/types/kamino_tester";
+import { WrapStablecoin } from "../target/types/wrap_stablecoin";
 
 // Mainnet Kamino Main Market USDC reserve (cloned into local validator by
 // fixtures/klend/*.json — see Anchor.toml).
@@ -171,7 +171,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   );
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.kaminoTester as Program<KaminoTester>;
+  const program = anchor.workspace.wrapStablecoin as Program<WrapStablecoin>;
   const programId = program.programId;
 
   const vaultConfig = vaultConfigPda(programId, wallet.publicKey);

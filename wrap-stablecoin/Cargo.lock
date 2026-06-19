@@ -2087,24 +2087,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kamino-tester"
-version = "0.1.0"
-dependencies = [
- "anchor-client",
- "anchor-lang",
- "anchor-spl",
- "anyhow",
- "borsh 0.10.4",
- "sha2 0.10.9",
- "shellexpand",
- "solana-client",
- "solana-sdk",
- "spl-associated-token-account",
- "spl-token 7.0.0",
- "tokio",
-]
-
-[[package]]
 name = "keccak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7092,6 +7074,24 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+
+[[package]]
+name = "wrap-stablecoin"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "anchor-lang",
+ "anchor-spl",
+ "anyhow",
+ "borsh 0.10.4",
+ "sha2 0.10.9",
+ "shellexpand",
+ "solana-client",
+ "solana-sdk",
+ "spl-associated-token-account",
+ "spl-token 7.0.0",
+ "tokio",
+]
 
 [[package]]
 name = "writeable"

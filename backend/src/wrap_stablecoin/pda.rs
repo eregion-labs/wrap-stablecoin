@@ -1,4 +1,4 @@
-use kamino_tester::constants::{KLEND_PROGRAM_ID, LENDING_MARKET_AUTH_SEED};
+use wrap_stablecoin::constants::{KLEND_PROGRAM_ID, LENDING_MARKET_AUTH_SEED};
 use solana_sdk::pubkey::Pubkey;
 
 pub fn vault_config(program_id: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {

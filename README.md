@@ -2,10 +2,12 @@
 
 Monorepo for the Kamino-backed wrap program ([`wrap-stablecoin/`](wrap-stablecoin/)), a Rust API that builds unsigned transactions, and a Next.js frontend with direct Solana wallet connection.
 
+**Wiki:** [`wiki/Home.md`](wiki/Home.md) — architecture, monorepo layout, API, and frontend docs.
+
 ## Prerequisites
 
 - Rust toolchain, `cargo`
-- Anchor (for building [`programs/kamino-tester`](wrap-stablecoin/programs/kamino-tester))
+- Anchor (for building [`programs/wrap-stablecoin`](wrap-stablecoin/programs/wrap-stablecoin))
 - Node 20+ and npm
 
 ## On-chain program
@@ -15,7 +17,7 @@ cd wrap-stablecoin
 anchor build
 ```
 
-IDL output: `wrap-stablecoin/target/idl/kamino_tester.json`.
+IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
 
 ## Backend (Axum + utoipa + Solana)
 
@@ -49,7 +51,7 @@ GraphQL client codegen was omitted to keep installs smaller. To add a GraphQL ad
 | Area | Variable | Purpose |
 |------|----------|---------|
 | Backend | `SOLANA_RPC_URL` | RPC URL |
-| Backend | `PROGRAM_ID` | `kamino_tester` program id |
+| Backend | `PROGRAM_ID` | `wrap_stablecoin` program id |
 | Backend | `VAULT_AUTHORITY` | Seeds `vault_config` PDA |
 | Frontend | `NEXT_PUBLIC_API_BASE` | Backend origin (no trailing slash) |
 | Frontend | `NEXT_PUBLIC_SOLANA_NETWORK` | `devnet` / `mainnet` / `localnet` |

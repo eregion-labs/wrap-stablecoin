@@ -25,7 +25,7 @@ thiserror = "2.0"
 utoipa = { version = "5.2", features = ["axum_extras"] }
 utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
-kamino-tester = { path = "../wrap-stablecoin/programs/kamino-tester", default-features = false, features = [
+wrap-stablecoin = { path = "../wrap-stablecoin/programs/wrap-stablecoin", default-features = false, features = [
     "no-entrypoint",
 ] }
 anchor-lang = "0.31.1"
