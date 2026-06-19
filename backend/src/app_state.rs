@@ -67,6 +67,8 @@ pub struct AppState {
     pub program_id: Pubkey,
     /// `authority` pubkey used in `vault_config` PDA seeds `[b"vault_config", authority]`.
     pub vault_authority_seed: Pubkey,
+    /// Default collateral mint when `assetMint` is omitted (typically USDC).
+    pub default_asset_mint: String,
     pub jupiter_swap_api_base: String,
     pub jupiter_quote_api_base: String,
     /// Cluster this backend instance serves. Client requests with a mismatched
@@ -102,6 +104,10 @@ impl AppState {
         )?)
         .context("invalid VAULT_AUTHORITY")?;
 
+        let default_asset_mint = std::env::var("DEFAULT_ASSET_MINT").unwrap_or_else(|_| {
+            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string()
+        });
+
         let jupiter_quote_api_base = std::env::var("JUPITER_QUOTE_API_BASE")
             .unwrap_or_else(|_| "https://quote-api.jup.ag/v6".to_string());
         let jupiter_swap_api_base = std::env::var("JUPITER_SWAP_API_BASE")
@@ -117,6 +123,7 @@ impl AppState {
             http,
             program_id,
             vault_authority_seed,
+            default_asset_mint,
             jupiter_swap_api_base,
             jupiter_quote_api_base,
             network,

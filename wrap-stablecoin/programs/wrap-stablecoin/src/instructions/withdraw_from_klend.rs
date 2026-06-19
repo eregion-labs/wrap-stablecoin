@@ -4,7 +4,7 @@ use anchor_spl::token_interface::TokenInterface;
 use crate::constants::LENDING_MARKET_AUTH_SEED;
 use crate::errors::ErrorCode;
 use crate::klend::KLEND_PROGRAM_ID;
-use crate::state::{TokenConfig, VaultConfig};
+use crate::state::{AssetConfig, KLendConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct WithdrawFromKlendArgs {
@@ -17,7 +17,7 @@ pub struct WithdrawFromKlend<'info> {
     pub admin: Signer<'info>,
 
     #[account(
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
@@ -26,59 +26,65 @@ pub struct WithdrawFromKlend<'info> {
 
     /// CHECK: PDA authority for signing KLend CPI
     #[account(
-        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::VAULT_AUTHORITY_SEED, vault_config.key().as_ref()],
         bump = vault_config.vault_authority_bump
     )]
     pub vault_authority: AccountInfo<'info>,
 
     #[account(
-        mut,
-        seeds = [b"token_config", vault_config.key().as_ref(), token_config.token_mint.as_ref()],
-        bump = token_config.bump,
-        constraint = token_config.is_base_token @ ErrorCode::TokenNotFound,
-        constraint = token_config.enabled @ ErrorCode::TokenDisabled
+        seeds = [crate::pda_seeds::ASSET_CONFIG_SEED, vault_config.key().as_ref(), asset_config.token_mint.as_ref()],
+        bump = asset_config.bump,
+        constraint = vault_config.has_asset(&asset_config.token_mint) @ ErrorCode::AssetNotRegistered
     )]
-    pub token_config: Box<Account<'info, TokenConfig>>,
+    pub asset_config: Box<Account<'info, AssetConfig>>,
 
-    /// CHECK: Base token vault - receives redeemed liquidity from KLend
-    #[account(mut, address = token_config.token_vault)]
-    pub base_token_vault: AccountInfo<'info>,
+    #[account(
+        mut,
+        seeds = [crate::pda_seeds::KLEND_CONFIG_SEED, asset_config.key().as_ref()],
+        bump = klend_config.bump,
+        constraint = klend_config.asset_config == asset_config.key() @ ErrorCode::KlendNotEnabled
+    )]
+    pub klend_config: Box<Account<'info, KLendConfig>>,
 
-    /// CHECK: Base token mint
-    #[account(address = vault_config.usdc_mint)]
-    pub usdc_mint: AccountInfo<'info>,
+    /// CHECK: Token vault - receives redeemed liquidity
+    #[account(mut, address = asset_config.token_vault)]
+    pub token_vault: AccountInfo<'info>,
+
+    /// CHECK: Underlying mint
+    #[account(address = asset_config.token_mint)]
+    pub token_mint: AccountInfo<'info>,
 
     /// CHECK: KLend program
     #[account(address = KLEND_PROGRAM_ID)]
     pub klend_program: AccountInfo<'info>,
 
     /// CHECK: KLend lending market
-    #[account(address = vault_config.lending_market)]
+    #[account(address = klend_config.lending_market)]
     pub lending_market: AccountInfo<'info>,
 
     /// CHECK: KLend lending market authority PDA
     #[account(
-        seeds = [LENDING_MARKET_AUTH_SEED, vault_config.lending_market.as_ref()],
+        seeds = [LENDING_MARKET_AUTH_SEED, klend_config.lending_market.as_ref()],
         bump,
         seeds::program = KLEND_PROGRAM_ID
     )]
     pub lending_market_authority: AccountInfo<'info>,
 
-    /// CHECK: Base token KLend reserve
-    #[account(mut, address = token_config.reserve)]
-    pub base_reserve: AccountInfo<'info>,
+    /// CHECK: KLend reserve
+    #[account(mut, address = klend_config.reserve)]
+    pub reserve: AccountInfo<'info>,
 
-    /// CHECK: Reserve liquidity supply - pinned to the value stored at init
-    #[account(mut, address = token_config.reserve_liquidity_supply)]
+    /// CHECK: Reserve liquidity supply
+    #[account(mut, address = klend_config.reserve_liquidity_supply)]
     pub reserve_liquidity_supply: AccountInfo<'info>,
 
     /// CHECK: Reserve collateral mint
-    #[account(mut, address = token_config.collateral_mint)]
+    #[account(mut, address = klend_config.collateral_mint)]
     pub reserve_collateral_mint: AccountInfo<'info>,
 
-    /// CHECK: Base collateral vault (holds KLend kTokens)
-    #[account(mut, address = token_config.collateral_vault)]
-    pub base_collateral_vault: AccountInfo<'info>,
+    /// CHECK: Collateral vault (kTokens)
+    #[account(mut, address = klend_config.collateral_vault)]
+    pub collateral_vault: AccountInfo<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 

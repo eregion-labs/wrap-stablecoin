@@ -10,28 +10,11 @@ pub struct SetPaused<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Account<'info, VaultConfig>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateTreasury<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
-        bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized
-    )]
-    pub vault_config: Account<'info, VaultConfig>,
-
-    /// CHECK: New treasury address
-    pub new_treasury: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
@@ -41,7 +24,7 @@ pub struct TransferAuthority<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -58,7 +41,7 @@ pub struct CancelTransferAuthority<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -72,7 +55,7 @@ pub struct AcceptAuthority<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         constraint = vault_config.pending_admin == new_admin.key() @ ErrorCode::NoPendingTransfer
     )]
@@ -86,7 +69,7 @@ pub struct SetWrapPublic<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -100,7 +83,7 @@ pub struct SetUnwrapPublic<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -114,7 +97,7 @@ pub struct InitAllowlist<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -124,7 +107,7 @@ pub struct InitAllowlist<'info> {
         init,
         payer = admin,
         space = 8 + Allowlist::INIT_SPACE,
-        seeds = [b"allowlist", vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::ALLOWLIST_SEED, vault_config.key().as_ref()],
         bump
     )]
     pub allowlist: Account<'info, Allowlist>,
@@ -139,7 +122,7 @@ pub struct AddToAllowlist<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -147,7 +130,7 @@ pub struct AddToAllowlist<'info> {
 
     #[account(
         mut,
-        seeds = [b"allowlist", vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::ALLOWLIST_SEED, vault_config.key().as_ref()],
         bump = allowlist.bump
     )]
     pub allowlist: Account<'info, Allowlist>,
@@ -160,7 +143,7 @@ pub struct RemoveFromAllowlist<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -168,7 +151,7 @@ pub struct RemoveFromAllowlist<'info> {
 
     #[account(
         mut,
-        seeds = [b"allowlist", vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::ALLOWLIST_SEED, vault_config.key().as_ref()],
         bump = allowlist.bump
     )]
     pub allowlist: Account<'info, Allowlist>,

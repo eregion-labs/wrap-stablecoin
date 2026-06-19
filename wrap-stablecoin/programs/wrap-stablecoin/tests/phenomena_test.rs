@@ -17,12 +17,17 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_instruction,
 };
+use wrap_stablecoin::pda_seeds::{
+    ASSET_CONFIG_SEED, COLLATERAL_VAULT_SEED, KLEND_CONFIG_SEED, TOKEN_VAULT_SEED,
+    TREASURY_VAULT_SEED, VAULT_AUTHORITY_SEED, VAULT_CONFIG_SEED, WRAPPED_MINT_SEED,
+};
 
 pub mod phenomena_ix;
 pub mod utils;
 
 use phenomena_ix::{
-    derive_klend_pdas, init_lending_market_ix, init_reserve_ix, wrapped_initialize_ix,
+    derive_klend_pdas, init_lending_market_ix, init_reserve_ix, wrapped_add_asset_ix,
+    wrapped_enable_klend_ix, wrapped_initialize_ix,
     wrapped_unwrap_ix, wrapped_wrap_ix, LENDING_MARKET_AUTH_SEED_BYTES, LENDING_MARKET_SPACE_BYTES,
     RESERVE_SPACE_BYTES,
 };
@@ -223,35 +228,43 @@ fn test_setup_wrap_unwrap() {
     // ========================================
     println!("\n[4/7] Initializing wrapped vault...");
     let (vault_config, _) = Pubkey::find_program_address(
-        &[b"vault_config", authority.pubkey().as_ref()],
+        &[VAULT_CONFIG_SEED, authority.pubkey().as_ref()],
         &wrapped_program_id,
     );
     let (wrapped_mint, _) = Pubkey::find_program_address(
-        &[b"wrapped_mint", vault_config.as_ref()],
+        &[WRAPPED_MINT_SEED, vault_config.as_ref()],
         &wrapped_program_id,
     );
     let (vault_authority, _) = Pubkey::find_program_address(
-        &[b"vault_authority", vault_config.as_ref()],
+        &[VAULT_AUTHORITY_SEED, vault_config.as_ref()],
         &wrapped_program_id,
     );
     let (token_config, _) = Pubkey::find_program_address(
         &[
-            b"token_config",
+            ASSET_CONFIG_SEED,
             vault_config.as_ref(),
             usdc_mint.pubkey().as_ref(),
         ],
         &wrapped_program_id,
     );
     let (token_collateral_vault, _) = Pubkey::find_program_address(
-        &[b"token_collateral_vault", token_config.as_ref()],
+        &[COLLATERAL_VAULT_SEED, token_config.as_ref()],
         &wrapped_program_id,
     );
     let (token_vault, _) = Pubkey::find_program_address(
-        &[b"token_vault", token_config.as_ref()],
+        &[TOKEN_VAULT_SEED, token_config.as_ref()],
+        &wrapped_program_id,
+    );
+    let (treasury_vault, _) = Pubkey::find_program_address(
+        &[TREASURY_VAULT_SEED, token_config.as_ref()],
         &wrapped_program_id,
     );
 
-    let treasury = user_usdc;
+    let (klend_config, _) = Pubkey::find_program_address(
+        &[KLEND_CONFIG_SEED, token_config.as_ref()],
+        &wrapped_program_id,
+    );
+
     let init_vault_ix = wrapped_initialize_ix(
         wrapped_program_id,
         &authority.pubkey(),
@@ -259,17 +272,36 @@ fn test_setup_wrap_unwrap() {
         &vault_config,
         &wrapped_mint,
         &vault_authority,
-        &lending_market.pubkey(),
-        &treasury,
-        &reserve_pubkey,
-        &collateral_mint_pubkey,
+    );
+    let add_asset_ix = wrapped_add_asset_ix(
+        wrapped_program_id,
+        &authority.pubkey(),
+        &vault_config,
+        &vault_authority,
+        &usdc_mint.pubkey(),
         &token_config,
-        &token_collateral_vault,
+        &treasury_vault,
         &token_vault,
+        true,
+        true,
+    );
+    let enable_klend_ix = wrapped_enable_klend_ix(
+        wrapped_program_id,
+        &authority.pubkey(),
+        &vault_config,
+        &vault_authority,
+        &token_config,
+        &klend_config,
+        &lending_market.pubkey(),
+        &lending_market_authority,
+        &reserve_pubkey,
+        &reserve_liquidity_supply,
+        &collateral_mint_pubkey,
+        &token_collateral_vault,
     );
     send_tx(
         &rpc,
-        vec![init_vault_ix],
+        vec![init_vault_ix, add_asset_ix, enable_klend_ix],
         &payer.pubkey(),
         &[&payer, &authority],
     )
@@ -304,7 +336,6 @@ fn test_setup_wrap_unwrap() {
         &user_wrapped,
         &wrapped_mint,
         &token_vault,
-        &usdc_mint.pubkey(),
         None,
         wrap_amount,
     );
@@ -327,10 +358,11 @@ fn test_setup_wrap_unwrap() {
         &user_wrapped,
         &user_usdc,
         &wrapped_mint,
-        &usdc_mint.pubkey(),
         &token_config,
+        &usdc_mint.pubkey(),
         &token_vault,
         None,
+        unwrap_amount,
         unwrap_amount,
     );
     send_tx(&rpc, vec![unwrap_ix], &payer.pubkey(), &[&payer]).unwrap();

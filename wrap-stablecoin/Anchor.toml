@@ -6,14 +6,16 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-wrap_stablecoin = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT"
+kamino_tester = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+# wallet = "~/.config/solana/id.json"
+wallet = ".secrets/depxPDoQBS9JXgwVumiJeuaaSU9b8FaCRwEVTaGD1v9.json"
+
 
 [scripts]
 test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/e2e.ts"

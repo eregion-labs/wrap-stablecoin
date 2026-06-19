@@ -1,9 +1,11 @@
 pub mod allowlist;
+pub mod asset_config;
 pub mod flash_loan_state;
-pub mod token_config;
+pub mod klend_config;
 pub mod vault_config;
 
 pub use allowlist::*;
+pub use asset_config::*;
 pub use flash_loan_state::*;
-pub use token_config::*;
+pub use klend_config::*;
 pub use vault_config::*;

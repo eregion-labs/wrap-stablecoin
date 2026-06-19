@@ -1,5 +1,5 @@
 # Monorepo: primary ignore rules live in the repository root `.gitignore`.
-# Package-local patterns below mirror secrets paths used by this workspace.
+# Package-local patterns below mirror secrets paths used by this service.
 
 .secrets/
 .env

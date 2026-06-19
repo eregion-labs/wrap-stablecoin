@@ -91,4 +91,40 @@ pub enum ErrorCode {
 
     #[msg("Flash mint fee receiver is not configured")]
     FlashMintFeeReceiverUnset,
+
+    #[msg("Minting is disabled for this asset")]
+    MintDisabled,
+
+    #[msg("Redemption is disabled for this asset")]
+    RedeemDisabled,
+
+    #[msg("Mint cap exceeded for this asset")]
+    MintCapExceeded,
+
+    #[msg("Exposure cap exceeded for this asset")]
+    ExposureCapExceeded,
+
+    #[msg("Asset registry is full")]
+    AssetRegistryFull,
+
+    #[msg("Asset already registered")]
+    AssetAlreadyRegistered,
+
+    #[msg("Asset not registered in vault")]
+    AssetNotRegistered,
+
+    #[msg("wStable cannot back itself as collateral")]
+    ReflexiveCollateralForbidden,
+
+    #[msg("KLend is not enabled for this asset")]
+    KlendNotEnabled,
+
+    #[msg("Invalid haircut bps")]
+    InvalidHaircut,
+
+    #[msg("Token decimals must be between 1 and 18")]
+    InvalidDecimals,
+
+    #[msg("Redemption output below minimum")]
+    RedemptionBelowMinimum,
 }

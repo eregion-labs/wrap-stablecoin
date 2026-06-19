@@ -1,17 +1,25 @@
 pub mod admin;
+pub mod add_asset;
 pub mod deposit_to_klend;
+pub mod enable_klend;
 pub mod flash_mint;
 pub mod harvest_yield;
 pub mod initialize;
 pub mod unwrap;
+pub mod update_asset_policy;
 pub mod withdraw_from_klend;
+pub mod withdraw_treasury;
 pub mod wrap;
 
 pub use admin::*;
+pub use add_asset::*;
 pub use deposit_to_klend::*;
+pub use enable_klend::*;
 pub use flash_mint::*;
 pub use harvest_yield::*;
 pub use initialize::*;
 pub use unwrap::*;
+pub use update_asset_policy::*;
 pub use withdraw_from_klend::*;
+pub use withdraw_treasury::*;
 pub use wrap::*;

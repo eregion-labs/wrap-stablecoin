@@ -20,7 +20,7 @@ pub struct FlashMintStart<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused,
         constraint = vault_config.flash_mint_enabled || borrower.key() == vault_config.admin @ ErrorCode::FlashMintDisabled
@@ -31,14 +31,14 @@ pub struct FlashMintStart<'info> {
         init,
         payer = borrower,
         space = 8 + FlashLoanState::INIT_SPACE,
-        seeds = [b"flash_loan", borrower.key().as_ref(), vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::FLASH_LOAN_SEED, borrower.key().as_ref(), vault_config.key().as_ref()],
         bump
     )]
     pub flash_loan_state: Account<'info, FlashLoanState>,
 
     /// CHECK: PDA authority for signing mint
     #[account(
-        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::VAULT_AUTHORITY_SEED, vault_config.key().as_ref()],
         bump = vault_config.vault_authority_bump
     )]
     pub vault_authority: AccountInfo<'info>,
@@ -67,7 +67,7 @@ pub struct FlashMintEnd<'info> {
     pub borrower: Signer<'info>,
 
     #[account(
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump
     )]
     pub vault_config: Account<'info, VaultConfig>,
@@ -75,7 +75,7 @@ pub struct FlashMintEnd<'info> {
     #[account(
         mut,
         close = borrower,
-        seeds = [b"flash_loan", borrower.key().as_ref(), vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::FLASH_LOAN_SEED, borrower.key().as_ref(), vault_config.key().as_ref()],
         bump = flash_loan_state.bump,
         constraint = flash_loan_state.borrower == borrower.key() @ ErrorCode::InvalidFlashLoan,
         constraint = flash_loan_state.vault_config == vault_config.key() @ ErrorCode::InvalidFlashLoan
@@ -109,7 +109,7 @@ pub struct SetFlashMintFee<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -123,7 +123,7 @@ pub struct SetFlashMintEnabled<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -137,7 +137,7 @@ pub struct SetFlashMintMaxAmount<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]
@@ -151,7 +151,7 @@ pub struct SetFlashMintFeeReceiver<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized
     )]

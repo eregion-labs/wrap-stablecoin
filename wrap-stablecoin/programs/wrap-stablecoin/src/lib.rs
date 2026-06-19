@@ -8,6 +8,7 @@ pub mod constants;
 pub mod errors;
 pub mod instructions;
 pub mod klend;
+pub mod pda_seeds;
 pub mod state;
 pub mod utils;
 
@@ -28,13 +29,8 @@ fn check_access(
         return Ok(());
     }
     let allowlist = allowlist.ok_or(err)?;
-    // The Option<Account> in the Accounts struct does not validate PDA seeds on
-    // its own — Anchor only checks ownership + discriminator. Without this check
-    // any caller could pass an Allowlist they seeded under a different vault
-    // (e.g. one they control) to bypass the gate. Verify the passed account is
-    // *this* vault's allowlist PDA.
     let expected = Pubkey::create_program_address(
-        &[b"allowlist", vault_config.as_ref(), &[allowlist.bump]],
+        &[crate::pda_seeds::ALLOWLIST_SEED, vault_config.as_ref(), &[allowlist.bump]],
         program_id,
     )
     .map_err(|_| err)?;
@@ -47,12 +43,43 @@ fn check_access(
     Ok(())
 }
 
+fn reject_reflexive_collateral(wrapped_mint: &Pubkey, underlying_mint: &Pubkey) -> Result<()> {
+    require!(
+        underlying_mint != wrapped_mint,
+        ErrorCode::ReflexiveCollateralForbidden
+    );
+    Ok(())
+}
+
+fn check_mint_cap(asset_config: &crate::state::AssetConfig, mint_amount: u64) -> Result<()> {
+    let new_liability = asset_config
+        .net_liability()?
+        .checked_add(mint_amount)
+        .ok_or(ErrorCode::MathOverflow)?;
+    if asset_config.mint_cap > 0 {
+        require!(
+            new_liability <= asset_config.mint_cap,
+            ErrorCode::MintCapExceeded
+        );
+    }
+    if asset_config.exposure_cap > 0 {
+        require!(
+            new_liability <= asset_config.exposure_cap,
+            ErrorCode::ExposureCapExceeded
+        );
+    }
+    Ok(())
+}
+
 #[program]
 pub mod wrap_stablecoin {
     use super::*;
     use crate::errors::ErrorCode;
     use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};
-    use crate::utils::get_token_balance;
+    use crate::state::AssetStatus;
+    use crate::utils::{
+        get_token_balance, underlying_to_wrapped_amount, wrapped_to_underlying_amount,
+    };
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_spl::token_interface::{
         burn, mint_to, transfer_checked, Burn, MintTo, TransferChecked,
@@ -60,18 +87,18 @@ pub mod wrap_stablecoin {
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
-        let token_config = &mut ctx.accounts.token_config;
 
         vault_config.bump = ctx.bumps.vault_config;
         vault_config.authority = ctx.accounts.authority.key();
         vault_config.admin = ctx.accounts.authority.key();
         vault_config.pending_admin = Pubkey::default();
-        vault_config.treasury = ctx.accounts.treasury.key();
         vault_config.wrapped_mint = ctx.accounts.wrapped_mint.key();
         vault_config.wrapped_mint_bump = ctx.bumps.wrapped_mint;
+        vault_config.wrapped_decimals = ctx.accounts.decimals_mint.decimals;
+        crate::utils::validate_token_decimals(vault_config.wrapped_decimals)?;
         vault_config.vault_authority_bump = ctx.bumps.vault_authority;
-        vault_config.lending_market = ctx.accounts.lending_market.key();
-        vault_config.usdc_mint = ctx.accounts.usdc_mint.key();
+        vault_config.asset_count = 0;
+        vault_config.registered_assets = [Pubkey::default(); crate::state::MAX_REGISTERED_ASSETS];
         vault_config.total_stable_deposited = 0;
         vault_config.paused = false;
         vault_config.wrap_public = true;
@@ -81,26 +108,128 @@ pub mod wrap_stablecoin {
         vault_config.flash_mint_max_amount = 0;
         vault_config.flash_mint_fee_receiver = Pubkey::default();
 
-        token_config.bump = ctx.bumps.token_config;
-        token_config.vault_config = vault_config.key();
-        token_config.token_mint = ctx.accounts.usdc_mint.key();
-        token_config.token_decimals = ctx.accounts.usdc_mint.decimals;
-        token_config.reserve = ctx.accounts.reserve.key();
-        token_config.collateral_mint = ctx.accounts.collateral_mint.key();
-        token_config.collateral_vault = ctx.accounts.collateral_vault.key();
-        token_config.collateral_vault_bump = ctx.bumps.collateral_vault;
-        token_config.token_vault = ctx.accounts.token_vault.key();
-        token_config.token_vault_bump = ctx.bumps.token_vault;
-        token_config.total_deposited = 0;
-        token_config.is_base_token = true;
-        token_config.enabled = true;
-        token_config.reserve_liquidity_supply = ctx.accounts.reserve_liquidity_supply.key();
-        token_config.total_liquidity_in_klend = 0;
+        msg!("Vault initialized; register assets via add_asset");
+        Ok(())
+    }
 
-        msg!(
-            "Vault initialized with base mint: {}",
-            vault_config.usdc_mint
+    pub fn add_asset(ctx: Context<AddAsset>, args: AddAssetArgs) -> Result<()> {
+        let vault_config = &mut ctx.accounts.vault_config;
+        let asset_config = &mut ctx.accounts.asset_config;
+        let mint = ctx.accounts.underlying_mint.key();
+
+        reject_reflexive_collateral(&vault_config.wrapped_mint, &mint)?;
+
+        asset_config.bump = ctx.bumps.asset_config;
+        asset_config.vault_config = vault_config.key();
+        asset_config.token_mint = mint;
+        asset_config.token_decimals = ctx.accounts.underlying_mint.decimals;
+        crate::utils::validate_token_decimals(asset_config.token_decimals)?;
+        asset_config.treasury_vault = ctx.accounts.treasury_vault.key();
+        asset_config.treasury_vault_bump = ctx.bumps.treasury_vault;
+        asset_config.token_vault = ctx.accounts.token_vault.key();
+        asset_config.token_vault_bump = ctx.bumps.token_vault;
+        asset_config.total_deposits = 0;
+        asset_config.total_wrapped_minted = 0;
+        asset_config.total_redemptions = 0;
+        asset_config.mint_enabled = args.mint_enabled;
+        asset_config.redeem_enabled = args.redeem_enabled;
+        asset_config.mint_haircut_bps = 0;
+        asset_config.redemption_haircut_bps = 0;
+        asset_config.mint_cap = 0;
+        asset_config.exposure_cap = 0;
+        asset_config.min_liquidity_target = 0;
+        asset_config.asset_status = AssetStatus::Active;
+
+        vault_config.register_asset(mint)?;
+
+        emit!(AssetAdded { token_mint: mint });
+        Ok(())
+    }
+
+    pub fn enable_klend(ctx: Context<EnableKlend>) -> Result<()> {
+        let klend_config = &mut ctx.accounts.klend_config;
+        let asset_config = &ctx.accounts.asset_config;
+
+        klend_config.bump = ctx.bumps.klend_config;
+        klend_config.asset_config = asset_config.key();
+        klend_config.lending_market = ctx.accounts.lending_market.key();
+        klend_config.reserve = ctx.accounts.reserve.key();
+        klend_config.reserve_liquidity_supply = ctx.accounts.reserve_liquidity_supply.key();
+        klend_config.collateral_mint = ctx.accounts.collateral_mint.key();
+        klend_config.collateral_vault = ctx.accounts.collateral_vault.key();
+        klend_config.collateral_vault_bump = ctx.bumps.collateral_vault;
+        klend_config.total_liquidity_in_klend = 0;
+
+        emit!(KlendEnabled {
+            token_mint: asset_config.token_mint,
+        });
+        Ok(())
+    }
+
+    pub fn update_asset_policy(
+        ctx: Context<UpdateAssetPolicy>,
+        args: UpdateAssetPolicyArgs,
+    ) -> Result<()> {
+        require!(args.mint_haircut_bps <= 10_000, ErrorCode::InvalidHaircut);
+        require!(args.redemption_haircut_bps <= 10_000, ErrorCode::InvalidHaircut);
+
+        let asset_config = &mut ctx.accounts.asset_config;
+        asset_config.mint_enabled = args.mint_enabled;
+        asset_config.redeem_enabled = args.redeem_enabled;
+        asset_config.mint_haircut_bps = args.mint_haircut_bps;
+        asset_config.redemption_haircut_bps = args.redemption_haircut_bps;
+        asset_config.mint_cap = args.mint_cap;
+        asset_config.exposure_cap = args.exposure_cap;
+        asset_config.min_liquidity_target = args.min_liquidity_target;
+        asset_config.asset_status = args.asset_status;
+
+        emit!(AssetPolicyUpdated {
+            token_mint: asset_config.token_mint,
+        });
+        Ok(())
+    }
+
+    pub fn withdraw_treasury(
+        ctx: Context<WithdrawTreasury>,
+        args: WithdrawTreasuryArgs,
+    ) -> Result<()> {
+        require!(args.amount > 0, ErrorCode::InvalidAmount);
+
+        let vault_config = &ctx.accounts.vault_config;
+        let asset_config = &ctx.accounts.asset_config;
+        let vault_config_key = vault_config.key();
+
+        require!(
+            ctx.accounts.treasury_vault.amount >= args.amount,
+            ErrorCode::InsufficientBalance
         );
+
+        let authority_seeds: &[&[u8]] = &[
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
+            vault_config_key.as_ref(),
+            &[vault_config.vault_authority_bump],
+        ];
+
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.treasury_vault.to_account_info(),
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.destination.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            args.amount,
+            asset_config.token_decimals,
+        )?;
+
+        emit!(TreasuryWithdrawn {
+            token_mint: asset_config.token_mint,
+            destination: ctx.accounts.destination.key(),
+            amount: args.amount,
+        });
         Ok(())
     }
 
@@ -121,19 +250,20 @@ pub mod wrap_stablecoin {
         )?;
 
         let vault_config = &mut ctx.accounts.vault_config;
-        let token_config = &mut ctx.accounts.token_config;
+        let asset_config = &mut ctx.accounts.asset_config;
+        require!(asset_config.mint_allowed(), ErrorCode::MintDisabled);
+
         let vault_config_key = vault_config.key();
         let vault_authority_bump = vault_config.vault_authority_bump;
-        let token_decimals = token_config.token_decimals;
+        let token_decimals = asset_config.token_decimals;
+        let wrapped_decimals = vault_config.wrapped_decimals;
 
         let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_authority_bump],
         ];
 
-        // Snapshot vault balance so fee-on-transfer mints can't let us mint more wStable
-        // than base token actually received.
         let vault_before = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
 
         transfer_checked(
@@ -156,6 +286,15 @@ pub mod wrap_stablecoin {
             .ok_or(ErrorCode::MathOverflow)?;
         require!(received > 0, ErrorCode::InvalidAmount);
 
+        let mint_amount = underlying_to_wrapped_amount(
+            received,
+            token_decimals,
+            wrapped_decimals,
+            asset_config.mint_haircut_bps,
+        )?;
+        require!(mint_amount > 0, ErrorCode::InvalidAmount);
+        check_mint_cap(asset_config, mint_amount)?;
+
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -166,24 +305,29 @@ pub mod wrap_stablecoin {
                 },
                 &[authority_seeds],
             ),
-            received,
+            mint_amount,
         )?;
 
-        token_config.total_deposited = token_config
-            .total_deposited
+        asset_config.total_deposits = asset_config
+            .total_deposits
             .checked_add(received)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        asset_config.total_wrapped_minted = asset_config
+            .total_wrapped_minted
+            .checked_add(mint_amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         vault_config.total_stable_deposited = vault_config
             .total_stable_deposited
-            .checked_add(received)
+            .checked_add(mint_amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         emit!(Wrapped {
             user: ctx.accounts.user.key(),
-            token_mint: token_config.token_mint,
+            token_mint: asset_config.token_mint,
             amount_in: args.amount,
-            amount_minted: received,
+            amount_minted: mint_amount,
         });
         Ok(())
     }
@@ -205,17 +349,31 @@ pub mod wrap_stablecoin {
         )?;
 
         let vault_config = &mut ctx.accounts.vault_config;
-        let base_token_config = &mut ctx.accounts.base_token_config;
+        let asset_config = &mut ctx.accounts.asset_config;
+        require!(asset_config.redeem_allowed(), ErrorCode::RedeemDisabled);
+
         let vault_config_key = vault_config.key();
         let vault_authority_bump = vault_config.vault_authority_bump;
-        let token_decimals = base_token_config.token_decimals;
+        let token_decimals = asset_config.token_decimals;
+        let wrapped_decimals = vault_config.wrapped_decimals;
 
         require!(
             vault_config.total_stable_deposited >= args.amount,
             ErrorCode::InsufficientBalance
         );
 
-        // Burn wStable from user
+        let out_amount = wrapped_to_underlying_amount(
+            args.amount,
+            token_decimals,
+            wrapped_decimals,
+            asset_config.redemption_haircut_bps,
+        )?;
+        require!(out_amount > 0, ErrorCode::InvalidAmount);
+        require!(
+            out_amount >= args.min_out_amount,
+            ErrorCode::RedemptionBelowMinimum
+        );
+
         burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -229,37 +387,35 @@ pub mod wrap_stablecoin {
         )?;
 
         let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_authority_bump],
         ];
 
-        let vault_balance = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+        let vault_balance = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
         require!(
-            vault_balance >= args.amount,
+            vault_balance >= out_amount,
             ErrorCode::InsufficientLiquidity
         );
 
-        // Transfer base token from vault to user
         transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 TransferChecked {
-                    from: ctx.accounts.base_token_vault.to_account_info(),
-                    mint: ctx.accounts.usdc_mint.to_account_info(),
-                    to: ctx.accounts.user_base_token.to_account_info(),
+                    from: ctx.accounts.token_vault.to_account_info(),
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.user_asset_token.to_account_info(),
                     authority: ctx.accounts.vault_authority.to_account_info(),
                 },
                 &[authority_seeds],
             ),
-            args.amount,
+            out_amount,
             token_decimals,
         )?;
 
-        // Update totals
-        base_token_config.total_deposited = base_token_config
-            .total_deposited
-            .checked_sub(args.amount)
+        asset_config.total_redemptions = asset_config
+            .total_redemptions
+            .checked_add(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
         vault_config.total_stable_deposited = vault_config
@@ -269,7 +425,9 @@ pub mod wrap_stablecoin {
 
         emit!(Unwrapped {
             user: ctx.accounts.user.key(),
-            amount: args.amount,
+            token_mint: asset_config.token_mint,
+            amount_burned: args.amount,
+            amount_out: out_amount,
         });
         Ok(())
     }
@@ -278,10 +436,10 @@ pub mod wrap_stablecoin {
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
-        let token_config = &ctx.accounts.token_config;
+        let asset_config = &ctx.accounts.asset_config;
+        let klend_config = &ctx.accounts.klend_config;
         let vault_config_key = vault_config.key();
 
-        // Don't let admin try to redeem more kTokens than the vault holds.
         let collateral_before =
             get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
         require!(
@@ -289,10 +447,11 @@ pub mod wrap_stablecoin {
             ErrorCode::InsufficientBalance
         );
 
-        let treasury_before = get_token_balance(&ctx.accounts.treasury.to_account_info())?;
+        let treasury_before =
+            get_token_balance(&ctx.accounts.treasury_vault.to_account_info())?;
 
         let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_config.vault_authority_bump],
         ];
@@ -303,11 +462,11 @@ pub mod wrap_stablecoin {
             ctx.accounts.lending_market.key(),
             ctx.accounts.reserve.key(),
             ctx.accounts.lending_market_authority.key(),
-            token_config.token_mint,
+            asset_config.token_mint,
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.reserve_liquidity_supply.key(),
             ctx.accounts.collateral_vault.key(),
-            ctx.accounts.treasury.key(),
+            ctx.accounts.treasury_vault.key(),
             ctx.accounts.collateral_token_program.key(),
             ctx.accounts.token_program.key(),
             ctx.accounts.instruction_sysvar.key(),
@@ -325,7 +484,7 @@ pub mod wrap_stablecoin {
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
                 ctx.accounts.collateral_vault.to_account_info(),
-                ctx.accounts.treasury.to_account_info(),
+                ctx.accounts.treasury_vault.to_account_info(),
                 ctx.accounts.collateral_token_program.to_account_info(),
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.instruction_sysvar.to_account_info(),
@@ -333,12 +492,9 @@ pub mod wrap_stablecoin {
             &[authority_seeds],
         )?;
 
-        // Use the CPI itself as the exchange-rate oracle. KLend rounds liquidity_received
-        // DOWN, so the implied kToken-per-USDC rate (kTokens_redeemed / liquidity_received)
-        // is an UPPER bound on the true rate — this makes the backing check strictly
-        // conservative. Admin has no input into the rate, so there's no rug path.
         let collateral_after = get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
-        let treasury_after = get_token_balance(&ctx.accounts.treasury.to_account_info())?;
+        let treasury_after =
+            get_token_balance(&ctx.accounts.treasury_vault.to_account_info())?;
 
         let ktokens_redeemed = collateral_before
             .checked_sub(collateral_after)
@@ -350,21 +506,18 @@ pub mod wrap_stablecoin {
             .ok_or(ErrorCode::MathOverflow)?;
         require!(liquidity_received > 0, ErrorCode::HarvestRedeemedNothing);
 
-        // Remaining backing value (in USDC) at the rate implied by this redemption:
-        //   remaining_value = collateral_after * liquidity_received / ktokens_redeemed
-        // Must cover the tracked liability (total_liquidity_in_klend).
         let remaining_value = (collateral_after as u128)
             .checked_mul(liquidity_received as u128)
             .ok_or(ErrorCode::MathOverflow)?
             .checked_div(ktokens_redeemed as u128)
             .ok_or(ErrorCode::MathOverflow)?;
         require!(
-            remaining_value >= token_config.total_liquidity_in_klend as u128,
+            remaining_value >= klend_config.total_liquidity_in_klend as u128,
             ErrorCode::HarvestLeavesUnderbacked
         );
 
         emit!(Harvested {
-            token_mint: token_config.token_mint,
+            token_mint: asset_config.token_mint,
             ktokens_redeemed,
             liquidity_received,
         });
@@ -375,9 +528,11 @@ pub mod wrap_stablecoin {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
+        let asset_config = &ctx.accounts.asset_config;
+        let klend_config = &mut ctx.accounts.klend_config;
         let vault_config_key = vault_config.key();
         let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_config.vault_authority_bump],
         ];
@@ -385,14 +540,14 @@ pub mod wrap_stablecoin {
         let ix = deposit_reserve_liquidity_ix(
             ctx.accounts.klend_program.key(),
             ctx.accounts.vault_authority.key(),
-            ctx.accounts.base_reserve.key(),
+            ctx.accounts.reserve.key(),
             ctx.accounts.lending_market.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.usdc_mint,
+            asset_config.token_mint,
             ctx.accounts.reserve_liquidity_supply.key(),
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.token_vault.key(),
-            ctx.accounts.base_collateral_vault.key(),
+            ctx.accounts.collateral_vault.key(),
             ctx.accounts.collateral_token_program.key(),
             ctx.accounts.token_program.key(),
             ctx.accounts.instruction_sysvar.key(),
@@ -403,14 +558,14 @@ pub mod wrap_stablecoin {
             &ix,
             &[
                 ctx.accounts.vault_authority.to_account_info(),
-                ctx.accounts.base_reserve.to_account_info(),
+                ctx.accounts.reserve.to_account_info(),
                 ctx.accounts.lending_market.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.usdc_mint.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.token_vault.to_account_info(),
-                ctx.accounts.base_collateral_vault.to_account_info(),
+                ctx.accounts.collateral_vault.to_account_info(),
                 ctx.accounts.collateral_token_program.to_account_info(),
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.instruction_sysvar.to_account_info(),
@@ -418,14 +573,16 @@ pub mod wrap_stablecoin {
             &[authority_seeds],
         )?;
 
-        // Track USDC-denominated liability held in KLend so harvest_yield's cap is meaningful.
-        let token_config = &mut ctx.accounts.token_config;
-        token_config.total_liquidity_in_klend = token_config
+        klend_config.total_liquidity_in_klend = klend_config
             .total_liquidity_in_klend
             .checked_add(args.amount)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        msg!("Deposited {} to KLend from vault", args.amount);
+        msg!(
+            "Deposited {} of {} to KLend",
+            args.amount,
+            asset_config.token_mint
+        );
         Ok(())
     }
 
@@ -436,27 +593,28 @@ pub mod wrap_stablecoin {
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
+        let asset_config = &ctx.accounts.asset_config;
+        let klend_config = &mut ctx.accounts.klend_config;
         let vault_config_key = vault_config.key();
         let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_config.vault_authority_bump],
         ];
 
-        // Snapshot vault USDC balance before redeem to measure actual liquidity returned.
-        let liquidity_before = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+        let liquidity_before = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
 
         let ix = redeem_reserve_collateral_ix(
             ctx.accounts.klend_program.key(),
             ctx.accounts.vault_authority.key(),
             ctx.accounts.lending_market.key(),
-            ctx.accounts.base_reserve.key(),
+            ctx.accounts.reserve.key(),
             ctx.accounts.lending_market_authority.key(),
-            vault_config.usdc_mint,
+            asset_config.token_mint,
             ctx.accounts.reserve_collateral_mint.key(),
             ctx.accounts.reserve_liquidity_supply.key(),
-            ctx.accounts.base_collateral_vault.key(),
-            ctx.accounts.base_token_vault.key(),
+            ctx.accounts.collateral_vault.key(),
+            ctx.accounts.token_vault.key(),
             ctx.accounts.collateral_token_program.key(),
             ctx.accounts.token_program.key(),
             ctx.accounts.instruction_sysvar.key(),
@@ -468,13 +626,13 @@ pub mod wrap_stablecoin {
             &[
                 ctx.accounts.vault_authority.to_account_info(),
                 ctx.accounts.lending_market.to_account_info(),
-                ctx.accounts.base_reserve.to_account_info(),
+                ctx.accounts.reserve.to_account_info(),
                 ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.usdc_mint.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
                 ctx.accounts.reserve_collateral_mint.to_account_info(),
                 ctx.accounts.reserve_liquidity_supply.to_account_info(),
-                ctx.accounts.base_collateral_vault.to_account_info(),
-                ctx.accounts.base_token_vault.to_account_info(),
+                ctx.accounts.collateral_vault.to_account_info(),
+                ctx.accounts.token_vault.to_account_info(),
                 ctx.accounts.collateral_token_program.to_account_info(),
                 ctx.accounts.token_program.to_account_info(),
                 ctx.accounts.instruction_sysvar.to_account_info(),
@@ -482,22 +640,19 @@ pub mod wrap_stablecoin {
             &[authority_seeds],
         )?;
 
-        // Decrement USDC tracking by actual liquidity returned. Saturates because after rate
-        // appreciation we may receive more USDC than originally tracked for these kTokens; the
-        // surplus is just extra vault backing and doesn't imply negative principal.
-        let liquidity_after = get_token_balance(&ctx.accounts.base_token_vault.to_account_info())?;
+        let liquidity_after = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
         let liquidity_received = liquidity_after
             .checked_sub(liquidity_before)
             .ok_or(ErrorCode::MathOverflow)?;
-        let token_config = &mut ctx.accounts.token_config;
-        token_config.total_liquidity_in_klend = token_config
+        klend_config.total_liquidity_in_klend = klend_config
             .total_liquidity_in_klend
             .saturating_sub(liquidity_received);
 
         msg!(
-            "Withdrew {} kTokens ({} liquidity) from KLend to vault",
+            "Withdrew {} kTokens ({} liquidity) of {} from KLend",
             args.collateral_amount,
-            liquidity_received
+            liquidity_received,
+            asset_config.token_mint
         );
         Ok(())
     }
@@ -552,18 +707,6 @@ pub mod wrap_stablecoin {
         Ok(())
     }
 
-    pub fn update_treasury(ctx: Context<UpdateTreasury>) -> Result<()> {
-        let new_treasury = ctx.accounts.new_treasury.key();
-        require!(
-            new_treasury != Pubkey::default(),
-            ErrorCode::InvalidTreasury
-        );
-        let old_treasury = ctx.accounts.vault_config.treasury;
-        ctx.accounts.vault_config.treasury = new_treasury;
-        msg!("Treasury updated from {} to {}", old_treasury, new_treasury);
-        Ok(())
-    }
-
     pub fn transfer_authority(ctx: Context<TransferAuthority>) -> Result<()> {
         let new_admin = ctx.accounts.new_admin.key();
         require!(new_admin != Pubkey::default(), ErrorCode::Unauthorized);
@@ -582,8 +725,6 @@ pub mod wrap_stablecoin {
     }
 
     pub fn accept_authority(ctx: Context<AcceptAuthority>) -> Result<()> {
-        // Reject the "default pubkey implicit default" edge-case defensively, even though
-        // no one holds the private key for Pubkey::default().
         require!(
             ctx.accounts.vault_config.pending_admin != Pubkey::default(),
             ErrorCode::NoPendingTransfer
@@ -605,7 +746,6 @@ pub mod wrap_stablecoin {
         let vault_config = &ctx.accounts.vault_config;
         let vault_config_key = vault_config.key();
 
-        // Enforce flash mint max amount if configured (0 = no limit)
         if vault_config.flash_mint_max_amount > 0 {
             require!(
                 args.amount <= vault_config.flash_mint_max_amount,
@@ -629,8 +769,6 @@ pub mod wrap_stablecoin {
             .checked_div(10000)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        // If a fee will be charged, the admin must have configured a fee receiver. Fail fast
-        // instead of letting flash_mint_end revert the whole transaction at the very end.
         if fee > 0 {
             require!(
                 vault_config.flash_mint_fee_receiver != Pubkey::default(),
@@ -646,7 +784,7 @@ pub mod wrap_stablecoin {
         flash_loan_state.fee = fee;
 
         let authority_seeds: &[&[u8]] = &[
-            b"vault_authority",
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_config.vault_authority_bump],
         ];
@@ -684,7 +822,6 @@ pub mod wrap_stablecoin {
             ErrorCode::InsufficientRepayment
         );
 
-        // Burn the principal
         burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -697,7 +834,6 @@ pub mod wrap_stablecoin {
             amount,
         )?;
 
-        // Transfer fee to treasury
         if fee > 0 {
             transfer_checked(
                 CpiContext::new(
@@ -776,7 +912,9 @@ pub struct Wrapped {
 #[event]
 pub struct Unwrapped {
     pub user: Pubkey,
-    pub amount: u64,
+    pub token_mint: Pubkey,
+    pub amount_burned: u64,
+    pub amount_out: u64,
 }
 
 #[event]
@@ -784,6 +922,28 @@ pub struct Harvested {
     pub token_mint: Pubkey,
     pub ktokens_redeemed: u64,
     pub liquidity_received: u64,
+}
+
+#[event]
+pub struct TreasuryWithdrawn {
+    pub token_mint: Pubkey,
+    pub destination: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct AssetAdded {
+    pub token_mint: Pubkey,
+}
+
+#[event]
+pub struct KlendEnabled {
+    pub token_mint: Pubkey,
+}
+
+#[event]
+pub struct AssetPolicyUpdated {
+    pub token_mint: Pubkey,
 }
 
 #[event]

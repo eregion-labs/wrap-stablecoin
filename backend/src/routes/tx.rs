@@ -11,6 +11,7 @@ use utoipa::ToSchema;
 
 use crate::app_state::AppState;
 use crate::jupiter;
+use crate::routes::vault::resolve_asset_mint;
 use crate::wrap_stablecoin::{
     build_versioned_tx, decode_versioned_tx_b64, ensure_tx_targets_program,
     instructions_from_versioned_tx, unsigned_unwrap_tx_bytes, unsigned_wrap_tx_bytes,
@@ -21,6 +22,9 @@ use crate::wrap_stablecoin::{
 pub struct IssueRequest {
     /// Fee payer / signer (user wallet base58).
     pub user: String,
+    /// Collateral mint to wrap (defaults to `DEFAULT_ASSET_MINT` when omitted).
+    #[serde(default)]
+    pub asset_mint: Option<String>,
     /// Base token amount to wrap (smallest units).
     pub amount: u64,
 }
@@ -29,6 +33,9 @@ pub struct IssueRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RedeemRequest {
     pub user: String,
+    /// Redemption asset mint (defaults to `DEFAULT_ASSET_MINT` when omitted).
+    #[serde(default)]
+    pub asset_mint: Option<String>,
     pub amount: u64,
     /// Minimum base token out (unwrap slippage floor).
     pub min_out_amount: u64,
@@ -63,9 +70,13 @@ pub enum ComposeStep {
         quote: Value,
     },
     Wrap {
+        #[serde(default)]
+        asset_mint: Option<String>,
         amount: u64,
     },
     Unwrap {
+        #[serde(default)]
+        asset_mint: Option<String>,
         amount: u64,
         min_out_amount: u64,
     },
@@ -116,11 +127,14 @@ pub async fn issue_tx(
             format!("invalid user: {e}"),
         )
     })?;
+    let asset_mint = resolve_asset_mint(state.as_ref(), body.asset_mint.as_deref())
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
     let raw = unsigned_wrap_tx_bytes(
         state.rpc.as_ref(),
         &state.program_id,
         &state.vault_authority_seed,
         &user,
+        &asset_mint,
         body.amount,
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
@@ -147,11 +161,14 @@ pub async fn redeem_tx(
             format!("invalid user: {e}"),
         )
     })?;
+    let asset_mint = resolve_asset_mint(state.as_ref(), body.asset_mint.as_deref())
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
     let raw = unsigned_unwrap_tx_bytes(
         state.rpc.as_ref(),
         &state.program_id,
         &state.vault_authority_seed,
         &user,
+        &asset_mint,
         body.amount,
         body.min_out_amount,
     )
@@ -224,24 +241,35 @@ pub async fn compose_tx(
 
     if body.steps.len() == 1 {
         let raw = match &body.steps[0] {
-            ComposeStep::Wrap { amount } => unsigned_wrap_tx_bytes(
-                state.rpc.as_ref(),
-                &state.program_id,
-                &state.vault_authority_seed,
-                &user,
-                *amount,
-            ),
+            ComposeStep::Wrap { asset_mint, amount } => {
+                let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
+                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+                unsigned_wrap_tx_bytes(
+                    state.rpc.as_ref(),
+                    &state.program_id,
+                    &state.vault_authority_seed,
+                    &user,
+                    &mint,
+                    *amount,
+                )
+            }
             ComposeStep::Unwrap {
+                asset_mint,
                 amount,
                 min_out_amount,
-            } => unsigned_unwrap_tx_bytes(
-                state.rpc.as_ref(),
-                &state.program_id,
-                &state.vault_authority_seed,
-                &user,
-                *amount,
-                *min_out_amount,
-            ),
+            } => {
+                let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
+                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+                unsigned_unwrap_tx_bytes(
+                    state.rpc.as_ref(),
+                    &state.program_id,
+                    &state.vault_authority_seed,
+                    &user,
+                    &mint,
+                    *amount,
+                    *min_out_amount,
+                )
+            }
             ComposeStep::JupiterSwap { .. } => {
                 return Err((
                     axum::http::StatusCode::BAD_REQUEST,
@@ -264,7 +292,9 @@ pub async fn compose_tx(
     }
 
     let vtx = match (&body.steps[0], &body.steps[1]) {
-        (ComposeStep::JupiterSwap { quote }, ComposeStep::Wrap { amount }) => {
+        (ComposeStep::JupiterSwap { quote }, ComposeStep::Wrap { asset_mint, amount }) => {
+            let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
+                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
             let swap_b64 = jupiter::fetch_swap_transaction_b64(state.as_ref(), quote, &user_str)
                 .await
                 .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
@@ -275,6 +305,7 @@ pub async fn compose_tx(
                 &state.program_id,
                 &state.vault_authority_seed,
                 &user,
+                &mint,
                 *amount,
             )
             .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
@@ -291,16 +322,20 @@ pub async fn compose_tx(
         }
         (
             ComposeStep::Unwrap {
+                asset_mint,
                 amount,
                 min_out_amount,
             },
             ComposeStep::JupiterSwap { quote },
         ) => {
+            let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
+                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
             let unwrap_raw = unsigned_unwrap_tx_bytes(
                 state.rpc.as_ref(),
                 &state.program_id,
                 &state.vault_authority_seed,
                 &user,
+                &mint,
                 *amount,
                 *min_out_amount,
             )

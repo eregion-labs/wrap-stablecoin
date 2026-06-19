@@ -2,11 +2,11 @@
  * Backend end-to-end smoke test against a running localnet + backend API.
  *
  * Assumes:
- *   - solana-test-validator is running on :8899 (via `anchor localnet`)
+ *   - solana-test-validator is running on :8901 (via `anchor test` / `anchor localnet`)
  *     with the fixtures from Anchor.toml (KLend state + fixture wallet).
  *   - The wrap_stablecoin program is deployed.
  *   - The backend API is running on :8080 with
- *       SOLANA_RPC_URL=http://127.0.0.1:8899
+ *       SOLANA_RPC_URL=http://127.0.0.1:8901
  *       SOLANA_NETWORK=localnet
  *       VAULT_AUTHORITY=<fixture wallet pubkey>
  *
@@ -41,9 +41,21 @@ import {
 } from "@solana/spl-token";
 import * as fs from "node:fs";
 import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import {
+  ASSET_CONFIG_SEED,
+  COLLATERAL_VAULT_SEED,
+  KLEND_CONFIG_SEED,
+  KLEND_LENDING_MARKET_AUTH_SEED,
+  TOKEN_VAULT_SEED,
+  TREASURY_VAULT_SEED,
+  VAULT_AUTHORITY_SEED,
+  VAULT_CONFIG_SEED,
+  WRAPPED_MINT_SEED,
+} from "../tests/pda-seeds";
 
 const BACKEND_BASE = process.env.BACKEND_BASE || "http://127.0.0.1:8080";
-const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8899";
+const RPC_URL =
+  process.env.RPC_URL || process.env.SOLANA_RPC_URL || "http://127.0.0.1:8901";
 const SIGNER_OUT = process.env.SIGNER_OUT || "/tmp/smoke-signer.json";
 
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
@@ -69,7 +81,7 @@ function pda(programId: PublicKey, seeds: Buffer[]): PublicKey {
 
 function lmaPda(): PublicKey {
   return pda(KLEND_PROGRAM_ID, [
-    Buffer.from("lma"),
+    Buffer.from(KLEND_LENDING_MARKET_AUTH_SEED),
     LENDING_MARKET.toBuffer(),
   ]);
 }
@@ -108,35 +120,38 @@ async function main() {
   const programId = program.programId;
 
   const vaultConfig = pda(programId, [
-    Buffer.from("vault_config"),
+    Buffer.from(VAULT_CONFIG_SEED),
     fixtureWallet.publicKey.toBuffer(),
   ]);
   const vaultAuthority = pda(programId, [
-    Buffer.from("vault_authority"),
+    Buffer.from(VAULT_AUTHORITY_SEED),
     vaultConfig.toBuffer(),
   ]);
   const wrappedMint = pda(programId, [
-    Buffer.from("wrapped_mint"),
+    Buffer.from(WRAPPED_MINT_SEED),
     vaultConfig.toBuffer(),
   ]);
   const tokenConfig = pda(programId, [
-    Buffer.from("token_config"),
+    Buffer.from(ASSET_CONFIG_SEED),
     vaultConfig.toBuffer(),
     USDC_MINT.toBuffer(),
   ]);
   const collateralVault = pda(programId, [
-    Buffer.from("token_collateral_vault"),
+    Buffer.from(COLLATERAL_VAULT_SEED),
     tokenConfig.toBuffer(),
   ]);
   const tokenVault = pda(programId, [
-    Buffer.from("token_vault"),
+    Buffer.from(TOKEN_VAULT_SEED),
     tokenConfig.toBuffer(),
   ]);
-  const treasuryUsdcAta = getAssociatedTokenAddressSync(
-    USDC_MINT,
-    vaultAuthority,
-    true,
-  );
+  const treasuryVault = pda(programId, [
+    Buffer.from(TREASURY_VAULT_SEED),
+    tokenConfig.toBuffer(),
+  ]);
+  const klendConfig = pda(programId, [
+    Buffer.from(KLEND_CONFIG_SEED),
+    tokenConfig.toBuffer(),
+  ]);
 
   console.log(`Program         ${programId.toBase58()}`);
   console.log(`Fixture wallet  ${fixtureWallet.publicKey.toBase58()}`);
@@ -146,36 +161,55 @@ async function main() {
   const existing = await connection.getAccountInfo(vaultConfig);
   if (existing === null) {
     console.log("\n[init] initializing vault…");
-    const treasuryIx = createAssociatedTokenAccountIdempotentInstruction(
-      fixtureWallet.publicKey,
-      treasuryUsdcAta,
-      vaultAuthority,
-      USDC_MINT,
-    );
-    const sig = await program.methods
+    const initSig = await program.methods
       .initialize()
       .accountsPartial({
         authority: fixtureWallet.publicKey,
-        usdcMint: USDC_MINT,
+        decimalsMint: USDC_MINT,
         vaultConfig,
         wrappedMint,
         vaultAuthority,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log(`[init] initialize tx ${initSig}`);
+
+    const addSig = await program.methods
+      .addAsset({ mintEnabled: true, redeemEnabled: true } as any)
+      .accountsPartial({
+        admin: fixtureWallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        underlyingMint: USDC_MINT,
+        assetConfig: tokenConfig,
+        tokenVault,
+        treasuryVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log(`[init] add_asset tx ${addSig}`);
+
+    const enableSig = await program.methods
+      .enableKlend()
+      .accountsPartial({
+        admin: fixtureWallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        assetConfig: tokenConfig,
+        klendConfig,
         lendingMarket: LENDING_MARKET,
         lendingMarketAuthority: lmaPda(),
-        treasury: treasuryUsdcAta,
         reserve: USDC_RESERVE,
         reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
         collateralMint: RESERVE_COLLATERAL_MINT,
-        tokenConfig,
         collateralVault,
-        tokenVault,
-        tokenProgram: TOKEN_PROGRAM_ID,
         collateralTokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       } as any)
-      .preInstructions([treasuryIx])
       .rpc();
-    console.log(`[init] tx ${sig}`);
+    console.log(`[init] enable_klend tx ${enableSig}`);
   } else {
     console.log("[init] vault already initialized — skipping");
   }

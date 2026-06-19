@@ -13,10 +13,10 @@ use anchor_client::{
 use anchor_lang::prelude::AnchorSerialize;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
+use wrap_stablecoin::pda_seeds::KLEND_LENDING_MARKET_AUTH_SEED;
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
 const LENDING_MARKET_SIZE: usize = 4656;
-const LENDING_MARKET_AUTH_SEED: &[u8] = b"lma";
 const ACCOUNT_DISCRIMINATOR_LEN: usize = 8;
 const LENDING_MARKET_SPACE: usize = LENDING_MARKET_SIZE + ACCOUNT_DISCRIMINATOR_LEN;
 
@@ -46,7 +46,7 @@ fn initialize_klend_market() -> Result<()> {
 
     let lending_market = Keypair::new();
     let (lending_market_authority, _) = Pubkey::find_program_address(
-        &[LENDING_MARKET_AUTH_SEED, lending_market.pubkey().as_ref()],
+        &[KLEND_LENDING_MARKET_AUTH_SEED, lending_market.pubkey().as_ref()],
         &program_id,
     );
 

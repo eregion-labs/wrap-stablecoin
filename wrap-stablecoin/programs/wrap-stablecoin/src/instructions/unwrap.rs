@@ -1,12 +1,14 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{TokenAccount, TokenInterface};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::errors::ErrorCode;
-use crate::state::{Allowlist, TokenConfig, VaultConfig};
+use crate::state::{Allowlist, AssetConfig, VaultConfig};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct UnwrapArgs {
     pub amount: u64,
+    /// Minimum underlying out after redemption haircut (slippage floor).
+    pub min_out_amount: u64,
 }
 
 #[derive(Accounts)]
@@ -16,7 +18,7 @@ pub struct Unwrap<'info> {
 
     #[account(
         mut,
-        seeds = [b"vault_config", vault_config.authority.as_ref()],
+        seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused
     )]
@@ -24,7 +26,7 @@ pub struct Unwrap<'info> {
 
     /// CHECK: PDA authority for signing
     #[account(
-        seeds = [b"vault_authority", vault_config.key().as_ref()],
+        seeds = [crate::pda_seeds::VAULT_AUTHORITY_SEED, vault_config.key().as_ref()],
         bump = vault_config.vault_authority_bump
     )]
     pub vault_authority: AccountInfo<'info>,
@@ -38,32 +40,39 @@ pub struct Unwrap<'info> {
 
     #[account(
         mut,
-        constraint = user_base_token.mint == vault_config.usdc_mint @ ErrorCode::InvalidTokenAccount,
-        constraint = user_base_token.owner == user.key() @ ErrorCode::InvalidTokenAccount,
+        constraint = user_asset_token.mint == asset_config.token_mint @ ErrorCode::InvalidTokenAccount,
+        constraint = user_asset_token.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_base_token: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_asset_token: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// CHECK: Wrapped mint - validated via vault_config
-    #[account(mut, address = vault_config.wrapped_mint)]
-    pub wrapped_mint: AccountInfo<'info>,
-
-    /// CHECK: Base token mint (USDC)
-    #[account(address = vault_config.usdc_mint)]
-    pub usdc_mint: AccountInfo<'info>,
+    /// wStable mint; precision fixed at vault init (`vault_config.wrapped_decimals`).
+    #[account(
+        mut,
+        address = vault_config.wrapped_mint,
+        constraint = wrapped_mint.decimals == vault_config.wrapped_decimals @ ErrorCode::InvalidDecimals
+    )]
+    pub wrapped_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
-        seeds = [b"token_config", vault_config.key().as_ref(), vault_config.usdc_mint.as_ref()],
-        bump = base_token_config.bump,
-        constraint = base_token_config.is_base_token @ ErrorCode::TokenNotFound
+        seeds = [crate::pda_seeds::ASSET_CONFIG_SEED, vault_config.key().as_ref(), asset_config.token_mint.as_ref()],
+        bump = asset_config.bump,
+        constraint = vault_config.has_asset(&asset_config.token_mint) @ ErrorCode::AssetNotRegistered
     )]
-    pub base_token_config: Box<Account<'info, TokenConfig>>,
+    pub asset_config: Box<Account<'info, AssetConfig>>,
 
-    /// CHECK: Base token vault - validated via base_token_config
-    #[account(mut, address = base_token_config.token_vault)]
-    pub base_token_vault: AccountInfo<'info>,
+    /// Underlying collateral mint (any supported precision).
+    #[account(
+        address = asset_config.token_mint,
+        constraint = token_mint.decimals == asset_config.token_decimals @ ErrorCode::InvalidDecimals
+    )]
+    pub token_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// Required when unwrap_public is false. PDA seeds: [b"allowlist", vault_config.key()]
+    /// CHECK: Asset token vault - validated via asset_config
+    #[account(mut, address = asset_config.token_vault)]
+    pub token_vault: AccountInfo<'info>,
+
+    /// Required when unwrap_public is false. PDA seeds: [crate::pda_seeds::ALLOWLIST_SEED, vault_config.key()]
     pub allowlist: Option<Account<'info, Allowlist>>,
 
     pub token_program: Interface<'info, TokenInterface>,

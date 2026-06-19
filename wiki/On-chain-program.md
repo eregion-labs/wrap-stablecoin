@@ -1,59 +1,64 @@
 # On-chain program
 
-Anchor program: **`wrap_stablecoin`**
+Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
 
-- Source: `wrap-stablecoin/programs/wrap-stablecoin/src/`
-- Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
+## Model
 
-## User instructions
+wStable is a **governed multi-reserve stablecoin**: one wrapped mint, many collateral `AssetConfig` accounts (PDA seed `token_config`). Kamino integration is optional per asset via a separate `KLendConfig` account.
 
-| Instruction | Description |
-|-------------|-------------|
-| `wrap` | Transfer USDC to `token_vault`, mint wStable 1:1 (on actual received amount) |
-| `unwrap` | Burn wStable, transfer USDC from `token_vault` to user |
-
-Gated by `paused`, `wrap_public` / `unwrap_public`, and optional allowlist.
-
-## Admin — liquidity
-
-| Instruction | Description |
-|-------------|-------------|
-| `deposit_to_klend` | Move USDC from `token_vault` into KLend; receive kTokens in `collateral_vault` |
-| `withdraw_from_klend` | Redeem kTokens for USDC back into `token_vault` |
-| `harvest_yield` | Redeem kTokens to `treasury`; enforces residual-backing invariant |
-
-## Admin — policy
-
-| Instruction | Description |
-|-------------|-------------|
-| `initialize` | One-shot vault bootstrap (no add/remove token) |
-| `set_paused` | Emergency pause |
-| `set_wrap_public` / `set_unwrap_public` | Public access toggles |
-| `init_allowlist` / `add_to_allowlist` / `remove_from_allowlist` | Allowlist (max 64 entries) |
-| `update_treasury` | Set USDC treasury ATA |
-| `transfer_authority` / `cancel_transfer_authority` / `accept_authority` | Two-step admin rotation |
-| `set_flash_mint_*` | Flash-mint enable, fee bps, max amount, fee receiver |
-
-## Flash mint
-
-| Instruction | Description |
-|-------------|-------------|
-| `flash_mint_start` | Mint wStable if matching `flash_mint_end` found in same tx |
-| `flash_mint_end` | Burn principal, transfer fee to `flash_mint_fee_receiver`, close PDA |
-
-## State accounts
-
-- **VaultConfig** — authority, admin, mints, KLend market, totals, flags
-- **TokenConfig** — base USDC reserve linkage, vaults, `total_deposited`, `total_liquidity_in_klend`
-- **Allowlist** — optional pubkey gate
-- **FlashLoanState** — ephemeral per flash borrow
-
-## Build & test
-
-```bash
-cd wrap-stablecoin
-anchor build
-anchor test
+```text
+Asset
+ |
+ +-- token_vault        (user backing / redemption liquidity)
+ +-- collateral_vault   (Kamino kTokens; optional)
+ +-- treasury_vault     (protocol yield; not wStable backing)
 ```
 
-See [Architecture](Architecture) for flows, PDAs, and security model.
+## Core instructions
+
+| Instruction | Who | Description |
+|-------------|-----|-------------|
+| `initialize` | authority | Create vault + wStable mint |
+| `add_asset` | admin | Register collateral: `AssetConfig`, `token_vault`, `treasury_vault`, policy defaults |
+| `enable_klend` | admin | Attach `KLendConfig` + collateral vault for Kamino CPI |
+| `update_asset_policy` | admin | Mint/redeem flags, haircuts, caps, status |
+| `wrap` | user | Deposit chosen asset → mint wStable (mint haircuts apply) |
+| `unwrap` | user | Burn wStable → chosen asset (redemption haircuts; `min_out_amount`) |
+| `deposit_to_klend` | admin | Per-asset KLend CPI (requires `KLendConfig`) |
+| `withdraw_from_klend` | admin | Per-asset KLend CPI → free vault |
+| `harvest_yield` | admin | Per-asset yield → `treasury_vault` |
+| `withdraw_treasury` | admin | Move yield from `treasury_vault` to a destination ATA |
+
+## AssetConfig (per collateral)
+
+Underlying mint, `token_vault`, `treasury_vault`, accounting, mint/redeem policy, haircuts, caps, `asset_status`. No Kamino accounts.
+
+## KLendConfig (optional per asset)
+
+PDA seeds: `["klend_config", asset_config]`. Lending market, reserve, liquidity supply, collateral mint/vault, `total_liquidity_in_klend`.
+
+## Treasury vault
+
+PDA seeds: `["treasury_vault", asset_config]`. Initialized in `add_asset`. Owned by `vault_authority`. Harvested Kamino yield lands here; it does **not** back wStable. Admin realizes revenue via `withdraw_treasury`.
+
+## Example bootstrap
+
+```
+initialize()
+add_asset(USDC)
+enable_klend(USDC)
+
+add_asset(Stable)          # vault-only today
+enable_klend(Stable)       # when a market exists
+```
+
+## Invariants
+
+- `reject_reflexive_collateral`: underlying mint cannot equal wStable mint
+- Per asset: `net_liability = total_wrapped_minted - total_redemptions` (wStable atoms)
+- Unwrap only from `token_vault`; never from `treasury_vault`
+- KLend ops fail with `KlendNotEnabled` when no `KLendConfig` exists
+
+## Migration
+
+See [Migration-playbook.md](Migration-playbook.md).

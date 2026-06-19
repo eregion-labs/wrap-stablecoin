@@ -3,7 +3,7 @@
 # is broken in 0.31.1 — it panics at cli/src/lib.rs:4704 on our workspace).
 #
 #   1. solana-test-validator with KLend fixtures + both programs preloaded
-#   2. waits for :8899
+#   2. waits for RPC_PORT (default 8901)
 #   3. starts the backend on :8080 pointed at localnet
 #   4. waits for /ping
 #   5. runs `scripts/backend_smoke.ts`
@@ -26,6 +26,10 @@ FIXTURE_WALLET_PUBKEY="5s72BFe78FWbXRzPHGoq7p8J6Ky2qWWDf4Nmk5aWWxtU"
 PROGRAM_ID="5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT"
 KLEND_PROGRAM_ID="KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
 WARP_SLOT=413424802
+RPC_PORT="${RPC_PORT:-8901}"
+# RPC websocket is always rpc_port + 1
+RPC_WS_PORT="$((RPC_PORT + 1))"
+RPC_URL="http://127.0.0.1:${RPC_PORT}"
 
 VALIDATOR_PID=""
 BACKEND_PID=""
@@ -67,9 +71,12 @@ done
 
 rm -rf "$LEDGER_DIR"
 
-echo "[1/5] starting solana-test-validator (log: $VALIDATOR_LOG)…"
+echo "[1/5] starting solana-test-validator on :${RPC_PORT} (log: $VALIDATOR_LOG)…"
 solana-test-validator --reset --quiet \
   --ledger "$LEDGER_DIR" \
+  --rpc-port "$RPC_PORT" \
+  --gossip-port "$((RPC_PORT + 3))" \
+  --faucet-port "$((RPC_PORT + 4))" \
   --warp-slot "$WARP_SLOT" \
   --bpf-program "$KLEND_PROGRAM_ID" so/klend.so \
   --bpf-program "$PROGRAM_ID" target/deploy/wrap_stablecoin.so \
@@ -85,9 +92,9 @@ solana-test-validator --reset --quiet \
   >"$VALIDATOR_LOG" 2>&1 &
 VALIDATOR_PID=$!
 
-echo "[2/5] waiting for validator on :8899…"
+echo "[2/5] waiting for validator on :${RPC_PORT}…"
 for i in $(seq 1 90); do
-  if solana cluster-version -u http://127.0.0.1:8899 >/dev/null 2>&1; then
+  if solana cluster-version -u "$RPC_URL" >/dev/null 2>&1; then
     echo "    validator up (after ${i}s)"
     break
   fi
@@ -106,7 +113,7 @@ done
 
 echo "[3/5] starting backend (log: $BACKEND_LOG)…"
 cd "$BACKEND_DIR"
-SOLANA_RPC_URL="http://127.0.0.1:8899" \
+SOLANA_RPC_URL="$RPC_URL" \
 SOLANA_NETWORK="localnet" \
 VAULT_AUTHORITY="$FIXTURE_WALLET_PUBKEY" \
 BIND_HOST="127.0.0.1" \

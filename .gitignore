@@ -11,10 +11,16 @@ Thumbs.db
 
 # --- Environment & secrets ---
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 !**/.env.example
+**/.secrets/
+*-keypair.json
+**/*-keypair.json
+*.pem
+*.key
+credentials.json
+**/credentials*.json
 
 # --- Node (any workspace / app) ---
 node_modules/

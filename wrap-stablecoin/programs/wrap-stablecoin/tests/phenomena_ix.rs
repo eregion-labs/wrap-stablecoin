@@ -8,14 +8,13 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_program,
 };
+use wrap_stablecoin::pda_seeds::{
+    KLEND_FEE_RECEIVER_SEED, KLEND_LENDING_MARKET_AUTH_SEED, KLEND_RESERVE_COLL_MINT_SEED,
+    KLEND_RESERVE_COLL_SUPPLY_SEED, KLEND_RESERVE_LIQ_SUPPLY_SEED,
+};
 
 const LENDING_MARKET_SPACE: usize = 4656 + 8;
 const RESERVE_SPACE: usize = 8616 + 8;
-const LENDING_MARKET_AUTH_SEED: &[u8] = b"lma";
-const RESERVE_LIQ_SUPPLY_SEED: &[u8] = b"reserve_liq_supply";
-const FEE_RECEIVER_SEED: &[u8] = b"fee_receiver";
-const RESERVE_COLL_MINT_SEED: &[u8] = b"reserve_coll_mint";
-const RESERVE_COLL_SUPPLY_SEED: &[u8] = b"reserve_coll_supply";
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
     let mut hasher = Sha256::new();
@@ -104,19 +103,19 @@ pub fn derive_klend_pdas(
     klend_program_id: &Pubkey,
 ) -> (Pubkey, Pubkey, Pubkey, Pubkey) {
     let reserve_liquidity_supply = Pubkey::find_program_address(
-        &[RESERVE_LIQ_SUPPLY_SEED, reserve.as_ref()],
+        &[KLEND_RESERVE_LIQ_SUPPLY_SEED, reserve.as_ref()],
         klend_program_id,
     )
     .0;
     let fee_receiver =
-        Pubkey::find_program_address(&[FEE_RECEIVER_SEED, reserve.as_ref()], klend_program_id).0;
+        Pubkey::find_program_address(&[KLEND_FEE_RECEIVER_SEED, reserve.as_ref()], klend_program_id).0;
     let collateral_mint = Pubkey::find_program_address(
-        &[RESERVE_COLL_MINT_SEED, reserve.as_ref()],
+        &[KLEND_RESERVE_COLL_MINT_SEED, reserve.as_ref()],
         klend_program_id,
     )
     .0;
     let reserve_collateral_supply = Pubkey::find_program_address(
-        &[RESERVE_COLL_SUPPLY_SEED, reserve.as_ref()],
+        &[KLEND_RESERVE_COLL_SUPPLY_SEED, reserve.as_ref()],
         klend_program_id,
     )
     .0;
@@ -130,7 +129,7 @@ pub fn derive_klend_pdas(
 
 pub const LENDING_MARKET_SPACE_BYTES: usize = LENDING_MARKET_SPACE;
 pub const RESERVE_SPACE_BYTES: usize = RESERVE_SPACE;
-pub const LENDING_MARKET_AUTH_SEED_BYTES: &[u8] = LENDING_MARKET_AUTH_SEED;
+pub const LENDING_MARKET_AUTH_SEED_BYTES: &[u8] = KLEND_LENDING_MARKET_AUTH_SEED;
 
 // ============================================================================
 // Wrapped Token Program
@@ -139,17 +138,10 @@ pub const LENDING_MARKET_AUTH_SEED_BYTES: &[u8] = LENDING_MARKET_AUTH_SEED;
 pub fn wrapped_initialize_ix(
     program_id: Pubkey,
     authority: &Pubkey,
-    usdc_mint: &Pubkey,
+    decimals_mint: &Pubkey,
     vault_config: &Pubkey,
     wrapped_mint: &Pubkey,
     vault_authority: &Pubkey,
-    lending_market: &Pubkey,
-    treasury: &Pubkey,
-    reserve: &Pubkey,
-    collateral_mint: &Pubkey,
-    token_config: &Pubkey,
-    collateral_vault: &Pubkey,
-    token_vault: &Pubkey,
 ) -> Instruction {
     let data = anchor_sighash("global", "initialize").to_vec();
 
@@ -157,18 +149,92 @@ pub fn wrapped_initialize_ix(
         program_id,
         accounts: vec![
             AccountMeta::new(*authority, true),
-            AccountMeta::new_readonly(*usdc_mint, false),
+            AccountMeta::new_readonly(*decimals_mint, false),
             AccountMeta::new(*vault_config, false),
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new_readonly(*vault_authority, false),
-            AccountMeta::new_readonly(*lending_market, false),
-            AccountMeta::new_readonly(*treasury, false),
-            AccountMeta::new_readonly(*reserve, false),
-            AccountMeta::new_readonly(*collateral_mint, false),
-            AccountMeta::new(*token_config, false),
-            AccountMeta::new(*collateral_vault, false),
-            AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ],
+        data,
+    }
+}
+
+#[derive(AnchorSerialize)]
+struct AddAssetArgs {
+    mint_enabled: bool,
+    redeem_enabled: bool,
+}
+
+pub fn wrapped_add_asset_ix(
+    program_id: Pubkey,
+    admin: &Pubkey,
+    vault_config: &Pubkey,
+    vault_authority: &Pubkey,
+    underlying_mint: &Pubkey,
+    asset_config: &Pubkey,
+    treasury_vault: &Pubkey,
+    token_vault: &Pubkey,
+    mint_enabled: bool,
+    redeem_enabled: bool,
+) -> Instruction {
+    let mut data = anchor_sighash("global", "add_asset").to_vec();
+    data.extend(
+        AddAssetArgs {
+            mint_enabled,
+            redeem_enabled,
+        }
+        .try_to_vec()
+        .unwrap(),
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(*admin, true),
+            AccountMeta::new(*vault_config, false),
+            AccountMeta::new_readonly(*vault_authority, false),
+            AccountMeta::new_readonly(*underlying_mint, false),
+            AccountMeta::new(*asset_config, false),
+            AccountMeta::new(*token_vault, false),
+            AccountMeta::new(*treasury_vault, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ],
+        data,
+    }
+}
+
+pub fn wrapped_enable_klend_ix(
+    program_id: Pubkey,
+    admin: &Pubkey,
+    vault_config: &Pubkey,
+    vault_authority: &Pubkey,
+    asset_config: &Pubkey,
+    klend_config: &Pubkey,
+    lending_market: &Pubkey,
+    lending_market_authority: &Pubkey,
+    reserve: &Pubkey,
+    reserve_liquidity_supply: &Pubkey,
+    collateral_mint: &Pubkey,
+    collateral_vault: &Pubkey,
+) -> Instruction {
+    let data = anchor_sighash("global", "enable_klend").to_vec();
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(*admin, true),
+            AccountMeta::new_readonly(*vault_config, false),
+            AccountMeta::new_readonly(*vault_authority, false),
+            AccountMeta::new_readonly(*asset_config, false),
+            AccountMeta::new(*klend_config, false),
+            AccountMeta::new_readonly(*lending_market, false),
+            AccountMeta::new_readonly(*lending_market_authority, false),
+            AccountMeta::new_readonly(*reserve, false),
+            AccountMeta::new_readonly(*reserve_liquidity_supply, false),
+            AccountMeta::new_readonly(*collateral_mint, false),
+            AccountMeta::new(*collateral_vault, false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(system_program::id(), false),
         ],
@@ -186,13 +252,12 @@ pub fn wrapped_wrap_ix(
     user: &Pubkey,
     vault_config: &Pubkey,
     vault_authority: &Pubkey,
-    token_config: &Pubkey,
+    asset_config: &Pubkey,
     token_mint: &Pubkey,
     user_token: &Pubkey,
     user_wrapped: &Pubkey,
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
-    usdc_mint: &Pubkey,
     allowlist: Option<&Pubkey>,
     amount: u64,
 ) -> Instruction {
@@ -205,13 +270,12 @@ pub fn wrapped_wrap_ix(
             AccountMeta::new(*user, true),
             AccountMeta::new(*vault_config, false),
             AccountMeta::new_readonly(*vault_authority, false),
-            AccountMeta::new(*token_config, false),
+            AccountMeta::new(*asset_config, false),
             AccountMeta::new_readonly(*token_mint, false),
             AccountMeta::new(*user_token, false),
             AccountMeta::new(*user_wrapped, false),
             AccountMeta::new(*wrapped_mint, false),
             AccountMeta::new(*token_vault, false),
-            AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
@@ -222,6 +286,7 @@ pub fn wrapped_wrap_ix(
 #[derive(AnchorSerialize)]
 struct UnwrapArgs {
     amount: u64,
+    min_out_amount: u64,
 }
 
 pub fn wrapped_unwrap_ix(
@@ -230,16 +295,24 @@ pub fn wrapped_unwrap_ix(
     vault_config: &Pubkey,
     vault_authority: &Pubkey,
     user_wrapped: &Pubkey,
-    user_base_token: &Pubkey,
+    user_asset_token: &Pubkey,
     wrapped_mint: &Pubkey,
-    usdc_mint: &Pubkey,
-    base_token_config: &Pubkey,
-    base_token_vault: &Pubkey,
+    asset_config: &Pubkey,
+    token_mint: &Pubkey,
+    token_vault: &Pubkey,
     allowlist: Option<&Pubkey>,
     amount: u64,
+    min_out_amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
-    data.extend(UnwrapArgs { amount }.try_to_vec().unwrap());
+    data.extend(
+        UnwrapArgs {
+            amount,
+            min_out_amount,
+        }
+        .try_to_vec()
+        .unwrap(),
+    );
 
     Instruction {
         program_id,
@@ -248,11 +321,11 @@ pub fn wrapped_unwrap_ix(
             AccountMeta::new(*vault_config, false),
             AccountMeta::new_readonly(*vault_authority, false),
             AccountMeta::new(*user_wrapped, false),
-            AccountMeta::new(*user_base_token, false),
+            AccountMeta::new(*user_asset_token, false),
             AccountMeta::new(*wrapped_mint, false),
-            AccountMeta::new_readonly(*usdc_mint, false),
-            AccountMeta::new(*base_token_config, false),
-            AccountMeta::new(*base_token_vault, false),
+            AccountMeta::new(*asset_config, false),
+            AccountMeta::new_readonly(*token_mint, false),
+            AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],

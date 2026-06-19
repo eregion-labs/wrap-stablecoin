@@ -10,6 +10,19 @@ export function solanaNetworkHeader(): SolanaNetworkHeader {
   return "devnet";
 }
 
+export async function apiGet<TRes>(path: string): Promise<TRes> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      "x-solana-network": solanaNetworkHeader(),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return (await res.json()) as TRes;
+}
+
 export async function apiPost<TBody extends object, TRes>(
   path: string,
   body: TBody,

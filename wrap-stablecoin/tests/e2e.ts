@@ -18,6 +18,18 @@ import * as fs from "node:fs";
 import { expect } from "chai";
 import * as crypto from "node:crypto";
 import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import {
+  ALLOWLIST_SEED,
+  ASSET_CONFIG_SEED,
+  COLLATERAL_VAULT_SEED,
+  KLEND_CONFIG_SEED,
+  KLEND_LENDING_MARKET_AUTH_SEED,
+  TOKEN_VAULT_SEED,
+  TREASURY_VAULT_SEED,
+  VAULT_AUTHORITY_SEED,
+  VAULT_CONFIG_SEED,
+  WRAPPED_MINT_SEED,
+} from "./pda-seeds";
 
 // Mainnet Kamino Main Market USDC reserve (cloned into local validator by
 // fixtures/klend/*.json — see Anchor.toml).
@@ -69,7 +81,7 @@ function refreshReserveIx(): TransactionInstruction {
 
 function lendingMarketAuthorityPda(): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("lma"), LENDING_MARKET.toBuffer()],
+    [Buffer.from(KLEND_LENDING_MARKET_AUTH_SEED), LENDING_MARKET.toBuffer()],
     KLEND_PROGRAM_ID,
   );
   return pda;
@@ -80,7 +92,7 @@ function vaultConfigPda(
   authority: PublicKey,
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("vault_config"), authority.toBuffer()],
+    [Buffer.from(VAULT_CONFIG_SEED), authority.toBuffer()],
     programId,
   );
   return pda;
@@ -91,7 +103,7 @@ function vaultAuthorityPda(
   vaultConfig: PublicKey,
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("vault_authority"), vaultConfig.toBuffer()],
+    [Buffer.from(VAULT_AUTHORITY_SEED), vaultConfig.toBuffer()],
     programId,
   );
   return pda;
@@ -102,7 +114,7 @@ function wrappedMintPda(
   vaultConfig: PublicKey,
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("wrapped_mint"), vaultConfig.toBuffer()],
+    [Buffer.from(WRAPPED_MINT_SEED), vaultConfig.toBuffer()],
     programId,
   );
   return pda;
@@ -115,7 +127,7 @@ function tokenConfigPda(
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
     [
-      Buffer.from("token_config"),
+      Buffer.from(ASSET_CONFIG_SEED),
       vaultConfig.toBuffer(),
       tokenMint.toBuffer(),
     ],
@@ -129,7 +141,7 @@ function collateralVaultPda(
   tokenConfig: PublicKey,
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("token_collateral_vault"), tokenConfig.toBuffer()],
+    [Buffer.from(COLLATERAL_VAULT_SEED), tokenConfig.toBuffer()],
     programId,
   );
   return pda;
@@ -140,7 +152,18 @@ function tokenVaultPda(
   tokenConfig: PublicKey,
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("token_vault"), tokenConfig.toBuffer()],
+    [Buffer.from(TOKEN_VAULT_SEED), tokenConfig.toBuffer()],
+    programId,
+  );
+  return pda;
+}
+
+function treasuryVaultPda(
+  programId: PublicKey,
+  assetConfig: PublicKey,
+): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from(TREASURY_VAULT_SEED), assetConfig.toBuffer()],
     programId,
   );
   return pda;
@@ -151,7 +174,18 @@ function allowlistPda(
   vaultConfig: PublicKey,
 ): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("allowlist"), vaultConfig.toBuffer()],
+    [Buffer.from(ALLOWLIST_SEED), vaultConfig.toBuffer()],
+    programId,
+  );
+  return pda;
+}
+
+function klendConfigPda(
+  programId: PublicKey,
+  assetConfig: PublicKey,
+): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from(KLEND_CONFIG_SEED), assetConfig.toBuffer()],
     programId,
   );
   return pda;
@@ -163,7 +197,11 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   );
   const wallet = Keypair.fromSecretKey(Uint8Array.from(walletSecret));
 
-  const connection = new Connection("http://127.0.0.1:8899", "confirmed");
+  const rpcUrl =
+    process.env.ANCHOR_PROVIDER_URL ??
+    process.env.SOLANA_RPC_URL ??
+    "http://127.0.0.1:8901";
+  const connection = new Connection(rpcUrl, "confirmed");
   const provider = new anchor.AnchorProvider(
     connection,
     new anchor.Wallet(wallet),
@@ -178,8 +216,10 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   const vaultAuthority = vaultAuthorityPda(programId, vaultConfig);
   const wrappedMint = wrappedMintPda(programId, vaultConfig);
   const tokenConfig = tokenConfigPda(programId, vaultConfig, USDC_MINT);
+  const klendConfig = klendConfigPda(programId, tokenConfig);
   const collateralVault = collateralVaultPda(programId, tokenConfig);
   const tokenVault = tokenVaultPda(programId, tokenConfig);
+  const treasuryVault = treasuryVaultPda(programId, tokenConfig);
   const lendingMarketAuthority = lendingMarketAuthorityPda();
   const allowlist = allowlistPda(programId, vaultConfig);
   const userUsdcAta = getAssociatedTokenAddressSync(
@@ -189,14 +229,6 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   const userWrappedAta = getAssociatedTokenAddressSync(
     wrappedMint,
     wallet.publicKey,
-    true,
-  );
-  // KLend's redeem_reserve_collateral enforces user_destination_liquidity.owner == owner-signer.
-  // Treasury must therefore be a USDC token account owned by the vault_authority PDA.
-  // A plain admin wallet cannot receive redemption proceeds directly.
-  const treasuryUsdcAta = getAssociatedTokenAddressSync(
-    USDC_MINT,
-    vaultAuthority,
     true,
   );
 
@@ -212,37 +244,18 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     console.log(`USDC balance    ${usdcAccount.amount.toString()} (raw)`);
   });
 
-  it("initializes the vault against the cloned USDC reserve", async () => {
-    // Create the vault_authority-owned treasury ATA as a preinstruction so harvest_yield
-    // can redeem into it. Admin can pull from this PDA-owned account via a follow-up flow.
-    const treasuryIx = createAssociatedTokenAccountIdempotentInstruction(
-      wallet.publicKey,
-      treasuryUsdcAta,
-      vaultAuthority,
-      USDC_MINT,
-    );
+  it("initializes the vault", async () => {
     const txSig = await program.methods
       .initialize()
       .accountsPartial({
         authority: wallet.publicKey,
-        usdcMint: USDC_MINT,
+        decimalsMint: USDC_MINT,
         vaultConfig,
         wrappedMint,
         vaultAuthority,
-        lendingMarket: LENDING_MARKET,
-        lendingMarketAuthority,
-        treasury: treasuryUsdcAta,
-        reserve: USDC_RESERVE,
-        reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
-        collateralMint: RESERVE_COLLATERAL_MINT,
-        tokenConfig,
-        collateralVault,
-        tokenVault,
         tokenProgram: TOKEN_PROGRAM_ID,
-        collateralTokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       } as any)
-      .preInstructions([treasuryIx])
       .rpc();
     console.log(`initialize tx: ${txSig}`);
 
@@ -250,8 +263,65 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       vaultConfig,
     );
     expect(vaultData.admin.toBase58()).to.equal(wallet.publicKey.toBase58());
-    expect(vaultData.usdcMint.toBase58()).to.equal(USDC_MINT.toBase58());
-    expect(vaultData.treasury.toBase58()).to.equal(treasuryUsdcAta.toBase58());
+    expect(vaultData.assetCount).to.equal(0);
+  });
+
+  it("registers USDC via add_asset", async () => {
+    const txSig = await program.methods
+      .addAsset({ mintEnabled: true, redeemEnabled: true } as any)
+      .accountsPartial({
+        admin: wallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        underlyingMint: USDC_MINT,
+        assetConfig: tokenConfig,
+        tokenVault,
+        treasuryVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log(`add_asset tx: ${txSig}`);
+
+    const vaultData = await (program.account as any).vaultConfig.fetch(
+      vaultConfig,
+    );
+    expect(vaultData.registeredAssets[0].toBase58()).to.equal(
+      USDC_MINT.toBase58(),
+    );
+    const assetData = await (program.account as any).assetConfig.fetch(
+      tokenConfig,
+    );
+    expect(assetData.treasuryVault.toBase58()).to.equal(
+      treasuryVault.toBase58(),
+    );
+  });
+
+  it("enables KLend for USDC", async () => {
+    const txSig = await program.methods
+      .enableKlend()
+      .accountsPartial({
+        admin: wallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        assetConfig: tokenConfig,
+        klendConfig,
+        lendingMarket: LENDING_MARKET,
+        lendingMarketAuthority,
+        reserve: USDC_RESERVE,
+        reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
+        collateralMint: RESERVE_COLLATERAL_MINT,
+        collateralVault,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log(`enable_klend tx: ${txSig}`);
+
+    const klendData = await (program.account as any).klendConfig.fetch(
+      klendConfig,
+    );
+    expect(klendData.assetConfig.toBase58()).to.equal(tokenConfig.toBase58());
   });
 
   it("wraps 100 USDC", async () => {
@@ -269,13 +339,12 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         user: wallet.publicKey,
         vaultConfig,
         vaultAuthority,
-        tokenConfig,
+        assetConfig: tokenConfig,
         tokenMint: USDC_MINT,
         userToken: userUsdcAta,
         userWrapped: userWrappedAta,
         wrappedMint,
         tokenVault,
-        usdcMint: USDC_MINT,
         allowlist: null,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
@@ -298,16 +367,17 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         admin: wallet.publicKey,
         vaultConfig,
         vaultAuthority,
-        tokenConfig,
+        assetConfig: tokenConfig,
+        klendConfig,
         tokenVault,
-        usdcMint: USDC_MINT,
+        tokenMint: USDC_MINT,
         klendProgram: KLEND_PROGRAM_ID,
         lendingMarket: LENDING_MARKET,
         lendingMarketAuthority,
-        baseReserve: USDC_RESERVE,
+        reserve: USDC_RESERVE,
         reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
         reserveCollateralMint: RESERVE_COLLATERAL_MINT,
-        baseCollateralVault: collateralVault,
+        collateralVault,
         tokenProgram: TOKEN_PROGRAM_ID,
         collateralTokenProgram: TOKEN_PROGRAM_ID,
         instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -316,7 +386,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       .rpc();
     console.log(`deposit_to_klend tx: ${txSig}`);
 
-    const cfg = await (program.account as any).tokenConfig.fetch(tokenConfig);
+    const cfg = await (program.account as any).klendConfig.fetch(klendConfig);
     expect(cfg.totalLiquidityInKlend.toString()).to.equal("50000000");
 
     const vaultBal = await getAccount(connection, tokenVault);
@@ -340,9 +410,10 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
           admin: wallet.publicKey,
           vaultConfig,
           vaultAuthority,
-          tokenConfig,
+          assetConfig: tokenConfig,
+          klendConfig,
           tokenMint: USDC_MINT,
-          treasury: treasuryUsdcAta,
+          treasuryVault,
           collateralVault,
           klendProgram: KLEND_PROGRAM_ID,
           lendingMarket: LENDING_MARKET,
@@ -375,16 +446,17 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         admin: wallet.publicKey,
         vaultConfig,
         vaultAuthority,
-        tokenConfig,
-        baseTokenVault: tokenVault,
-        usdcMint: USDC_MINT,
+        assetConfig: tokenConfig,
+        klendConfig,
+        tokenVault,
+        tokenMint: USDC_MINT,
         klendProgram: KLEND_PROGRAM_ID,
         lendingMarket: LENDING_MARKET,
         lendingMarketAuthority,
-        baseReserve: USDC_RESERVE,
+        reserve: USDC_RESERVE,
         reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
         reserveCollateralMint: RESERVE_COLLATERAL_MINT,
-        baseCollateralVault: collateralVault,
+        collateralVault,
         tokenProgram: TOKEN_PROGRAM_ID,
         collateralTokenProgram: TOKEN_PROGRAM_ID,
         instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -405,17 +477,17 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     const vaultBal = await getAccount(connection, tokenVault);
     const amount = new anchor.BN(vaultBal.amount.toString());
     const txSig = await program.methods
-      .unwrap({ amount } as any)
+      .unwrap({ amount, minOutAmount: amount } as any)
       .accountsPartial({
         user: wallet.publicKey,
         vaultConfig,
         vaultAuthority,
         userWrapped: userWrappedAta,
-        userBaseToken: userUsdcAta,
+        userAssetToken: userUsdcAta,
         wrappedMint,
-        usdcMint: USDC_MINT,
-        baseTokenConfig: tokenConfig,
-        baseTokenVault: tokenVault,
+        assetConfig: tokenConfig,
+        tokenMint: USDC_MINT,
+        tokenVault,
         allowlist: null,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
@@ -448,13 +520,12 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
             user: wallet.publicKey,
             vaultConfig,
             vaultAuthority,
-            tokenConfig,
+            assetConfig: tokenConfig,
             tokenMint: USDC_MINT,
             userToken: userUsdcAta,
             userWrapped: userWrappedAta,
             wrappedMint,
             tokenVault,
-            usdcMint: USDC_MINT,
             allowlist: null,
             tokenProgram: TOKEN_PROGRAM_ID,
           } as any)
@@ -640,13 +711,12 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
           user: wallet.publicKey,
           vaultConfig,
           vaultAuthority,
-          tokenConfig,
+          assetConfig: tokenConfig,
           tokenMint: USDC_MINT,
           userToken: userUsdcAta,
           userWrapped: userWrappedAta,
           wrappedMint,
           tokenVault,
-          usdcMint: USDC_MINT,
           allowlist,
           tokenProgram: TOKEN_PROGRAM_ID,
         } as any)
@@ -676,42 +746,19 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       const atkTokenConfig = tokenConfigPda(programId, atkVault, USDC_MINT);
       const atkCollateralVault = collateralVaultPda(programId, atkTokenConfig);
       const atkTokenVault = tokenVaultPda(programId, atkTokenConfig);
-      const atkTreasury = getAssociatedTokenAddressSync(
-        USDC_MINT,
-        atkVaultAuthority,
-        true,
-      );
       const atkAllowlist = allowlistPda(programId, atkVault);
-
-      const atkTreasuryIx = createAssociatedTokenAccountIdempotentInstruction(
-        attacker.publicKey,
-        atkTreasury,
-        atkVaultAuthority,
-        USDC_MINT,
-      );
 
       await program.methods
         .initialize()
         .accountsPartial({
           authority: attacker.publicKey,
-          usdcMint: USDC_MINT,
+          decimalsMint: USDC_MINT,
           vaultConfig: atkVault,
           wrappedMint: atkWrappedMint,
           vaultAuthority: atkVaultAuthority,
-          lendingMarket: LENDING_MARKET,
-          lendingMarketAuthority,
-          treasury: atkTreasury,
-          reserve: USDC_RESERVE,
-          reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
-          collateralMint: RESERVE_COLLATERAL_MINT,
-          tokenConfig: atkTokenConfig,
-          collateralVault: atkCollateralVault,
-          tokenVault: atkTokenVault,
           tokenProgram: TOKEN_PROGRAM_ID,
-          collateralTokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         } as any)
-        .preInstructions([atkTreasuryIx])
         .signers([attacker])
         .rpc();
 
@@ -771,7 +818,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
             user: attacker.publicKey,
             vaultConfig, // victim vault
             vaultAuthority,
-            tokenConfig,
+            assetConfig: tokenConfig,
             tokenMint: USDC_MINT,
             userToken: atkUsdcAta,
             userWrapped: atkWrappedAta,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import ConnectWalletButton from "@/components/ConnectWalletButton";
 import Box from "@mui/material/Box";
@@ -10,10 +10,26 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
-import { apiPost } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { sendWithBlockhashRefresh } from "@/lib/sendWithRefresh";
 
 type TxResponse = { transactionB64: string };
+
+type VaultAsset = {
+  mint: string;
+  freeLiquidity: number;
+  deployedToKamino: number;
+  mintEnabled: boolean;
+  redeemEnabled: boolean;
+  mintHaircutBps: number;
+  redemptionHaircutBps: number;
+  netLiability: number;
+  assetStatus: string;
+};
+
+const DEFAULT_ASSET_MINT =
+  process.env.NEXT_PUBLIC_DEFAULT_ASSET_MINT ||
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 export default function WrapRedeemPanel() {
   const { connection } = useConnection();
@@ -23,9 +39,17 @@ export default function WrapRedeemPanel() {
   const [issueAmount, setIssueAmount] = useState("1000000");
   const [redeemAmount, setRedeemAmount] = useState("1000000");
   const [minOut, setMinOut] = useState("900000");
+  const [assetMint, setAssetMint] = useState(DEFAULT_ASSET_MINT);
+  const [vaultAssets, setVaultAssets] = useState<VaultAsset[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const address = publicKey?.toBase58();
+
+  useEffect(() => {
+    apiGet<{ assets: VaultAsset[] }>("/v1/vault/assets")
+      .then((r) => setVaultAssets(r.assets))
+      .catch(() => setVaultAssets([]));
+  }, []);
 
   const submitIssue = async () => {
     if (!publicKey) {
@@ -40,10 +64,10 @@ export default function WrapRedeemPanel() {
     setBusy("issue");
     try {
       const buildTx = async () => {
-        const { transactionB64 } = await apiPost<{ user: string; amount: number }, TxResponse>(
-          "/v1/tx/issue",
-          { user: address!, amount },
-        );
+        const { transactionB64 } = await apiPost<
+          { user: string; assetMint: string; amount: number },
+          TxResponse
+        >("/v1/tx/issue", { user: address!, assetMint, amount });
         return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
       };
       const signature = await sendWithBlockhashRefresh({
@@ -83,9 +107,9 @@ export default function WrapRedeemPanel() {
     try {
       const buildTx = async () => {
         const { transactionB64 } = await apiPost<
-          { user: string; amount: number; minOutAmount: number },
+          { user: string; assetMint: string; amount: number; minOutAmount: number },
           TxResponse
-        >("/v1/tx/redeem", { user: address!, amount, minOutAmount });
+        >("/v1/tx/redeem", { user: address!, assetMint, amount, minOutAmount });
         return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
       };
       const signature = await sendWithBlockhashRefresh({
@@ -109,10 +133,10 @@ export default function WrapRedeemPanel() {
     if (!publicKey) return;
     setBusy("sim");
     try {
-      const { transactionB64 } = await apiPost<{ user: string; amount: number }, TxResponse>(
-        "/v1/tx/issue",
-        { user: address!, amount: Number(issueAmount) || 1 },
-      );
+      const { transactionB64 } = await apiPost<
+        { user: string; assetMint: string; amount: number },
+        TxResponse
+      >("/v1/tx/issue", { user: address!, assetMint, amount: Number(issueAmount) || 1 });
       const sim = await connection.simulateTransaction(
         VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64")),
       );
@@ -133,9 +157,23 @@ export default function WrapRedeemPanel() {
         Wrap stablecoin
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Issue (wrap) and redeem (unwrap) against the configured vault. Amounts are in smallest
-        token units.
+        Issue (wrap) and redeem (unwrap) wStable against a registered collateral asset. Amounts
+        are in smallest token units.
       </Typography>
+
+      {vaultAssets.length > 0 && (
+        <Box sx={{ mb: 3, p: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Available redemption liquidity
+          </Typography>
+          {vaultAssets.map((a) => (
+            <Typography key={a.mint} variant="body2" sx={{ fontFamily: "monospace" }}>
+              {a.mint.slice(0, 4)}…{a.mint.slice(-4)}: free {a.freeLiquidity}
+              {a.redeemEnabled ? "" : " (redeem off)"}
+            </Typography>
+          ))}
+        </Box>
+      )}
 
       {connecting ? (
         <Typography>Connecting wallet…</Typography>
@@ -159,6 +197,12 @@ export default function WrapRedeemPanel() {
           </Stack>
 
           <Stack spacing={1}>
+            <TextField
+              label="Collateral mint (asset)"
+              value={assetMint}
+              onChange={(e) => setAssetMint(e.target.value)}
+              fullWidth
+            />
             <Typography variant="subtitle1">Issue (wrap)</Typography>
             <TextField
               label="Amount (base units)"
