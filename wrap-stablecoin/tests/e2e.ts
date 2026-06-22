@@ -318,9 +318,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       .rpc();
     console.log(`enable_klend tx: ${txSig}`);
 
-    const klendData = await (program.account as any).klendConfig.fetch(
-      klendConfig,
-    );
+    const klendData = await program.account.kLendConfig.fetch(klendConfig);
     expect(klendData.assetConfig.toBase58()).to.equal(tokenConfig.toBase58());
   });
 
@@ -386,7 +384,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       .rpc();
     console.log(`deposit_to_klend tx: ${txSig}`);
 
-    const cfg = await (program.account as any).klendConfig.fetch(klendConfig);
+    const cfg = await program.account.kLendConfig.fetch(klendConfig);
     expect(cfg.totalLiquidityInKlend.toString()).to.equal("50000000");
 
     const vaultBal = await getAccount(connection, tokenVault);
