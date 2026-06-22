@@ -37,7 +37,8 @@ pub const COLLATERAL_VAULT_SEED: &[u8] = b"token_collateral_vault";
 /// Wrap/unwrap gate when not public. Seeds: `["allowlist", vault_config]`.
 pub const ALLOWLIST_SEED: &[u8] = b"allowlist";
 
-/// Transient flash-mint state. Seeds: `["flash_loan", borrower, vault_config]`.
+/// Transient flash-mint state (`flash-mint` feature only). Seeds: `["flash_loan", borrower, vault_config]`.
+#[cfg(feature = "flash-mint")]
 pub const FLASH_LOAN_SEED: &[u8] = b"flash_loan";
 
 // =============================================================================

@@ -13,6 +13,7 @@ export const TREASURY_VAULT_SEED = "treasury_vault";
 export const KLEND_CONFIG_SEED = "klend_config";
 export const COLLATERAL_VAULT_SEED = "token_collateral_vault";
 export const ALLOWLIST_SEED = "allowlist";
+/** Used when the on-chain program is built with `--features flash-mint`. */
 export const FLASH_LOAN_SEED = "flash_loan";
 
 // Kamino KLend (external program)

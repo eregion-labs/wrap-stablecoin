@@ -38,23 +38,18 @@ The design splits user-facing flows from KLend interaction. `wrap` and `unwrap` 
 
 ## Accounts
 
-- **VaultConfig** — global config (authority, admin, pending_admin, treasury, wrapped_mint, lending_market, usdc_mint, flags, flash-mint params).
-- **TokenConfig** — per-reserve config; currently a single instance (base USDC). Tracks `total_deposited` (user principal in USDC held in `token_vault`) and `total_liquidity_in_klend` (USDC-denominated liability deposited into KLend). `harvest_yield` uses an admin-supplied conservative kToken exchange rate to derive the kToken count that must remain as backing; anything above that is yield.
+- **VaultConfig** — global config (authority, admin, pending_admin, wrapped mint, registered assets, flags). Four `flash_*` fields are reserved layout (unused in shipped build).
+- **AssetConfig** — per-collateral registry (seed `token_config`): vaults, treasury, caps, KLend wiring, and deposit/liquidity totals.
 - **Allowlist** — optional list of pubkeys permitted to wrap/unwrap when the vault is private.
-- **FlashLoanState** — transient PDA created by `flash_mint_start` and required by `flash_mint_end` to close a flash mint.
+
+Flash mint (`FlashLoanState`, flash instructions) is **not compiled** in the default build. See [../wiki/Flash-mint.md](../wiki/Flash-mint.md).
 
 ## Access control
 
 Two permission axes:
 
-1. **Admin / authority split.** `authority` is set at init and used only as the immutable PDA seed root. `admin` is mutable and gates every privileged instruction (pause, treasury update, KLend movement, harvest, flash-mint config). Admin is rotated via a two-step `transfer_authority` → `accept_authority` flow.
+1. **Admin / authority split.** `authority` is set at init and used only as the immutable PDA seed root. `admin` is mutable and gates every privileged instruction (pause, treasury update, KLend movement, harvest, asset policy). Admin is rotated via a two-step `transfer_authority` → `accept_authority` flow.
 2. **Public vs allowlist.** `wrap_public` and `unwrap_public` flags control whether arbitrary users can wrap or unwrap. When a flag is false, the caller must either be the admin or present an `Allowlist` PDA that contains their pubkey.
-
-## Flash mint
-
-`flash_mint_start` mints wStable to a borrower and writes a transient `FlashLoanState`. `flash_mint_end` must run in the same transaction — it verifies the borrower holds `amount + fee`, burns the principal, and transfers the fee to the treasury. Transaction-introspection in `flash_mint_start` confirms the matching `flash_mint_end` is present before minting.
-
-Knobs: `flash_mint_enabled`, `flash_mint_fee_bps` (max 10000), and `flash_mint_max_amount` (0 = no cap).
 
 ## Layout
 
@@ -65,12 +60,14 @@ Knobs: `flash_mint_enabled`, `flash_mint_fee_bps` (max 10000), and `flash_mint_m
 ## Build & test
 
 ```bash
-# Build the program
+# Shipped build (Folkmoot / production — no flash mint in binary or IDL)
 cd wrap-stablecoin && anchor build
 
 # Run integration tests (local validator)
 cd wrap-stablecoin && anchor test
 ```
+
+Experimental flash-mint build (repo only, not for listing): `anchor build -- --features flash-mint`. See [../wiki/Flash-mint.md](../wiki/Flash-mint.md).
 
 ## Running E2E tests locally
 

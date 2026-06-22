@@ -16,11 +16,13 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use wrap_stablecoin::pda_seeds::{
-    ASSET_CONFIG_SEED, COLLATERAL_VAULT_SEED, FLASH_LOAN_SEED, KLEND_FEE_RECEIVER_SEED,
+    ASSET_CONFIG_SEED, COLLATERAL_VAULT_SEED, KLEND_FEE_RECEIVER_SEED,
     KLEND_LENDING_MARKET_AUTH_SEED, KLEND_RESERVE_COLL_MINT_SEED, KLEND_RESERVE_COLL_SUPPLY_SEED,
     KLEND_RESERVE_LIQ_SUPPLY_SEED, KLEND_CONFIG_SEED, TOKEN_VAULT_SEED, TREASURY_VAULT_SEED,
     VAULT_AUTHORITY_SEED, VAULT_CONFIG_SEED, WRAPPED_MINT_SEED,
 };
+#[cfg(feature = "flash-mint")]
+use wrap_stablecoin::pda_seeds::FLASH_LOAN_SEED;
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
 const WRAPPED_TOKEN_PROGRAM_ID: &str = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT";
@@ -831,14 +833,16 @@ fn wrapped_withdraw_from_klend_ix(
 }
 
 // ============================================================================
-// Flash Mint Instruction Builders
+// Flash Mint Instruction Builders (flash-mint feature only)
 // ============================================================================
 
+#[cfg(feature = "flash-mint")]
 #[derive(AnchorSerialize)]
 struct FlashMintStartArgs {
     amount: u64,
 }
 
+#[cfg(feature = "flash-mint")]
 fn wrapped_set_flash_mint_enabled_ix(
     program_id: Pubkey,
     authority: &Pubkey,
@@ -858,6 +862,7 @@ fn wrapped_set_flash_mint_enabled_ix(
     }
 }
 
+#[cfg(feature = "flash-mint")]
 fn wrapped_set_flash_mint_fee_ix(
     program_id: Pubkey,
     authority: &Pubkey,
@@ -877,6 +882,7 @@ fn wrapped_set_flash_mint_fee_ix(
     }
 }
 
+#[cfg(feature = "flash-mint")]
 fn wrapped_flash_mint_start_ix(
     program_id: Pubkey,
     borrower: &Pubkey,
@@ -907,6 +913,7 @@ fn wrapped_flash_mint_start_ix(
     }
 }
 
+#[cfg(feature = "flash-mint")]
 fn wrapped_flash_mint_end_ix(
     program_id: Pubkey,
     borrower: &Pubkey,
@@ -1375,9 +1382,10 @@ fn test_full_integration() -> Result<()> {
 }
 
 // ============================================================================
-// Flash Mint Tests
+// Flash Mint Tests (flash-mint feature only)
 // ============================================================================
 
+#[cfg(feature = "flash-mint")]
 #[test]
 fn test_flash_mint() -> Result<()> {
     let ctx = TestContext::new()?;

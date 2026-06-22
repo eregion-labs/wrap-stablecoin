@@ -10,6 +10,7 @@ name = "wrap_stablecoin"
 
 [features]
 default = []
+flash-mint = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
@@ -19,7 +20,7 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 [lints.rust.unexpected_cfgs]
 level = "warn"
 check-cfg = [
-    'cfg(feature, values("anchor-debug", "custom-heap", "custom-panic"))',
+    'cfg(feature, values("anchor-debug", "custom-heap", "custom-panic", "flash-mint"))',
     'cfg(target_os, values("solana"))',
 ]
 

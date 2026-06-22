@@ -2,6 +2,7 @@ pub mod admin;
 pub mod add_asset;
 pub mod deposit_to_klend;
 pub mod enable_klend;
+#[cfg(feature = "flash-mint")]
 pub mod flash_mint;
 pub mod harvest_yield;
 pub mod initialize;
@@ -15,6 +16,7 @@ pub use admin::*;
 pub use add_asset::*;
 pub use deposit_to_klend::*;
 pub use enable_klend::*;
+#[cfg(feature = "flash-mint")]
 pub use flash_mint::*;
 pub use harvest_yield::*;
 pub use initialize::*;

@@ -21,16 +21,18 @@ pub struct VaultConfig {
     pub asset_count: u8,
     /// Mints with an `AssetConfig` PDA under this vault.
     pub registered_assets: [Pubkey; MAX_REGISTERED_ASSETS],
-    /// Global wStable liability counter (wraps − unwraps, excluding flash-mint semantics).
+    /// Global wStable liability counter (wraps − unwraps).
     pub total_stable_deposited: u64,
     pub paused: bool,
     pub wrap_public: bool,
     pub unwrap_public: bool,
+    /// Reserved for optional `flash-mint` feature; unused in shipped build.
     pub flash_mint_enabled: bool,
+    /// Reserved for optional `flash-mint` feature; unused in shipped build.
     pub flash_mint_fee_bps: u16,
-    /// Maximum amount for a single flash mint. 0 means no limit.
+    /// Reserved for optional `flash-mint` feature; unused in shipped build.
     pub flash_mint_max_amount: u64,
-    /// Wrapped-mint token account that receives flash-mint fees.
+    /// Reserved for optional `flash-mint` feature; unused in shipped build.
     pub flash_mint_fee_receiver: Pubkey,
 }
 

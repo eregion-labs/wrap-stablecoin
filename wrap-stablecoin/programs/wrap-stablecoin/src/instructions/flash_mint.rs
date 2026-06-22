@@ -1,3 +1,5 @@
+#![cfg(feature = "flash-mint")]
+
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::instructions::{
     load_current_index_checked, load_instruction_at_checked,
@@ -70,7 +72,7 @@ pub struct FlashMintEnd<'info> {
         seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     #[account(
         mut,
@@ -80,24 +82,24 @@ pub struct FlashMintEnd<'info> {
         constraint = flash_loan_state.borrower == borrower.key() @ ErrorCode::InvalidFlashLoan,
         constraint = flash_loan_state.vault_config == vault_config.key() @ ErrorCode::InvalidFlashLoan
     )]
-    pub flash_loan_state: Account<'info, FlashLoanState>,
+    pub flash_loan_state: Box<Account<'info, FlashLoanState>>,
 
     #[account(mut, address = vault_config.wrapped_mint)]
-    pub wrapped_mint: InterfaceAccount<'info, Mint>,
+    pub wrapped_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
         constraint = borrower_wrapped.mint == vault_config.wrapped_mint,
         constraint = borrower_wrapped.owner == borrower.key()
     )]
-    pub borrower_wrapped: InterfaceAccount<'info, TokenAccount>,
+    pub borrower_wrapped: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = fee_receiver.mint == vault_config.wrapped_mint @ ErrorCode::InvalidTokenAccount,
         constraint = fee_receiver.key() == vault_config.flash_mint_fee_receiver @ ErrorCode::Unauthorized
     )]
-    pub fee_receiver: InterfaceAccount<'info, TokenAccount>,
+    pub fee_receiver: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
