@@ -1,10 +1,13 @@
 use solana_sdk::pubkey::Pubkey;
 use wrap_stablecoin::constants::KLEND_PROGRAM_ID;
 use wrap_stablecoin::pda_seeds::{
-    ALLOWLIST_SEED, ASSET_CONFIG_SEED, COLLATERAL_VAULT_SEED, FLASH_LOAN_SEED, KLEND_CONFIG_SEED,
+    ALLOWLIST_SEED, ASSET_CONFIG_SEED, COLLATERAL_VAULT_SEED, KLEND_CONFIG_SEED,
     KLEND_LENDING_MARKET_AUTH_SEED, TREASURY_VAULT_SEED, TOKEN_VAULT_SEED, VAULT_AUTHORITY_SEED,
     VAULT_CONFIG_SEED, WRAPPED_MINT_SEED,
 };
+
+/// Seed for optional on-chain `flash-mint` feature (not compiled in shipped program).
+const FLASH_LOAN_SEED: &[u8] = b"flash_loan";
 
 pub fn vault_config(program_id: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[VAULT_CONFIG_SEED, authority.as_ref()], program_id)
@@ -62,6 +65,8 @@ pub fn allowlist(program_id: &Pubkey, vault_config: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[ALLOWLIST_SEED, vault_config.as_ref()], program_id)
 }
 
+/// Flash-loan state PDA for the experimental `flash-mint` program feature.
+/// Not exposed via the HTTP API; reserved for future market-making integrations.
 pub fn flash_loan_state(
     program_id: &Pubkey,
     borrower: &Pubkey,

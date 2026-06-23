@@ -363,7 +363,6 @@ fn test_setup_wrap_unwrap() {
         &token_vault,
         None,
         unwrap_amount,
-        unwrap_amount,
     );
     send_tx(&rpc, vec![unwrap_ix], &payer.pubkey(), &[&payer]).unwrap();
     println!(

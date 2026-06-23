@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - On-chain program: `programs/wrap-stablecoin/src/lib.rs` (Rust Anchor entrypoint) with crate metadata in `programs/wrap-stablecoin/Cargo.toml`.
 - Client tests: `tests/*.ts` executed against the built IDL; `Anchor.toml` points to the generated ID under `[programs.localnet]`.
-- Scripts: `migrations/deploy.ts` for deployment automation; adjust if you add custom setup.
+- Scripts: `migrations/deploy.ts` (stub); `scripts/run_local.sh` for `anchor run local`; `scripts/run_backend_smoke.sh` for API smoke.
 - Build artifacts land in `target/` and `so/`; keep source edits inside `programs/` and `tests/` only.
 
 ## Build, Test, and Development Commands

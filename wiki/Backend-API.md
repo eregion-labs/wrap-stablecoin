@@ -9,6 +9,8 @@ Source: `backend/src/`
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/ping` | Health check |
+| `GET` | `/v1/vault/assets` | Per-asset vault balances and policy |
+| `GET` | `/v1/quote/redeem` | Expected unwrap output and free liquidity |
 | `POST` | `/v1/tx/issue` | Unsigned wrap transaction |
 | `POST` | `/v1/tx/redeem` | Unsigned unwrap transaction |
 | `POST` | `/v1/tx/preview` | Simulate a transaction |
@@ -31,10 +33,32 @@ OpenAPI / Swagger: `/doc`
 **Redeem** (`POST /v1/tx/redeem`):
 
 ```json
-{ "user": "<wallet base58>", "amount": 1000000, "minOutAmount": 900000 }
+{ "user": "<wallet base58>", "amount": 1000000 }
 ```
 
+Optional `assetMint` when the vault has multiple registered assets.
+
 Response: `{ "transactionB64": "..." }` — bincode-serialized `VersionedTransaction`.
+
+## Redeem quote
+
+**Quote** (`GET /v1/quote/redeem?assetMint=<mint>&amount=<wrapped atoms>`):
+
+```json
+{
+  "input": 1000000,
+  "output": 980000,
+  "haircutBps": 200,
+  "assetMint": "...",
+  "freeLiquidity": 500000,
+  "deployedToKamino": 500000,
+  "redeemEnabled": true
+}
+```
+
+- `output` uses the same formula as on-chain `wrapped_to_underlying_amount`
+- `freeLiquidity` is the current `token_vault` balance (what unwrap can pay right now)
+- `deployedToKamino` is informational only
 
 ## Compose
 

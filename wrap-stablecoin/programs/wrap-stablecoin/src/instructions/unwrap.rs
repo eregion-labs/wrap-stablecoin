@@ -7,8 +7,6 @@ use crate::state::{Allowlist, AssetConfig, VaultConfig};
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct UnwrapArgs {
     pub amount: u64,
-    /// Minimum underlying out after redemption haircut (slippage floor).
-    pub min_out_amount: u64,
 }
 
 #[derive(Accounts)]

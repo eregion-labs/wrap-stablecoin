@@ -12,6 +12,10 @@ Thumbs.db
 # --- Environment & secrets ---
 .env
 .env.*
+**/.env
+**/.env.*
+**/.env.local
+**/.env.local.*
 !.env.example
 !**/.env.example
 **/.secrets/

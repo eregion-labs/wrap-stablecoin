@@ -2,6 +2,7 @@ use anchor_lang::AccountDeserialize;
 use anchor_lang::AnchorSerialize;
 use anyhow::{anyhow, Context, Result};
 use wrap_stablecoin::state::{AssetConfig, AssetStatus, KLendConfig, VaultConfig};
+use wrap_stablecoin::utils::wrapped_to_underlying_amount;
 use wrap_stablecoin::{UnwrapArgs, WrapArgs};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
@@ -38,15 +39,12 @@ pub fn wrap_ix_data(amount: u64) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn unwrap_ix_data(amount: u64, min_out_amount: u64) -> Result<Vec<u8>> {
+pub fn unwrap_ix_data(amount: u64) -> Result<Vec<u8>> {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
     data.extend(
-        UnwrapArgs {
-            amount,
-            min_out_amount,
-        }
-        .try_to_vec()
-        .map_err(|e| anyhow!("borsh unwrap args: {e}"))?,
+        UnwrapArgs { amount }
+            .try_to_vec()
+            .map_err(|e| anyhow!("borsh unwrap args: {e}"))?,
     );
     Ok(data)
 }
@@ -79,7 +77,6 @@ pub fn build_wrap_instruction(
         ),
         AccountMeta::new(vault.wrapped_mint, false),
         AccountMeta::new(asset_cfg.token_vault, false),
-        AccountMeta::new_readonly(*program_id, false),
         AccountMeta::new_readonly(spl_token_program_id(), false),
     ];
 
@@ -99,9 +96,8 @@ pub fn build_unwrap_instruction(
     asset_cfg: &AssetConfig,
     asset_config_key: &Pubkey,
     amount: u64,
-    min_out_amount: u64,
 ) -> Result<Instruction> {
-    let data = unwrap_ix_data(amount, min_out_amount)?;
+    let data = unwrap_ix_data(amount)?;
 
     let accounts = vec![
         AccountMeta::new(*user, true),
@@ -119,7 +115,6 @@ pub fn build_unwrap_instruction(
         AccountMeta::new(*asset_config_key, false),
         AccountMeta::new_readonly(asset_cfg.token_mint, false),
         AccountMeta::new(asset_cfg.token_vault, false),
-        AccountMeta::new_readonly(*program_id, false),
         AccountMeta::new_readonly(spl_token_program_id(), false),
     ];
 
@@ -253,7 +248,6 @@ pub fn unsigned_unwrap_tx_bytes(
     user: &Pubkey,
     asset_mint: &Pubkey,
     amount: u64,
-    min_out_amount: u64,
 ) -> Result<Vec<u8>> {
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
     if vault.paused {
@@ -285,7 +279,6 @@ pub fn unsigned_unwrap_tx_bytes(
         &asset_cfg,
         &asset_config_key,
         amount,
-        min_out_amount,
     )?;
 
     let tx = build_versioned_tx(rpc, user, vec![create_user_asset_ata, unwrap_ix], None)?;
@@ -305,6 +298,56 @@ pub struct VaultAssetView {
     pub net_liability: u64,
     pub asset_status: String,
     pub klend_enabled: bool,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RedeemQuoteView {
+    pub input: u64,
+    pub output: u64,
+    pub haircut_bps: u16,
+    pub asset_mint: String,
+    pub free_liquidity: u64,
+    pub deployed_to_kamino: u64,
+    pub redeem_enabled: bool,
+}
+
+pub fn redeem_quote(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    asset_mint: &Pubkey,
+    amount: u64,
+) -> Result<RedeemQuoteView> {
+    if amount == 0 {
+        return Err(anyhow!("amount must be positive"));
+    }
+    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    if !vault.has_asset(asset_mint) {
+        return Err(anyhow!("asset not registered: {asset_mint}"));
+    }
+    let (asset_config_key, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+    let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
+    let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
+    let output = wrapped_to_underlying_amount(
+        amount,
+        cfg.token_decimals,
+        vault.wrapped_decimals,
+        cfg.redemption_haircut_bps,
+    )
+    .map_err(|e| anyhow!("quote conversion: {e}"))?;
+    Ok(RedeemQuoteView {
+        input: amount,
+        output,
+        haircut_bps: cfg.redemption_haircut_bps,
+        asset_mint: asset_mint.to_string(),
+        free_liquidity,
+        deployed_to_kamino: klend
+            .as_ref()
+            .map(|k| k.total_liquidity_in_klend)
+            .unwrap_or(0),
+        redeem_enabled: cfg.redeem_allowed(),
+    })
 }
 
 pub fn fetch_vault_assets(

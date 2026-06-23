@@ -8,6 +8,7 @@ import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import Alert from "@mui/material/Alert";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 import { apiGet, apiPost } from "@/lib/api";
@@ -27,6 +28,16 @@ type VaultAsset = {
   assetStatus: string;
 };
 
+type RedeemQuote = {
+  input: number;
+  output: number;
+  haircutBps: number;
+  assetMint: string;
+  freeLiquidity: number;
+  deployedToKamino: number;
+  redeemEnabled: boolean;
+};
+
 const DEFAULT_ASSET_MINT =
   process.env.NEXT_PUBLIC_DEFAULT_ASSET_MINT ||
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -38,9 +49,9 @@ export default function WrapRedeemPanel() {
 
   const [issueAmount, setIssueAmount] = useState("1000000");
   const [redeemAmount, setRedeemAmount] = useState("1000000");
-  const [minOut, setMinOut] = useState("900000");
   const [assetMint, setAssetMint] = useState(DEFAULT_ASSET_MINT);
   const [vaultAssets, setVaultAssets] = useState<VaultAsset[]>([]);
+  const [redeemQuote, setRedeemQuote] = useState<RedeemQuote | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const address = publicKey?.toBase58();
@@ -50,6 +61,21 @@ export default function WrapRedeemPanel() {
       .then((r) => setVaultAssets(r.assets))
       .catch(() => setVaultAssets([]));
   }, []);
+
+  useEffect(() => {
+    const amount = Number(redeemAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setRedeemQuote(null);
+      return;
+    }
+    const params = new URLSearchParams({
+      amount: String(amount),
+      assetMint,
+    });
+    apiGet<RedeemQuote>(`/v1/quote/redeem?${params.toString()}`)
+      .then(setRedeemQuote)
+      .catch(() => setRedeemQuote(null));
+  }, [redeemAmount, assetMint]);
 
   const submitIssue = async () => {
     if (!publicKey) {
@@ -93,23 +119,17 @@ export default function WrapRedeemPanel() {
       return;
     }
     const amount = Number(redeemAmount);
-    const minOutAmount = Number(minOut);
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !Number.isFinite(minOutAmount) ||
-      minOutAmount <= 0
-    ) {
-      enqueueSnackbar("Invalid amounts", { variant: "error" });
+    if (!Number.isFinite(amount) || amount <= 0) {
+      enqueueSnackbar("Invalid amount", { variant: "error" });
       return;
     }
     setBusy("redeem");
     try {
       const buildTx = async () => {
         const { transactionB64 } = await apiPost<
-          { user: string; assetMint: string; amount: number; minOutAmount: number },
+          { user: string; assetMint: string; amount: number },
           TxResponse
-        >("/v1/tx/redeem", { user: address!, assetMint, amount, minOutAmount });
+        >("/v1/tx/redeem", { user: address!, assetMint, amount });
         return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
       };
       const signature = await sendWithBlockhashRefresh({
@@ -151,6 +171,9 @@ export default function WrapRedeemPanel() {
     }
   };
 
+  const liquidityShortfall =
+    redeemQuote && redeemQuote.output > redeemQuote.freeLiquidity;
+
   return (
     <Box sx={{ maxWidth: 520, mx: "auto", py: 4, px: 2 }}>
       <Typography variant="h5" gutterBottom>
@@ -169,6 +192,7 @@ export default function WrapRedeemPanel() {
           {vaultAssets.map((a) => (
             <Typography key={a.mint} variant="body2" sx={{ fontFamily: "monospace" }}>
               {a.mint.slice(0, 4)}…{a.mint.slice(-4)}: free {a.freeLiquidity}
+              {a.deployedToKamino > 0 ? ` (${a.deployedToKamino} in Kamino)` : ""}
               {a.redeemEnabled ? "" : " (redeem off)"}
             </Typography>
           ))}
@@ -232,12 +256,20 @@ export default function WrapRedeemPanel() {
               onChange={(e) => setRedeemAmount(e.target.value)}
               fullWidth
             />
-            <TextField
-              label="Min base out (slippage floor)"
-              value={minOut}
-              onChange={(e) => setMinOut(e.target.value)}
-              fullWidth
-            />
+            {redeemQuote && (
+              <Typography variant="body2" color="text.secondary">
+                Expected output: {redeemQuote.output} base units
+                {redeemQuote.haircutBps > 0
+                  ? ` (haircut ${redeemQuote.haircutBps} bps)`
+                  : ""}
+              </Typography>
+            )}
+            {liquidityShortfall && (
+              <Alert severity="warning">
+                Free vault liquidity ({redeemQuote!.freeLiquidity}) is below expected output (
+                {redeemQuote!.output}). Redeem may fail until an operator withdraws from Kamino.
+              </Alert>
+            )}
             <Button
               variant="contained"
               color="secondary"

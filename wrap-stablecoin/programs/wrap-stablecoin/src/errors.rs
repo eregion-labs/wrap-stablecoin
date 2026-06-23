@@ -124,7 +124,4 @@ pub enum ErrorCode {
 
     #[msg("Token decimals must be between 1 and 18")]
     InvalidDecimals,
-
-    #[msg("Redemption output below minimum")]
-    RedemptionBelowMinimum,
 }

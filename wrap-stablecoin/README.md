@@ -69,6 +69,23 @@ cd wrap-stablecoin && anchor test
 
 Experimental flash-mint build (repo only, not for listing): `anchor build -- --features flash-mint`. See [../wiki/Flash-mint.md](../wiki/Flash-mint.md).
 
+## Local development (persistent localnet)
+
+For interactive dev against KLend with a **persistent** validator (not `anchor test`):
+
+```bash
+cd wrap-stablecoin
+cp .env.example .env    # first time only
+yarn install
+anchor run local        # validator + seed + print env block (leave this terminal open)
+```
+
+Stop: `anchor run stop-local` (alias: `anchor run local-stop`) — see [kill.md](kill.md)
+
+The validator runs as a **background job** in that terminal (`&`); slot logs keep printing while the tab stays open.
+
+See [../wiki/Local-development.md](../wiki/Local-development.md) for full reference (Kamino fixtures, env vars, backend/frontend setup).
+
 ## Running E2E tests locally
 
 The e2e tests run against cloned mainnet KLend state, allowing full CPI integration without depending on live RPC at test time.

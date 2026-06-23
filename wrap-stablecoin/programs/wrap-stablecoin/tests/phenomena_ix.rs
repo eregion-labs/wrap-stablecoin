@@ -286,7 +286,6 @@ pub fn wrapped_wrap_ix(
 #[derive(AnchorSerialize)]
 struct UnwrapArgs {
     amount: u64,
-    min_out_amount: u64,
 }
 
 pub fn wrapped_unwrap_ix(
@@ -302,16 +301,12 @@ pub fn wrapped_unwrap_ix(
     token_vault: &Pubkey,
     allowlist: Option<&Pubkey>,
     amount: u64,
-    min_out_amount: u64,
 ) -> Instruction {
     let mut data = anchor_sighash("global", "unwrap").to_vec();
     data.extend(
-        UnwrapArgs {
-            amount,
-            min_out_amount,
-        }
-        .try_to_vec()
-        .unwrap(),
+        UnwrapArgs { amount }
+            .try_to_vec()
+            .unwrap(),
     );
 
     Instruction {

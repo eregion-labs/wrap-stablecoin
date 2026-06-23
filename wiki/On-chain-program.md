@@ -10,9 +10,11 @@ wStable is a **governed multi-reserve stablecoin**: one wrapped mint, many colla
 Asset
  |
  +-- token_vault        (user backing / redemption liquidity)
- +-- collateral_vault   (Kamino kTokens; optional)
+ +-- collateral_vault   (Kamino kTokens; admin treasury investment)
  +-- treasury_vault     (protocol yield; not wStable backing)
 ```
+
+**User path:** `wrap` and `unwrap` only touch `token_vault`. **Admin path:** Kamino CPIs via `deposit_to_klend`, `withdraw_from_klend`, `withdraw_all_from_klend`, and `harvest_yield`.
 
 ## Core instructions
 
@@ -22,10 +24,11 @@ Asset
 | `add_asset` | admin | Register collateral: `AssetConfig`, `token_vault`, `treasury_vault`, policy defaults |
 | `enable_klend` | admin | Attach `KLendConfig` + collateral vault for Kamino CPI |
 | `update_asset_policy` | admin | Mint/redeem flags, haircuts, caps, status |
-| `wrap` | user | Deposit chosen asset → mint wStable (mint haircuts apply) |
-| `unwrap` | user | Burn wStable → chosen asset (redemption haircuts; `min_out_amount`) |
+| `wrap` | user | Deposit chosen asset → `token_vault` → mint wStable |
+| `unwrap` | user | Burn wStable → transfer from `token_vault` only |
 | `deposit_to_klend` | admin | Per-asset KLend CPI (requires `KLendConfig`) |
 | `withdraw_from_klend` | admin | Per-asset KLend CPI → free vault |
+| `withdraw_all_from_klend` | admin | Recall full Kamino position → free vault |
 | `harvest_yield` | admin | Per-asset yield → `treasury_vault` |
 | `withdraw_treasury` | admin | Move yield from `treasury_vault` to a destination ATA |
 
@@ -35,7 +38,7 @@ Underlying mint, `token_vault`, `treasury_vault`, accounting, mint/redeem policy
 
 ## KLendConfig (optional per asset)
 
-PDA seeds: `["klend_config", asset_config]`. Lending market, reserve, liquidity supply, collateral mint/vault, `total_liquidity_in_klend`.
+PDA seeds: `["klend_config", asset_config]`. Lending market, reserve, liquidity supply, collateral mint/vault, `total_liquidity_in_klend`. Used only by admin Kamino instructions.
 
 ## Treasury vault
 
@@ -56,9 +59,9 @@ enable_klend(Stable)       # when a market exists
 
 - `reject_reflexive_collateral`: underlying mint cannot equal wStable mint
 - Per asset: `net_liability = total_wrapped_minted - total_redemptions` (wStable atoms)
-- Unwrap only from `token_vault`; never from `treasury_vault`
+- Unwrap sources liquidity **only** from `token_vault`; never from `treasury_vault` or Kamino CPIs
 - KLend ops fail with `KlendNotEnabled` when no `KLendConfig` exists
 
-## Migration
+## Redemption
 
-See [Migration-playbook.md](Migration-playbook.md).
+See [Redemption.md](Redemption.md) for vault-only unwrap and operator pre-withdraw workflow.

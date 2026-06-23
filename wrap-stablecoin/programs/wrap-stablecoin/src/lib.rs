@@ -75,7 +75,7 @@ fn check_mint_cap(asset_config: &crate::state::AssetConfig, mint_amount: u64) ->
 pub mod wrap_stablecoin {
     use super::*;
     use crate::errors::ErrorCode;
-    use crate::klend::{deposit_reserve_liquidity_ix, redeem_reserve_collateral_ix};
+    use crate::klend::{deposit_reserve_liquidity_ix, redeem_collateral, redeem_reserve_collateral_ix};
     use crate::state::AssetStatus;
     use crate::utils::{
         get_token_balance, underlying_to_wrapped_amount, wrapped_to_underlying_amount,
@@ -369,10 +369,6 @@ pub mod wrap_stablecoin {
             asset_config.redemption_haircut_bps,
         )?;
         require!(out_amount > 0, ErrorCode::InvalidAmount);
-        require!(
-            out_amount >= args.min_out_amount,
-            ErrorCode::RedemptionBelowMinimum
-        );
 
         burn(
             CpiContext::new(
@@ -602,48 +598,24 @@ pub mod wrap_stablecoin {
             &[vault_config.vault_authority_bump],
         ];
 
-        let liquidity_before = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
-
-        let ix = redeem_reserve_collateral_ix(
-            ctx.accounts.klend_program.key(),
-            ctx.accounts.vault_authority.key(),
-            ctx.accounts.lending_market.key(),
-            ctx.accounts.reserve.key(),
-            ctx.accounts.lending_market_authority.key(),
-            asset_config.token_mint,
-            ctx.accounts.reserve_collateral_mint.key(),
-            ctx.accounts.reserve_liquidity_supply.key(),
-            ctx.accounts.collateral_vault.key(),
-            ctx.accounts.token_vault.key(),
-            ctx.accounts.collateral_token_program.key(),
-            ctx.accounts.token_program.key(),
-            ctx.accounts.instruction_sysvar.key(),
-            args.collateral_amount,
-        );
-
-        invoke_signed(
-            &ix,
-            &[
-                ctx.accounts.vault_authority.to_account_info(),
-                ctx.accounts.lending_market.to_account_info(),
-                ctx.accounts.reserve.to_account_info(),
-                ctx.accounts.lending_market_authority.to_account_info(),
-                ctx.accounts.token_mint.to_account_info(),
-                ctx.accounts.reserve_collateral_mint.to_account_info(),
-                ctx.accounts.reserve_liquidity_supply.to_account_info(),
-                ctx.accounts.collateral_vault.to_account_info(),
-                ctx.accounts.token_vault.to_account_info(),
-                ctx.accounts.collateral_token_program.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.instruction_sysvar.to_account_info(),
-            ],
+        let liquidity_received = redeem_collateral(
+            &ctx.accounts.klend_program.to_account_info(),
+            &ctx.accounts.vault_authority.to_account_info(),
+            &ctx.accounts.lending_market.to_account_info(),
+            &ctx.accounts.reserve.to_account_info(),
+            &ctx.accounts.lending_market_authority.to_account_info(),
+            &ctx.accounts.token_mint.to_account_info(),
+            &ctx.accounts.reserve_collateral_mint.to_account_info(),
+            &ctx.accounts.reserve_liquidity_supply.to_account_info(),
+            &ctx.accounts.collateral_vault.to_account_info(),
+            &ctx.accounts.token_vault.to_account_info(),
+            &ctx.accounts.collateral_token_program.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.instruction_sysvar.to_account_info(),
             &[authority_seeds],
+            args.collateral_amount,
         )?;
 
-        let liquidity_after = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
-        let liquidity_received = liquidity_after
-            .checked_sub(liquidity_before)
-            .ok_or(ErrorCode::MathOverflow)?;
         klend_config.total_liquidity_in_klend = klend_config
             .total_liquidity_in_klend
             .saturating_sub(liquidity_received);
@@ -651,6 +623,52 @@ pub mod wrap_stablecoin {
         msg!(
             "Withdrew {} kTokens ({} liquidity) of {} from KLend",
             args.collateral_amount,
+            liquidity_received,
+            asset_config.token_mint
+        );
+        Ok(())
+    }
+
+    pub fn withdraw_all_from_klend(ctx: Context<WithdrawAllFromKlend>) -> Result<()> {
+        let vault_config = &ctx.accounts.vault_config;
+        let asset_config = &ctx.accounts.asset_config;
+        let klend_config = &mut ctx.accounts.klend_config;
+        let vault_config_key = vault_config.key();
+        let authority_seeds: &[&[u8]] = &[
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
+            vault_config_key.as_ref(),
+            &[vault_config.vault_authority_bump],
+        ];
+
+        let collateral_amount =
+            get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
+        require!(collateral_amount > 0, ErrorCode::InvalidAmount);
+
+        let liquidity_received = redeem_collateral(
+            &ctx.accounts.klend_program.to_account_info(),
+            &ctx.accounts.vault_authority.to_account_info(),
+            &ctx.accounts.lending_market.to_account_info(),
+            &ctx.accounts.reserve.to_account_info(),
+            &ctx.accounts.lending_market_authority.to_account_info(),
+            &ctx.accounts.token_mint.to_account_info(),
+            &ctx.accounts.reserve_collateral_mint.to_account_info(),
+            &ctx.accounts.reserve_liquidity_supply.to_account_info(),
+            &ctx.accounts.collateral_vault.to_account_info(),
+            &ctx.accounts.token_vault.to_account_info(),
+            &ctx.accounts.collateral_token_program.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.instruction_sysvar.to_account_info(),
+            &[authority_seeds],
+            collateral_amount,
+        )?;
+
+        klend_config.total_liquidity_in_klend = klend_config
+            .total_liquidity_in_klend
+            .saturating_sub(liquidity_received);
+
+        msg!(
+            "Withdrew all {} kTokens ({} liquidity) of {} from KLend",
+            collateral_amount,
             liquidity_received,
             asset_config.token_mint
         );

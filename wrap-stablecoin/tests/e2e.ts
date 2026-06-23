@@ -434,12 +434,46 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     expect(threw).to.equal(true);
   });
 
-  it("withdraws from KLend to restore token_vault liquidity", async () => {
+  it("rejects unwrap when token_vault lacks free liquidity", async () => {
+    const vaultBal = await getAccount(connection, tokenVault);
+    expect(Number(vaultBal.amount)).to.equal(50_000_000);
+
+    const amount = new anchor.BN(60_000_000);
+    let threw = false;
+    try {
+      await program.methods
+        .unwrap({ amount } as any)
+        .accountsPartial({
+          user: wallet.publicKey,
+          vaultConfig,
+          vaultAuthority,
+          userWrapped: userWrappedAta,
+          userAssetToken: userUsdcAta,
+          wrappedMint,
+          assetConfig: tokenConfig,
+          tokenMint: USDC_MINT,
+          tokenVault,
+          allowlist: null,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        } as any)
+        .rpc();
+    } catch (err: any) {
+      threw = true;
+      const msg = err?.error?.errorCode?.code || err?.message || String(err);
+      console.log(`unwrap rejected as expected: ${msg}`);
+      expect(msg).to.match(/InsufficientLiquidity/);
+    }
+    expect(threw).to.equal(true);
+  });
+
+  it("admin withdraw_from_klend refills vault before user unwrap", async () => {
     const collateralBal = await getAccount(connection, collateralVault);
-    const txSig = await program.methods
-      .withdrawFromKlend({
-        collateralAmount: new anchor.BN(collateralBal.amount.toString()),
-      } as any)
+    const collateralAmount = new anchor.BN(
+      Math.floor(Number(collateralBal.amount) / 2),
+    );
+
+    const withdrawSig = await program.methods
+      .withdrawFromKlend({ collateralAmount } as any)
       .accountsPartial({
         admin: wallet.publicKey,
         vaultConfig,
@@ -461,21 +495,17 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       } as any)
       .preInstructions([refreshReserveIx()])
       .rpc();
-    console.log(`withdraw_from_klend tx: ${txSig}`);
+    console.log(`withdraw_from_klend tx: ${withdrawSig}`);
 
     const vaultBal = await getAccount(connection, tokenVault);
-    expect(Number(vaultBal.amount)).to.be.greaterThanOrEqual(99_999_999);
-  });
+    expect(Number(vaultBal.amount)).to.be.greaterThan(60_000_000);
 
-  it("unwraps wStable back to USDC", async () => {
     const usdcBefore = (await getAccount(connection, userUsdcAta)).amount;
-    const wrappedBefore = (await getAccount(connection, userWrappedAta))
-      .amount;
+    const wrappedBefore = (await getAccount(connection, userWrappedAta)).amount;
+    const amount = new anchor.BN(60_000_000);
 
-    const vaultBal = await getAccount(connection, tokenVault);
-    const amount = new anchor.BN(vaultBal.amount.toString());
-    const txSig = await program.methods
-      .unwrap({ amount, minOutAmount: amount } as any)
+    const unwrapSig = await program.methods
+      .unwrap({ amount } as any)
       .accountsPartial({
         user: wallet.publicKey,
         vaultConfig,
@@ -490,7 +520,91 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
-    console.log(`unwrap tx: ${txSig}`);
+    console.log(`unwrap (vault-only) tx: ${unwrapSig}`);
+
+    const usdcAfter = (await getAccount(connection, userUsdcAta)).amount;
+    const wrappedAfter = (await getAccount(connection, userWrappedAta)).amount;
+    expect(Number(usdcAfter - usdcBefore)).to.equal(60_000_000);
+    expect((wrappedBefore - wrappedAfter).toString()).to.equal(
+      amount.toString(),
+    );
+  });
+
+  it("admin withdraw_all_from_klend drains remaining Kamino position", async () => {
+    const collateralBal = await getAccount(connection, collateralVault);
+    if (collateralBal.amount === 0n) {
+      console.log("skip withdraw_all_from_klend: no collateral left");
+      return;
+    }
+    const txSig = await program.methods
+      .withdrawAllFromKlend()
+      .accountsPartial({
+        admin: wallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        assetConfig: tokenConfig,
+        klendConfig,
+        tokenVault,
+        tokenMint: USDC_MINT,
+        klendProgram: KLEND_PROGRAM_ID,
+        lendingMarket: LENDING_MARKET,
+        lendingMarketAuthority,
+        reserve: USDC_RESERVE,
+        reserveLiquiditySupply: RESERVE_LIQUIDITY_SUPPLY,
+        reserveCollateralMint: RESERVE_COLLATERAL_MINT,
+        collateralVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+      } as any)
+      .preInstructions([refreshReserveIx()])
+      .rpc();
+    console.log(`withdraw_all_from_klend tx: ${txSig}`);
+
+    const collateralAfter = await getAccount(connection, collateralVault);
+    expect(collateralAfter.amount.toString()).to.equal("0");
+  });
+
+  it("unwraps wStable when only home vault has liquidity", async () => {
+    const wrapAmount = new anchor.BN(10_000_000);
+    await program.methods
+      .wrap({ amount: wrapAmount } as any)
+      .accountsPartial({
+        user: wallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        assetConfig: tokenConfig,
+        tokenMint: USDC_MINT,
+        userToken: userUsdcAta,
+        userWrapped: userWrappedAta,
+        wrappedMint,
+        tokenVault,
+        allowlist: null,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      } as any)
+      .rpc();
+
+    const usdcBefore = (await getAccount(connection, userUsdcAta)).amount;
+    const wrappedBefore = (await getAccount(connection, userWrappedAta)).amount;
+    const amount = wrapAmount;
+
+    const txSig = await program.methods
+      .unwrap({ amount } as any)
+      .accountsPartial({
+        user: wallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        userWrapped: userWrappedAta,
+        userAssetToken: userUsdcAta,
+        wrappedMint,
+        assetConfig: tokenConfig,
+        tokenMint: USDC_MINT,
+        tokenVault,
+        allowlist: null,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      } as any)
+      .rpc();
+    console.log(`unwrap (home vault only) tx: ${txSig}`);
 
     const usdcAfter = (await getAccount(connection, userUsdcAta)).amount;
     const wrappedAfter = (await getAccount(connection, userWrappedAta)).amount;

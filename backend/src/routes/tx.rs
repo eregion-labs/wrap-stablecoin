@@ -37,8 +37,6 @@ pub struct RedeemRequest {
     #[serde(default)]
     pub asset_mint: Option<String>,
     pub amount: u64,
-    /// Minimum base token out (unwrap slippage floor).
-    pub min_out_amount: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -78,7 +76,6 @@ pub enum ComposeStep {
         #[serde(default)]
         asset_mint: Option<String>,
         amount: u64,
-        min_out_amount: u64,
     },
 }
 
@@ -170,7 +167,6 @@ pub async fn redeem_tx(
         &user,
         &asset_mint,
         body.amount,
-        body.min_out_amount,
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     verify_tx_bytes(&raw, &state.program_id)?;
@@ -253,11 +249,7 @@ pub async fn compose_tx(
                     *amount,
                 )
             }
-            ComposeStep::Unwrap {
-                asset_mint,
-                amount,
-                min_out_amount,
-            } => {
+            ComposeStep::Unwrap { asset_mint, amount } => {
                 let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
                     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
                 unsigned_unwrap_tx_bytes(
@@ -267,7 +259,6 @@ pub async fn compose_tx(
                     &user,
                     &mint,
                     *amount,
-                    *min_out_amount,
                 )
             }
             ComposeStep::JupiterSwap { .. } => {
@@ -321,11 +312,7 @@ pub async fn compose_tx(
                 .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?
         }
         (
-            ComposeStep::Unwrap {
-                asset_mint,
-                amount,
-                min_out_amount,
-            },
+            ComposeStep::Unwrap { asset_mint, amount },
             ComposeStep::JupiterSwap { quote },
         ) => {
             let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
@@ -337,7 +324,6 @@ pub async fn compose_tx(
                 &user,
                 &mint,
                 *amount,
-                *min_out_amount,
             )
             .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
             let unwrap_vtx: VersionedTransaction = bincode::deserialize(&unwrap_raw)

@@ -15,6 +15,7 @@ Monorepo for the Kamino-backed wrap program ([`wrap-stablecoin/`](wrap-stablecoi
 ```bash
 cd wrap-stablecoin
 anchor build
+anchor run local   # persistent localnet + KLend — see wiki/Local-development.md
 ```
 
 IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
