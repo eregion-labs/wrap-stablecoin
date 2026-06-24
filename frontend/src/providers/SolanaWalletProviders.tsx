@@ -3,37 +3,26 @@
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 import { useMemo } from "react";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
-import { WalletModal, WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-wallets";
+import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
+import { resolveRpcEndpoint } from "@/lib/solanaConfig";
+import { useNetworkStore } from "@/stores/networkStore";
 
-function adapterNetwork(): WalletAdapterNetwork {
-  const n = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet").toLowerCase();
-  if (n === "mainnet" || n === "mainnet-beta") return WalletAdapterNetwork.Mainnet;
-  if (n === "testnet") return WalletAdapterNetwork.Testnet;
-  return WalletAdapterNetwork.Devnet;
-}
-
-function rpcEndpoint(network: WalletAdapterNetwork): string {
-  const custom = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-  if (custom) return custom;
-  if (network === WalletAdapterNetwork.Mainnet) return "https://api.mainnet-beta.solana.com";
-  return "https://api.devnet.solana.com";
-}
-
+/**
+ * Wallet Standard + Wallet Adapter. Empty `wallets` → standard wallets are merged
+ * in by WalletProvider via useStandardWalletAdapters.
+ *
+ * Do not mount <WalletModal /> here — WalletModalProvider renders it when open.
+ */
 export default function SolanaWalletProviders({ children }: { children: React.ReactNode }) {
-  const network = useMemo(() => adapterNetwork(), []);
-  const endpoint = useMemo(() => rpcEndpoint(network), [network]);
-  const wallets = useMemo(() => [new PhantomWalletAdapter({ network })], [network]);
+  const network = useNetworkStore((s) => s.network);
+  const endpoint = useMemo(() => resolveRpcEndpoint(network), [network]);
+  const wallets = useMemo(() => [], []);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider key={endpoint} endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          {children}
-          <WalletModal />
-        </WalletModalProvider>
+        <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );

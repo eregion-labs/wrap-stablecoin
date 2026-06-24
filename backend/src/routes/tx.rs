@@ -9,9 +9,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::VersionedTransaction;
 use utoipa::ToSchema;
 
-use crate::app_state::AppState;
+use crate::app_state::{AppState, NetworkContext};
 use crate::jupiter;
-use crate::routes::vault::resolve_asset_mint;
+use crate::routes::network::RequestNetwork;
 use crate::wrap_stablecoin::{
     build_versioned_tx, decode_versioned_tx_b64, ensure_tx_targets_program,
     instructions_from_versioned_tx, unsigned_unwrap_tx_bytes, unsigned_wrap_tx_bytes,
@@ -91,6 +91,17 @@ fn b64_encode_tx(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
+fn bad_request(msg: String) -> (axum::http::StatusCode, String) {
+    (axum::http::StatusCode::BAD_REQUEST, msg)
+}
+
+fn require_ctx<'a>(
+    state: &'a AppState,
+    network: RequestNetwork,
+) -> Result<&'a NetworkContext, (axum::http::StatusCode, String)> {
+    state.require_network(network.0).map_err(bad_request)
+}
+
 /// Decode `raw` and confirm at least one instruction targets our wStable program.
 /// Returns `(status, body)` suitable for propagating as an axum error tuple.
 fn verify_tx_bytes(
@@ -116,26 +127,24 @@ fn verify_tx_bytes(
 )]
 pub async fn issue_tx(
     State(state): State<Arc<AppState>>,
+    RequestNetwork(network): RequestNetwork,
     Json(body): Json<IssueRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let user = Pubkey::from_str(&body.user).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid user: {e}"),
-        )
-    })?;
-    let asset_mint = resolve_asset_mint(state.as_ref(), body.asset_mint.as_deref())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
+    let user = Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
+    let asset_mint = ctx
+        .resolve_asset_mint(body.asset_mint.as_deref())
+        .map_err(bad_request)?;
     let raw = unsigned_wrap_tx_bytes(
-        state.rpc.as_ref(),
-        &state.program_id,
-        &state.vault_authority_seed,
+        ctx.rpc.as_ref(),
+        &ctx.program_id,
+        &ctx.vault_authority_seed,
         &user,
         &asset_mint,
         body.amount,
     )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    verify_tx_bytes(&raw, &state.program_id)?;
+    .map_err(|e| bad_request(e.to_string()))?;
+    verify_tx_bytes(&raw, &ctx.program_id)?;
     Ok(Json(TxResponse {
         transaction_b64: b64_encode_tx(&raw),
     }))
@@ -150,26 +159,24 @@ pub async fn issue_tx(
 )]
 pub async fn redeem_tx(
     State(state): State<Arc<AppState>>,
+    RequestNetwork(network): RequestNetwork,
     Json(body): Json<RedeemRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let user = Pubkey::from_str(&body.user).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid user: {e}"),
-        )
-    })?;
-    let asset_mint = resolve_asset_mint(state.as_ref(), body.asset_mint.as_deref())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
+    let user = Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
+    let asset_mint = ctx
+        .resolve_asset_mint(body.asset_mint.as_deref())
+        .map_err(bad_request)?;
     let raw = unsigned_unwrap_tx_bytes(
-        state.rpc.as_ref(),
-        &state.program_id,
-        &state.vault_authority_seed,
+        ctx.rpc.as_ref(),
+        &ctx.program_id,
+        &ctx.vault_authority_seed,
         &user,
         &asset_mint,
         body.amount,
     )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    verify_tx_bytes(&raw, &state.program_id)?;
+    .map_err(|e| bad_request(e.to_string()))?;
+    verify_tx_bytes(&raw, &ctx.program_id)?;
     Ok(Json(TxResponse {
         transaction_b64: b64_encode_tx(&raw),
     }))
@@ -184,24 +191,20 @@ pub async fn redeem_tx(
 )]
 pub async fn preview_tx(
     State(state): State<Arc<AppState>>,
+    RequestNetwork(network): RequestNetwork,
     Json(body): Json<PreviewRequest>,
 ) -> Result<Json<PreviewResponse>, (axum::http::StatusCode, String)> {
+    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
     use base64::Engine;
     let raw = base64::engine::general_purpose::STANDARD
         .decode(body.transaction_b64.trim())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, format!("base64: {e}")))?;
-    let vtx: VersionedTransaction = bincode::deserialize(&raw).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("tx decode: {e}"),
-        )
-    })?;
-    ensure_tx_targets_program(&vtx, &state.program_id)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sim = state
+        .map_err(|e| bad_request(format!("base64: {e}")))?;
+    let vtx: VersionedTransaction = bincode::deserialize(&raw).map_err(|e| bad_request(format!("tx decode: {e}")))?;
+    ensure_tx_targets_program(&vtx, &ctx.program_id).map_err(|e| bad_request(e.to_string()))?;
+    let sim = ctx
         .rpc
         .simulate_transaction(&vtx)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        .map_err(|e| bad_request(e.to_string()))?;
     let err = sim.value.err.map(|e| format!("{e:?}"));
     let logs = sim.value.logs;
     let units_consumed = sim.value.units_consumed;
@@ -221,137 +224,138 @@ pub async fn preview_tx(
 )]
 pub async fn compose_tx(
     State(state): State<Arc<AppState>>,
+    RequestNetwork(network): RequestNetwork,
     Json(body): Json<ComposeRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let user = Pubkey::from_str(&body.user).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid user: {e}"),
-        )
-    })?;
+    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
+    let user = Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
     let user_str = body.user.clone();
 
     if body.steps.is_empty() {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "steps empty".into()));
+        return Err(bad_request("steps empty".into()));
     }
 
     if body.steps.len() == 1 {
         let raw = match &body.steps[0] {
             ComposeStep::Wrap { asset_mint, amount } => {
-                let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
-                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+                let mint = ctx
+                    .resolve_asset_mint(asset_mint.as_deref())
+                    .map_err(bad_request)?;
                 unsigned_wrap_tx_bytes(
-                    state.rpc.as_ref(),
-                    &state.program_id,
-                    &state.vault_authority_seed,
+                    ctx.rpc.as_ref(),
+                    &ctx.program_id,
+                    &ctx.vault_authority_seed,
                     &user,
                     &mint,
                     *amount,
                 )
             }
             ComposeStep::Unwrap { asset_mint, amount } => {
-                let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
-                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+                let mint = ctx
+                    .resolve_asset_mint(asset_mint.as_deref())
+                    .map_err(bad_request)?;
                 unsigned_unwrap_tx_bytes(
-                    state.rpc.as_ref(),
-                    &state.program_id,
-                    &state.vault_authority_seed,
+                    ctx.rpc.as_ref(),
+                    &ctx.program_id,
+                    &ctx.vault_authority_seed,
                     &user,
                     &mint,
                     *amount,
                 )
             }
             ComposeStep::JupiterSwap { .. } => {
-                return Err((
-                    axum::http::StatusCode::BAD_REQUEST,
+                return Err(bad_request(
                     "JupiterSwap alone is not supported; pair with wrap or unwrap".into(),
                 ));
             }
         }
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-        verify_tx_bytes(&raw, &state.program_id)?;
+        .map_err(|e| bad_request(e.to_string()))?;
+        verify_tx_bytes(&raw, &ctx.program_id)?;
         return Ok(Json(TxResponse {
             transaction_b64: b64_encode_tx(&raw),
         }));
     }
 
     if body.steps.len() != 2 {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            "only 1 or 2 steps supported".into(),
-        ));
+        return Err(bad_request("only 1 or 2 steps supported".into()));
     }
 
     let vtx = match (&body.steps[0], &body.steps[1]) {
         (ComposeStep::JupiterSwap { quote }, ComposeStep::Wrap { asset_mint, amount }) => {
-            let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+            let mint = ctx
+                .resolve_asset_mint(asset_mint.as_deref())
+                .map_err(bad_request)?;
             let swap_b64 = jupiter::fetch_swap_transaction_b64(state.as_ref(), quote, &user_str)
                 .await
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let jup = decode_versioned_tx_b64(&swap_b64)
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+                .map_err(|e| bad_request(e.to_string()))?;
+            let jup = decode_versioned_tx_b64(&swap_b64).map_err(|e| bad_request(e.to_string()))?;
             let wrap_raw = unsigned_wrap_tx_bytes(
-                state.rpc.as_ref(),
-                &state.program_id,
-                &state.vault_authority_seed,
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
                 &user,
                 &mint,
                 *amount,
             )
-            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let wrap_vtx: VersionedTransaction = bincode::deserialize(&wrap_raw)
-                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            let mut ixs = instructions_from_versioned_tx(state.rpc.as_ref(), &jup)
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+            .map_err(|e| bad_request(e.to_string()))?;
+            let wrap_vtx: VersionedTransaction = bincode::deserialize(&wrap_raw).map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("wrap tx decode: {e}"),
+                )
+            })?;
+            let mut ixs = instructions_from_versioned_tx(ctx.rpc.as_ref(), &jup)
+                .map_err(|e| bad_request(e.to_string()))?;
             ixs.extend(
-                instructions_from_versioned_tx(state.rpc.as_ref(), &wrap_vtx)
-                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?,
+                instructions_from_versioned_tx(ctx.rpc.as_ref(), &wrap_vtx)
+                    .map_err(|e| bad_request(e.to_string()))?,
             );
-            build_versioned_tx(state.rpc.as_ref(), &user, ixs, None)
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?
+            build_versioned_tx(ctx.rpc.as_ref(), &user, ixs, None)
+                .map_err(|e| bad_request(e.to_string()))?
         }
         (
             ComposeStep::Unwrap { asset_mint, amount },
             ComposeStep::JupiterSwap { quote },
         ) => {
-            let mint = resolve_asset_mint(state.as_ref(), asset_mint.as_deref())
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+            let mint = ctx
+                .resolve_asset_mint(asset_mint.as_deref())
+                .map_err(bad_request)?;
             let unwrap_raw = unsigned_unwrap_tx_bytes(
-                state.rpc.as_ref(),
-                &state.program_id,
-                &state.vault_authority_seed,
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
                 &user,
                 &mint,
                 *amount,
             )
-            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let unwrap_vtx: VersionedTransaction = bincode::deserialize(&unwrap_raw)
-                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(|e| bad_request(e.to_string()))?;
+            let unwrap_vtx: VersionedTransaction = bincode::deserialize(&unwrap_raw).map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("unwrap tx decode: {e}"),
+                )
+            })?;
             let swap_b64 = jupiter::fetch_swap_transaction_b64(state.as_ref(), quote, &user_str)
                 .await
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let jup = decode_versioned_tx_b64(&swap_b64)
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-            let mut ixs = instructions_from_versioned_tx(state.rpc.as_ref(), &unwrap_vtx)
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+                .map_err(|e| bad_request(e.to_string()))?;
+            let jup = decode_versioned_tx_b64(&swap_b64).map_err(|e| bad_request(e.to_string()))?;
+            let mut ixs = instructions_from_versioned_tx(ctx.rpc.as_ref(), &unwrap_vtx)
+                .map_err(|e| bad_request(e.to_string()))?;
             ixs.extend(
-                instructions_from_versioned_tx(state.rpc.as_ref(), &jup)
-                    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?,
+                instructions_from_versioned_tx(ctx.rpc.as_ref(), &jup)
+                    .map_err(|e| bad_request(e.to_string()))?,
             );
-            build_versioned_tx(state.rpc.as_ref(), &user, ixs, None)
-                .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?
+            build_versioned_tx(ctx.rpc.as_ref(), &user, ixs, None)
+                .map_err(|e| bad_request(e.to_string()))?
         }
         _ => {
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
+            return Err(bad_request(
                 "unsupported sequence: use [jupiter_swap, wrap] or [unwrap, jupiter_swap]".into(),
             ));
         }
     };
 
-    ensure_tx_targets_program(&vtx, &state.program_id)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    ensure_tx_targets_program(&vtx, &ctx.program_id).map_err(|e| bad_request(e.to_string()))?;
     let raw = bincode::serialize(&vtx)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(TxResponse {

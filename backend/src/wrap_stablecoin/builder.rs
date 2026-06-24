@@ -5,7 +5,7 @@ use wrap_stablecoin::state::{AssetConfig, AssetStatus, KLendConfig, VaultConfig}
 use wrap_stablecoin::utils::{
     home_surplus_amount, liability_to_underlying_amount, wrapped_to_underlying_amount,
 };
-use wrap_stablecoin::{UnwrapArgs, WrapArgs};
+use wrap_stablecoin::{AddAssetArgs, UnwrapArgs, UpdateAssetPolicyArgs, WrapArgs};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::hash::Hash;
@@ -363,8 +363,10 @@ pub fn unsigned_unwrap_tx_bytes(
 #[serde(rename_all = "camelCase")]
 pub struct VaultAssetView {
     pub mint: String,
+    pub token_decimals: u8,
     pub free_liquidity: u64,
     pub deployed_to_kamino: u64,
+    pub treasury_balance: u64,
     pub backing: u64,
     pub liability: u64,
     pub liability_underlying: u64,
@@ -378,9 +380,35 @@ pub struct VaultAssetView {
     pub redeem_allowed: bool,
     pub mint_haircut_bps: u16,
     pub redemption_haircut_bps: u16,
+    pub mint_cap: u64,
+    pub exposure_cap: u64,
+    pub min_liquidity_target: u64,
     pub net_liability: u64,
     pub asset_status: String,
     pub klend_enabled: bool,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultSummaryView {
+    pub admin: String,
+    pub paused: bool,
+    pub program_id: String,
+    pub vault_config: String,
+    pub wrapped_mint: String,
+    pub wrapped_decimals: u8,
+    pub assets: Vec<VaultAssetView>,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultMetaView {
+    pub admin: String,
+    pub paused: bool,
+    pub program_id: String,
+    pub vault_config: String,
+    pub wrapped_mint: String,
+    pub wrapped_decimals: u8,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -456,7 +484,7 @@ pub fn fetch_vault_assets(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_authority_seed: &Pubkey,
-) -> Result<Vec<VaultAssetView>> {
+) -> Result<VaultSummaryView> {
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
     let mut out = Vec::new();
     for mint in vault.registered_assets[..vault.asset_count as usize].iter() {
@@ -471,6 +499,7 @@ pub fn fetch_vault_assets(
         );
         let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
         let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
+        let treasury_balance = get_token_account_amount(rpc, &cfg.treasury_vault).unwrap_or(0);
         let deployed = klend
             .as_ref()
             .map(|k| k.total_liquidity_in_klend)
@@ -496,8 +525,10 @@ pub fn fetch_vault_assets(
         let max_redeemable = max_redeemable_wstable(&cfg, &vault, free_liquidity).unwrap_or(0);
         out.push(VaultAssetView {
             mint: mint.to_string(),
+            token_decimals: cfg.token_decimals,
             free_liquidity,
             deployed_to_kamino: deployed,
+            treasury_balance,
             backing: free_liquidity.saturating_add(deployed),
             liability,
             liability_underlying,
@@ -511,12 +542,187 @@ pub fn fetch_vault_assets(
             redeem_allowed: cfg.redeem_allowed(),
             mint_haircut_bps: cfg.mint_haircut_bps,
             redemption_haircut_bps: cfg.redemption_haircut_bps,
+            mint_cap: cfg.mint_cap,
+            exposure_cap: cfg.exposure_cap,
+            min_liquidity_target: cfg.min_liquidity_target,
             net_liability: liability,
             asset_status: asset_status_label(cfg.asset_status),
             klend_enabled: klend.is_some(),
         });
     }
-    Ok(out)
+    Ok(VaultSummaryView {
+        admin: vault.admin.to_string(),
+        paused: vault.paused,
+        program_id: program_id.to_string(),
+        vault_config: vault_config_key.to_string(),
+        wrapped_mint: vault.wrapped_mint.to_string(),
+        wrapped_decimals: vault.wrapped_decimals,
+        assets: out,
+    })
+}
+
+pub fn fetch_vault_meta(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+) -> Result<VaultMetaView> {
+    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    Ok(VaultMetaView {
+        admin: vault.admin.to_string(),
+        paused: vault.paused,
+        program_id: program_id.to_string(),
+        vault_config: vault_config_key.to_string(),
+        wrapped_mint: vault.wrapped_mint.to_string(),
+        wrapped_decimals: vault.wrapped_decimals,
+    })
+}
+
+pub fn parse_asset_status(s: &str) -> Result<AssetStatus> {
+    match s.trim().to_lowercase().as_str() {
+        "active" => Ok(AssetStatus::Active),
+        "paused" => Ok(AssetStatus::Paused),
+        "mint_only" | "mintonly" => Ok(AssetStatus::MintOnly),
+        "redeem_only" | "redeemonly" => Ok(AssetStatus::RedeemOnly),
+        "deprecated" => Ok(AssetStatus::Deprecated),
+        other => Err(anyhow!("unknown assetStatus: {other}")),
+    }
+}
+
+pub fn add_asset_ix_data(mint_enabled: bool, redeem_enabled: bool) -> Result<Vec<u8>> {
+    let mut data = anchor_sighash("global", "add_asset").to_vec();
+    data.extend(
+        AddAssetArgs {
+            mint_enabled,
+            redeem_enabled,
+        }
+        .try_to_vec()
+        .map_err(|e| anyhow!("borsh add_asset args: {e}"))?,
+    );
+    Ok(data)
+}
+
+pub fn update_asset_policy_ix_data(args: &UpdateAssetPolicyArgs) -> Result<Vec<u8>> {
+    let mut data = anchor_sighash("global", "update_asset_policy").to_vec();
+    data.extend(
+        args.try_to_vec()
+            .map_err(|e| anyhow!("borsh update_asset_policy args: {e}"))?,
+    );
+    Ok(data)
+}
+
+pub fn build_add_asset_instruction(
+    program_id: &Pubkey,
+    admin: &Pubkey,
+    vault_config_key: &Pubkey,
+    vault_authority_key: &Pubkey,
+    underlying_mint: &Pubkey,
+    asset_config_key: &Pubkey,
+    token_vault_key: &Pubkey,
+    treasury_vault_key: &Pubkey,
+    mint_enabled: bool,
+    redeem_enabled: bool,
+) -> Result<Instruction> {
+    let data = add_asset_ix_data(mint_enabled, redeem_enabled)?;
+    Ok(Instruction {
+        program_id: *program_id,
+        accounts: vec![
+            AccountMeta::new(*admin, true),
+            AccountMeta::new(*vault_config_key, false),
+            AccountMeta::new_readonly(*vault_authority_key, false),
+            AccountMeta::new_readonly(*underlying_mint, false),
+            AccountMeta::new(*asset_config_key, false),
+            AccountMeta::new(*token_vault_key, false),
+            AccountMeta::new(*treasury_vault_key, false),
+            AccountMeta::new_readonly(spl_token_program_id(), false),
+            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        ],
+        data,
+    })
+}
+
+pub fn build_update_asset_policy_instruction(
+    program_id: &Pubkey,
+    admin: &Pubkey,
+    vault_config_key: &Pubkey,
+    asset_config_key: &Pubkey,
+    args: &UpdateAssetPolicyArgs,
+) -> Result<Instruction> {
+    let data = update_asset_policy_ix_data(args)?;
+    Ok(Instruction {
+        program_id: *program_id,
+        accounts: vec![
+            AccountMeta::new(*admin, true),
+            AccountMeta::new_readonly(*vault_config_key, false),
+            AccountMeta::new(*asset_config_key, false),
+        ],
+        data,
+    })
+}
+
+pub fn unsigned_add_asset_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    mint_enabled: bool,
+    redeem_enabled: bool,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    if vault.admin != *admin {
+        return Err(anyhow!("signer is not vault admin"));
+    }
+    if vault.has_asset(underlying_mint) {
+        return Err(anyhow!("asset already registered: {underlying_mint}"));
+    }
+    let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
+    let (asset_config_key, _) = asset_config(program_id, &vault_config_key, underlying_mint);
+    let (token_vault_key, _) = crate::wrap_stablecoin::pda::token_vault(program_id, &asset_config_key);
+    let (treasury_vault_key, _) =
+        crate::wrap_stablecoin::pda::treasury_vault(program_id, &asset_config_key);
+
+    let ix = build_add_asset_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        underlying_mint,
+        &asset_config_key,
+        &token_vault_key,
+        &treasury_vault_key,
+        mint_enabled,
+        redeem_enabled,
+    )?;
+
+    let tx = build_versioned_tx(rpc, admin, vec![ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_update_asset_policy_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    args: &UpdateAssetPolicyArgs,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    if vault.admin != *admin {
+        return Err(anyhow!("signer is not vault admin"));
+    }
+    if !vault.has_asset(underlying_mint) {
+        return Err(anyhow!("asset not registered: {underlying_mint}"));
+    }
+    let (asset_config_key, _) = asset_config(program_id, &vault_config_key, underlying_mint);
+    let ix = build_update_asset_policy_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &asset_config_key,
+        args,
+    )?;
+    let tx = build_versioned_tx(rpc, admin, vec![ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
 fn fetch_klend_config_optional(

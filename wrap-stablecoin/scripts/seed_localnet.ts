@@ -225,7 +225,8 @@ function printEnvBlock(result: SeedResult) {
   console.log(`TTT_MINT=${TTT_MINT.toBase58()}`);
   console.log(`DEFAULT_ASSET_MINT=${USDC_MINT.toBase58()}`);
   console.log("NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080");
-  console.log("NEXT_PUBLIC_SOLANA_NETWORK=localnet");
+  console.log("NEXT_PUBLIC_DEFAULT_NETWORK=localnet");
+  console.log("# Backend: set LOCALNET_* vars in backend/.env (see backend/.env.example)");
   console.log("──────────────────────────────────────────────────────────────────────");
   console.log("");
   console.log(`Validator RPC:  ${RPC_URL}  (pid file: .localnet/validator.pid)`);

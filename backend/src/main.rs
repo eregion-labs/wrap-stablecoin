@@ -19,6 +19,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let state = Arc::new(AppState::from_env()?);
+    info!(
+        networks = ?state.configured_networks(),
+        "wrap-stablecoin API listening (multi-network; cluster chosen via x-solana-network)"
+    );
     let app = app(state);
 
     let host = std::env::var("BIND_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

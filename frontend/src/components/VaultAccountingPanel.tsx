@@ -1,0 +1,99 @@
+"use client";
+
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Typography from "@mui/material/Typography";
+import { mintLabel } from "@/lib/mints";
+import { formatTokenAmount } from "@/lib/tokenAmount";
+import type { VaultAsset } from "@/types/vault";
+
+type Props = {
+  assets: VaultAsset[];
+  wrappedDecimals: number;
+};
+
+function AmountCell({ amount, decimals }: { amount: number; decimals: number }) {
+  return (
+    <TableCell align="right" sx={{ fontFamily: "monospace", whiteSpace: "nowrap" }}>
+      {formatTokenAmount(amount, decimals)}
+    </TableCell>
+  );
+}
+
+function AssetRow({
+  asset,
+  wrappedDecimals,
+}: {
+  asset: VaultAsset;
+  wrappedDecimals: number;
+}) {
+  const d = asset.tokenDecimals;
+  return (
+    <TableRow>
+      <TableCell>
+        <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+          <Typography variant="body2">{mintLabel(asset.mint)}</Typography>
+          {!asset.mintAllowed && <Chip label="mint off" size="small" />}
+          {!asset.redeemAllowed && <Chip label="redeem off" size="small" color="warning" />}
+          {asset.klendEnabled && <Chip label="Kamino" size="small" variant="outlined" />}
+        </Stack>
+      </TableCell>
+      <AmountCell amount={asset.freeLiquidity} decimals={d} />
+      <AmountCell amount={asset.deployedToKamino} decimals={d} />
+      <AmountCell amount={asset.treasuryBalance} decimals={d} />
+      <AmountCell amount={asset.kaminoSurplus} decimals={d} />
+      <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+        {formatTokenAmount(asset.liability, wrappedDecimals)}
+      </TableCell>
+      <AmountCell amount={asset.liabilityUnderlying} decimals={d} />
+      <AmountCell amount={asset.homeSurplus} decimals={d} />
+      <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+        {formatTokenAmount(asset.maxRedeemable, wrappedDecimals)}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+export default function VaultAccountingPanel({ assets, wrappedDecimals }: Props) {
+  if (assets.length === 0) {
+    return null;
+  }
+
+  return (
+    <Box sx={{ mb: 3, p: 2, bgcolor: "action.hover", borderRadius: 1, overflowX: "auto" }}>
+      <Typography variant="subtitle2" gutterBottom>
+        Pool accounting
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+        Home vault = free liquidity for unwrap. Treasury = harvested / swept yield sitting in
+        treasury vault. Kamino surplus requires live reserve mark (shown as 0 until exposed).
+      </Typography>
+      <Table size="small" sx={{ minWidth: 720 }}>
+        <TableHead>
+          <TableRow>
+            <TableCell>Asset</TableCell>
+            <TableCell align="right">Home vault</TableCell>
+            <TableCell align="right">In Kamino</TableCell>
+            <TableCell align="right">Treasury</TableCell>
+            <TableCell align="right">Kamino surplus</TableCell>
+            <TableCell align="right">Liability (wStable)</TableCell>
+            <TableCell align="right">Liability (underlying)</TableCell>
+            <TableCell align="right">Home surplus</TableCell>
+            <TableCell align="right">Max redeemable</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {assets.map((asset) => (
+            <AssetRow key={asset.mint} asset={asset} wrappedDecimals={wrappedDecimals} />
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  );
+}

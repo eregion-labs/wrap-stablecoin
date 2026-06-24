@@ -1,13 +1,13 @@
+import { useNetworkStore } from "@/stores/networkStore";
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://127.0.0.1:8080";
 
 export type SolanaNetworkHeader = "localnet" | "devnet" | "mainnet";
 
+/** Cluster header sent to the backend — driven by the in-app network switch. */
 export function solanaNetworkHeader(): SolanaNetworkHeader {
-  const n = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet").toLowerCase();
-  if (n === "mainnet" || n === "mainnet-beta") return "mainnet";
-  if (n === "localnet") return "localnet";
-  return "devnet";
+  return useNetworkStore.getState().network;
 }
 
 export async function apiGet<TRes>(path: string): Promise<TRes> {

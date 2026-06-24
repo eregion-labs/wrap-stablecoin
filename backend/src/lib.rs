@@ -13,7 +13,7 @@ pub mod routes;
 pub mod wrap_stablecoin;
 
 use crate::app_state::AppState;
-use crate::routes::{guard, ping, tx, vault};
+use crate::routes::{admin, guard, ping, tx, vault};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -23,7 +23,10 @@ use crate::routes::{guard, ping, tx, vault};
         tx::redeem_tx,
         tx::preview_tx,
         tx::compose_tx,
+        admin::add_asset_tx,
+        admin::update_asset_policy_tx,
         vault::vault_assets,
+        vault::vault_meta,
         vault::redeem_quote_handler,
     ),
     components(schemas(
@@ -34,9 +37,13 @@ use crate::routes::{guard, ping, tx, vault};
         tx::TxResponse,
         tx::PreviewResponse,
         tx::ComposeStep,
+        admin::AddAssetRequest,
+        admin::UpdateAssetPolicyRequest,
         vault::VaultAssetsResponse,
+        vault::VaultMetaResponse,
         vault::RedeemQuoteQuery,
         crate::wrap_stablecoin::VaultAssetView,
+        crate::wrap_stablecoin::VaultMetaView,
         crate::wrap_stablecoin::RedeemQuoteView,
     )),
     tags(
@@ -54,14 +61,15 @@ struct ApiDoc;
 pub fn app(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::very_permissive();
 
-    // Guarded `/v1/tx/*` routes: every request must carry a matching
-    // `x-solana-network` header so we never hand a client a transaction
-    // built for a cluster it didn't ask for.
+    // Guarded routes: every request must carry `x-solana-network` so the backend
+    // builds transactions against the cluster the client selected.
     let tx_router: Router<Arc<AppState>> = Router::new()
         .route("/issue", post(tx::issue_tx))
         .route("/redeem", post(tx::redeem_tx))
         .route("/preview", post(tx::preview_tx))
         .route("/compose", post(tx::compose_tx))
+        .route("/admin/add-asset", post(admin::add_asset_tx))
+        .route("/admin/update-asset-policy", post(admin::update_asset_policy_tx))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             guard::network_guard,
@@ -69,6 +77,7 @@ pub fn app(state: Arc<AppState>) -> Router {
 
     let vault_router: Router<Arc<AppState>> = Router::new()
         .route("/assets", axum::routing::get(vault::vault_assets))
+        .route("/meta", axum::routing::get(vault::vault_meta))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             guard::network_guard,
@@ -88,6 +97,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/v1/tx/preview", post(tx::preview_tx))
         .route("/v1/tx/compose", post(tx::compose_tx))
         .route("/v1/vault/assets", axum::routing::get(vault::vault_assets))
+        .route("/v1/vault/meta", axum::routing::get(vault::vault_meta))
         .route("/v1/quote/redeem", axum::routing::get(vault::redeem_quote_handler))
         .split_for_parts();
 
