@@ -1,26 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useWallet } from "@solana/wallet-adapter-react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import AssetPolicyTable from "@/components/admin/AssetPolicyTable";
+import AssetPolicyTable from "@/components/AssetPolicyTable";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
-import { useVaultAdmin } from "@/hooks/useVaultAdmin";
+import { selectVaultLoading } from "@/stores/selectors";
+import { useVaultStore } from "@/stores/vaultStore";
 
-export default function AdminPage() {
-  const router = useRouter();
-  const { connected } = useWallet();
-  const { isAdmin, loading, summary, meta, error, refresh } = useVaultAdmin();
-
-  useEffect(() => {
-    if (!loading && (!connected || !isAdmin)) {
-      router.replace("/");
-    }
-  }, [loading, connected, isAdmin, router]);
+export default function PolicyPage() {
+  const status = useVaultStore((s) => s.status);
+  const error = useVaultStore((s) => s.error);
+  const summary = useVaultStore((s) => s.summary);
+  const loading = selectVaultLoading(status);
 
   if (loading) {
     return (
@@ -28,10 +21,6 @@ export default function AdminPage() {
         <CircularProgress size={32} />
       </Stack>
     );
-  }
-
-  if (!isAdmin) {
-    return null;
   }
 
   return (
@@ -43,11 +32,7 @@ export default function AdminPage() {
           </Typography>
         </Box>
       )}
-      <AssetPolicyTable
-        summary={summary}
-        paused={meta?.paused ?? false}
-        onRefresh={refresh}
-      />
+      <AssetPolicyTable />
       {summary && summary.assets.length > 0 && (
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, pb: 5 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>

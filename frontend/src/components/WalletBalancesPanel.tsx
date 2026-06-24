@@ -1,6 +1,7 @@
 "use client";
 
 import Box from "@mui/material/Box";
+import { cardSx } from "@/theme/tokens";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -38,7 +39,7 @@ export default function WalletBalancesPanel({ summary, walletBalances, connected
   ];
 
   return (
-    <Box sx={{ mb: 3, p: 2, bgcolor: "action.hover", borderRadius: 1 }}>
+    <Box sx={{ ...cardSx, overflowX: "visible" }}>
       <Typography variant="subtitle2" gutterBottom>
         Your wallet
       </Typography>

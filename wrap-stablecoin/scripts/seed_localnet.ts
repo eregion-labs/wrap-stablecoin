@@ -1,5 +1,5 @@
 /**
- * Idempotent localnet vault bootstrap: initialize → add_asset(USDC) → enable_klend.
+ * Idempotent localnet vault bootstrap: fund admin + payer → initialize → add_asset(USDC) → enable_klend.
  * Invoked by `anchor run local` after the test-validator is up.
  */
 
@@ -12,7 +12,9 @@ import { WrapStablecoin } from "../target/types/wrap_stablecoin";
 import {
   bootstrapDummyMints,
   CCC_MINT,
+  fundLocalnetWallets,
   LOCAL_ADMIN_DUMMY_SUPPLY,
+  LOCAL_SOL_TARGET,
   TTT_MINT,
 } from "../tests/dummy_tokens";
 import {
@@ -37,6 +39,10 @@ const WALLET_PATH =
   process.env.ANCHOR_WALLET ||
   process.env.ANCHOR_WALLET_PATH ||
   ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json";
+
+const PAYER_WALLET_PATH =
+  process.env.PAYER_WALLET_PATH ||
+  ".secrets/depxPDoQBS9JXgwVumiJeuaaSU9b8FaCRwEVTaGD1v9.json";
 
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const KLEND_PROGRAM_ID = new PublicKey(
@@ -78,11 +84,28 @@ export type SeedResult = {
   collateralVault: string;
 };
 
+function loadKeypair(path: string): Keypair {
+  const walletSecret = JSON.parse(fs.readFileSync(path, "utf8"));
+  return Keypair.fromSecretKey(Uint8Array.from(walletSecret));
+}
+
 export async function seedLocalnet(): Promise<SeedResult> {
-  const walletSecret = JSON.parse(fs.readFileSync(WALLET_PATH, "utf8"));
-  const authority = Keypair.fromSecretKey(Uint8Array.from(walletSecret));
+  const authority = loadKeypair(WALLET_PATH);
+  const payer = loadKeypair(PAYER_WALLET_PATH);
 
   const connection = new Connection(RPC_URL, "confirmed");
+
+  console.log(
+    `[seed] fund admin + payer to ${LOCAL_SOL_TARGET / 1e9} SOL each…`,
+  );
+  await fundLocalnetWallets(
+    connection,
+    [authority.publicKey, payer.publicKey],
+    LOCAL_SOL_TARGET,
+  );
+  console.log(`[seed]   admin ${authority.publicKey.toBase58()}`);
+  console.log(`[seed]   payer ${payer.publicKey.toBase58()}`);
+
   const provider = new anchor.AnchorProvider(
     connection,
     new anchor.Wallet(authority),

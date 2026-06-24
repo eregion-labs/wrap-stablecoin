@@ -1,3 +1,7 @@
 # frontend
 
-Next.js 16 + MUI + Wallet Standard / Solana Wallet Adapter + `@solana/web3.js`. Set `NEXT_PUBLIC_API_BASE` (and optional `NEXT_PUBLIC_SOLANA_RPC_URL` / `NEXT_PUBLIC_SOLANA_NETWORK`) in `.env.local`, then `npm install` and `npm run dev` (port **3001**).
+Public-facing Next.js app for wStable wrap and redeem. Users connect a wallet to sign transactions.
+
+Set `NEXT_PUBLIC_API_BASE` in `.env.local` (default `http://127.0.0.1:8080`), then `pnpm install` and `pnpm dev` (port **3001**).
+
+Operator tools (mint dashboard, collateral policy) live in **`admin-frontend/`** (port **3002**) and use backend-signed admin transactions — no wallet in the browser.

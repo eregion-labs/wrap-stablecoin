@@ -6,16 +6,11 @@ export const MINT_LABELS: Record<string, string> = {
   tttv7GkTAwb1pE6J2Gb3xghGcTXfxrk5B7cM8G2QNWR: "TTT",
 };
 
-/** Token chip colors from wStable design language. */
-export const TOKEN_CHIP_COLORS: Record<string, string> = {
-  USDC: "#2775CA",
-  USDT: "#26A17B",
-  wStable: "#9945FF",
-};
-
-export function tokenChipColor(label: string): string | undefined {
-  return TOKEN_CHIP_COLORS[label];
-}
+/** Collateral assets listed for registration / policy. */
+export const ADMIN_COLLATERAL_MINTS = [
+  "ccc58277Rfo3mCue4aHD3RcUfQzw8PoNSXimfNMnDqu",
+  "tttv7GkTAwb1pE6J2Gb3xghGcTXfxrk5B7cM8G2QNWR",
+] as const;
 
 export function mintLabel(mint: string): string {
   return MINT_LABELS[mint] ?? `${mint.slice(0, 4)}…${mint.slice(-4)}`;

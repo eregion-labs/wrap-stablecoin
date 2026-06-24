@@ -4,15 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
+import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import WalletNavButton from "@/components/WalletNavButton";
 import NetworkSwitch from "@/components/NetworkSwitch";
 import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
 import { solPurple } from "@/theme/tokens";
 
 export default function AppHeader() {
+  const pathname = usePathname();
   const network = useNetworkStore((s) => s.network);
 
   return (
@@ -32,18 +34,37 @@ export default function AppHeader() {
                 textDecoration: "none",
               }}
             >
-              wStable
+              wStable Admin
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{ display: { xs: "none", sm: "block" } }}
             >
-              Issuance & redemption · {appNetworkLabel(network)}
+              {pathname.startsWith("/policy")
+                ? "Collateral policy"
+                : `Mint operations · ${appNetworkLabel(network)}`}
             </Typography>
           </Box>
           <NetworkSwitch />
-          <WalletNavButton />
+          <Stack direction="row" spacing={1}>
+            <Button
+              component={Link}
+              href="/"
+              size="small"
+              variant={pathname === "/" ? "contained" : "text"}
+            >
+              Mint
+            </Button>
+            <Button
+              component={Link}
+              href="/policy"
+              size="small"
+              variant={pathname.startsWith("/policy") ? "contained" : "text"}
+            >
+              Policy
+            </Button>
+          </Stack>
         </Toolbar>
       </Container>
     </AppBar>

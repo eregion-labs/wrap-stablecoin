@@ -7,6 +7,9 @@ use anyhow::{bail, Context, Result};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Keypair;
+
+use crate::admin_wallet::load_keypair_arc;
 
 /// Cluster selected by the frontend via `x-solana-network`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,7 +28,7 @@ impl SolanaNetwork {
         }
     }
 
-    fn env_prefix(self) -> &'static str {
+    pub fn env_prefix(self) -> &'static str {
         match self {
             SolanaNetwork::Mainnet => "MAINNET",
             SolanaNetwork::Devnet => "DEVNET",
@@ -83,6 +86,8 @@ pub struct NetworkContext {
     /// `authority` pubkey used in `vault_config` PDA seeds.
     pub vault_authority_seed: Pubkey,
     pub default_asset_mint: String,
+    /// Vault admin signer for server-side admin operations (optional).
+    pub admin_keypair: Option<Arc<Keypair>>,
 }
 
 impl NetworkContext {
@@ -186,6 +191,7 @@ impl AppState {
 
         let default_asset_mint = Self::env_opt(&format!("{prefix}_DEFAULT_ASSET_MINT"))
             .unwrap_or_else(|| "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string());
+        let admin_keypair_path = Self::env_opt(&format!("{prefix}_ADMIN_KEYPAIR_PATH"));
 
         Self::build_context(
             network,
@@ -193,6 +199,7 @@ impl AppState {
             program_id.unwrap(),
             vault_authority.unwrap(),
             default_asset_mint,
+            admin_keypair_path,
         )
         .map(Some)
     }
@@ -214,6 +221,7 @@ impl AppState {
             .context("VAULT_AUTHORITY required when SOLANA_RPC_URL is set")?;
         let default_asset_mint = Self::env_opt("DEFAULT_ASSET_MINT")
             .unwrap_or_else(|| "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string());
+        let admin_keypair_path = Self::env_opt("ADMIN_KEYPAIR_PATH");
 
         let ctx = Self::build_context(
             network,
@@ -221,6 +229,7 @@ impl AppState {
             program_id,
             vault_authority,
             default_asset_mint,
+            admin_keypair_path,
         )?;
         Ok(Some((network, ctx)))
     }
@@ -231,6 +240,7 @@ impl AppState {
         program_id: String,
         vault_authority: String,
         default_asset_mint: String,
+        admin_keypair_path: Option<String>,
     ) -> Result<NetworkContext> {
         let rpc = Arc::new(RpcClient::new_with_commitment(
             rpc_url,
@@ -240,6 +250,10 @@ impl AppState {
             Pubkey::from_str(&program_id).context(format!("invalid {} program id", network))?;
         let vault_authority_seed = Pubkey::from_str(&vault_authority)
             .context(format!("invalid {} vault authority", network))?;
+        let admin_keypair = admin_keypair_path
+            .map(|p| load_keypair_arc(p))
+            .transpose()
+            .context(format!("load {network} admin keypair"))?;
 
         Ok(NetworkContext {
             network,
@@ -247,6 +261,7 @@ impl AppState {
             program_id,
             vault_authority_seed,
             default_asset_mint,
+            admin_keypair,
         })
     }
 }

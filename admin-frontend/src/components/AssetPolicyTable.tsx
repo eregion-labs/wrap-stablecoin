@@ -1,8 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { VersionedTransaction } from "@solana/web3.js";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -20,25 +17,11 @@ import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import Paper from "@mui/material/Paper";
 import { useSnackbar } from "notistack";
-import { apiPost } from "@/lib/api";
-import { ADMIN_COLLATERAL_MINTS, mintLabel, shortMint } from "@/lib/mints";
-import { sendWithBlockhashRefresh } from "@/lib/sendWithRefresh";
-import type { AssetStatus, VaultAsset, VaultSummary } from "@/types/vault";
-
-type TxResponse = { transactionB64: string };
-
-type PolicyDraft = {
-  mint: string;
-  registered: boolean;
-  mintEnabled: boolean;
-  redeemEnabled: boolean;
-  mintHaircutBps: string;
-  redemptionHaircutBps: string;
-  mintCap: string;
-  exposureCap: string;
-  minLiquidityTarget: string;
-  assetStatus: AssetStatus;
-};
+import { mintLabel, shortMint } from "@/lib/mints";
+import { selectRowMints } from "@/stores/selectors";
+import { usePolicyStore } from "@/stores/policyStore";
+import type { AssetStatus } from "@/types/vault";
+import { useVaultStore } from "@/stores/vaultStore";
 
 const STATUS_OPTIONS: AssetStatus[] = [
   "active",
@@ -48,160 +31,41 @@ const STATUS_OPTIONS: AssetStatus[] = [
   "deprecated",
 ];
 
-function assetToDraft(mint: string, asset?: VaultAsset): PolicyDraft {
-  return {
-    mint,
-    registered: asset != null,
-    mintEnabled: asset?.mintEnabled ?? true,
-    redeemEnabled: asset?.redeemEnabled ?? true,
-    mintHaircutBps: String(asset?.mintHaircutBps ?? 0),
-    redemptionHaircutBps: String(asset?.redemptionHaircutBps ?? 0),
-    mintCap: String(asset?.mintCap ?? 0),
-    exposureCap: String(asset?.exposureCap ?? 0),
-    minLiquidityTarget: String(asset?.minLiquidityTarget ?? 0),
-    assetStatus: (asset?.assetStatus as AssetStatus) ?? "active",
-  };
-}
-
-type Props = {
-  summary: VaultSummary | null;
-  paused: boolean;
-  onRefresh: () => Promise<void>;
-};
-
-export default function AssetPolicyTable({ summary, paused, onRefresh }: Props) {
-  const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+export default function AssetPolicyTable() {
   const { enqueueSnackbar } = useSnackbar();
-  const [busyMint, setBusyMint] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, PolicyDraft>>({});
 
-  const assetByMint = useMemo(() => {
-    const map = new Map<string, VaultAsset>();
-    for (const a of summary?.assets ?? []) {
-      map.set(a.mint, a);
-    }
-    return map;
-  }, [summary]);
+  const summary = useVaultStore((s) => s.summary);
+  const meta = useVaultStore((s) => s.meta);
+  const refresh = useVaultStore((s) => s.refresh);
 
-  const rowMints = useMemo(() => {
-    const seen = new Set<string>();
-    const mints: string[] = [];
-    for (const m of ADMIN_COLLATERAL_MINTS) {
-      if (!seen.has(m)) {
-        seen.add(m);
-        mints.push(m);
-      }
-    }
-    for (const a of summary?.assets ?? []) {
-      if (!seen.has(a.mint)) {
-        seen.add(a.mint);
-        mints.push(a.mint);
-      }
-    }
-    return mints;
-  }, [summary]);
+  const drafts = usePolicyStore((s) => s.drafts);
+  const busyMint = usePolicyStore((s) => s.busyMint);
+  const updateDraft = usePolicyStore((s) => s.updateDraft);
+  const registerAsset = usePolicyStore((s) => s.registerAsset);
+  const savePolicy = usePolicyStore((s) => s.savePolicy);
 
-  useEffect(() => {
-    const next: Record<string, PolicyDraft> = {};
-    for (const mint of rowMints) {
-      next[mint] = assetToDraft(mint, assetByMint.get(mint));
-    }
-    setDrafts(next);
-  }, [rowMints, assetByMint]);
+  const rowMints = selectRowMints(summary);
+  const paused = meta?.paused ?? false;
 
-  const updateDraft = useCallback((mint: string, patch: Partial<PolicyDraft>) => {
-    setDrafts((prev) => ({
-      ...prev,
-      [mint]: { ...prev[mint], ...patch },
-    }));
-  }, []);
-
-  const submitTx = async (buildTx: () => Promise<VersionedTransaction>) => {
-    if (!publicKey) throw new Error("Wallet not connected");
-    return sendWithBlockhashRefresh({
-      connection,
-      sendTransaction,
-      buildTx,
-      onBlockhashExpired: () =>
-        enqueueSnackbar("Blockhash expired — please re-approve the refreshed transaction", {
-          variant: "warning",
-        }),
-    });
-  };
-
-  const registerAsset = async (mint: string) => {
-    if (!publicKey) return;
-    const draft = drafts[mint];
-    if (!draft) return;
-    setBusyMint(mint);
-    try {
-      const sig = await submitTx(async () => {
-        const { transactionB64 } = await apiPost<
-          { admin: string; assetMint: string; mintEnabled: boolean; redeemEnabled: boolean },
-          TxResponse
-        >("/v1/tx/admin/add-asset", {
-          admin: publicKey.toBase58(),
-          assetMint: mint,
-          mintEnabled: draft.mintEnabled,
-          redeemEnabled: draft.redeemEnabled,
-        });
-        return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
-      });
-      enqueueSnackbar(`Registered ${mintLabel(mint)} (${sig.slice(0, 8)}…)`, {
+  const onRegister = async (mint: string) => {
+    const result = await registerAsset(mint);
+    if (result.ok) {
+      enqueueSnackbar(`Registered ${mintLabel(mint)} (${result.data.signature.slice(0, 8)}…)`, {
         variant: "success",
       });
-      await onRefresh();
-    } catch (e) {
-      enqueueSnackbar((e as Error).message, { variant: "error" });
-    } finally {
-      setBusyMint(null);
+    } else {
+      enqueueSnackbar(result.error, { variant: "error" });
     }
   };
 
-  const savePolicy = async (mint: string) => {
-    if (!publicKey) return;
-    const draft = drafts[mint];
-    if (!draft) return;
-    setBusyMint(mint);
-    try {
-      const sig = await submitTx(async () => {
-        const { transactionB64 } = await apiPost<
-          {
-            admin: string;
-            assetMint: string;
-            mintEnabled: boolean;
-            redeemEnabled: boolean;
-            mintHaircutBps: number;
-            redemptionHaircutBps: number;
-            mintCap: number;
-            exposureCap: number;
-            minLiquidityTarget: number;
-            assetStatus: string;
-          },
-          TxResponse
-        >("/v1/tx/admin/update-asset-policy", {
-          admin: publicKey.toBase58(),
-          assetMint: mint,
-          mintEnabled: draft.mintEnabled,
-          redeemEnabled: draft.redeemEnabled,
-          mintHaircutBps: Number(draft.mintHaircutBps) || 0,
-          redemptionHaircutBps: Number(draft.redemptionHaircutBps) || 0,
-          mintCap: Number(draft.mintCap) || 0,
-          exposureCap: Number(draft.exposureCap) || 0,
-          minLiquidityTarget: Number(draft.minLiquidityTarget) || 0,
-          assetStatus: draft.assetStatus,
-        });
-        return VersionedTransaction.deserialize(Buffer.from(transactionB64, "base64"));
-      });
-      enqueueSnackbar(`Policy saved for ${mintLabel(mint)} (${sig.slice(0, 8)}…)`, {
+  const onSavePolicy = async (mint: string) => {
+    const result = await savePolicy(mint);
+    if (result.ok) {
+      enqueueSnackbar(`Policy saved for ${mintLabel(mint)} (${result.data.signature.slice(0, 8)}…)`, {
         variant: "success",
       });
-      await onRefresh();
-    } catch (e) {
-      enqueueSnackbar((e as Error).message, { variant: "error" });
-    } finally {
-      setBusyMint(null);
+    } else {
+      enqueueSnackbar(result.error, { variant: "error" });
     }
   };
 
@@ -214,10 +78,10 @@ export default function AssetPolicyTable({ summary, paused, onRefresh }: Props) 
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
             Register CCC and TTT as vault collateral and configure mint/redeem flags, haircuts,
-            caps, and status. Changes require an admin signature.
+            caps, and status. The backend signs and submits with the vault admin keypair.
           </Typography>
         </Box>
-        <Button variant="outlined" size="small" onClick={() => onRefresh()} disabled={busyMint != null}>
+        <Button variant="outlined" size="small" onClick={() => refresh()} disabled={busyMint != null}>
           Refresh
         </Button>
       </Stack>
@@ -363,8 +227,8 @@ export default function AssetPolicyTable({ summary, paused, onRefresh }: Props) 
                       <Button
                         size="small"
                         variant="contained"
-                        disabled={isBusy || !publicKey}
-                        onClick={() => savePolicy(mint)}
+                        disabled={isBusy}
+                        onClick={() => onSavePolicy(mint)}
                       >
                         {isBusy ? "…" : "Save policy"}
                       </Button>
@@ -373,8 +237,8 @@ export default function AssetPolicyTable({ summary, paused, onRefresh }: Props) 
                         size="small"
                         variant="contained"
                         color="secondary"
-                        disabled={isBusy || !publicKey}
-                        onClick={() => registerAsset(mint)}
+                        disabled={isBusy}
+                        onClick={() => onRegister(mint)}
                       >
                         {isBusy ? "…" : "Register"}
                       </Button>

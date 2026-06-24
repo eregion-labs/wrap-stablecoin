@@ -6,6 +6,8 @@ import WalletBalancesPanel from "@/components/WalletBalancesPanel";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
@@ -16,6 +18,7 @@ import { apiGet, apiPost } from "@/lib/api";
 import { sendWithBlockhashRefresh } from "@/lib/sendWithRefresh";
 import { fetchWalletBalances } from "@/lib/walletBalances";
 import { mintLabel } from "@/lib/mints";
+import { cardSx } from "@/theme/tokens";
 import { useNetworkStore } from "@/stores/networkStore";
 import type { RedeemQuote, VaultSummary } from "@/types/vault";
 
@@ -27,7 +30,7 @@ const DEFAULT_ASSET_MINT =
 
 export default function WrapRedeemPanel() {
   const { connection } = useConnection();
-  const { publicKey, sendTransaction, connected } = useWallet();
+  const { publicKey, signTransaction, connected } = useWallet();
   const { enqueueSnackbar } = useSnackbar();
   const network = useNetworkStore((s) => s.network);
 
@@ -38,6 +41,7 @@ export default function WrapRedeemPanel() {
   const [walletBalances, setWalletBalances] = useState<Map<string, number>>(new Map());
   const [redeemQuote, setRedeemQuote] = useState<RedeemQuote | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [tab, setTab] = useState(0);
 
   const address = publicKey?.toBase58();
   const vaultAssets = vaultSummary?.assets ?? [];
@@ -122,6 +126,10 @@ export default function WrapRedeemPanel() {
       enqueueSnackbar("Invalid amount", { variant: "error" });
       return;
     }
+    if (!signTransaction) {
+      enqueueSnackbar("Wallet does not support signing transactions", { variant: "error" });
+      return;
+    }
     setBusy("issue");
     try {
       const buildTx = async () => {
@@ -133,7 +141,7 @@ export default function WrapRedeemPanel() {
       };
       const signature = await sendWithBlockhashRefresh({
         connection,
-        sendTransaction,
+        signTransaction,
         buildTx,
         onBlockhashExpired: () =>
           enqueueSnackbar("Blockhash expired — please re-approve the refreshed transaction", {
@@ -155,6 +163,10 @@ export default function WrapRedeemPanel() {
       enqueueSnackbar("Invalid amount", { variant: "error" });
       return;
     }
+    if (!signTransaction) {
+      enqueueSnackbar("Wallet does not support signing transactions", { variant: "error" });
+      return;
+    }
     setBusy("redeem");
     try {
       const buildTx = async () => {
@@ -166,7 +178,7 @@ export default function WrapRedeemPanel() {
       };
       const signature = await sendWithBlockhashRefresh({
         connection,
-        sendTransaction,
+        signTransaction,
         buildTx,
         onBlockhashExpired: () =>
           enqueueSnackbar("Blockhash expired — please re-approve the refreshed transaction", {
@@ -261,87 +273,102 @@ export default function WrapRedeemPanel() {
           connected={connected}
         />
 
-        <Stack spacing={1}>
-          <TextField
-            select
-            label="Collateral asset"
-            value={assetMint}
-            onChange={(e) => setAssetMint(e.target.value)}
-            fullWidth
-          >
-            {vaultAssets.length === 0 ? (
-              <MenuItem value={assetMint}>{mintLabel(assetMint)}</MenuItem>
-            ) : (
-              vaultAssets.map((a) => (
-                <MenuItem key={a.mint} value={a.mint}>
-                  {mintLabel(a.mint)}
-                </MenuItem>
-              ))
-            )}
-          </TextField>
-          <Typography variant="subtitle1">Issue (wrap)</Typography>
-          {selectedAsset && !selectedAsset.mintAllowed && (
-            <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
+        <TextField
+          select
+          label="Collateral asset"
+          value={assetMint}
+          onChange={(e) => setAssetMint(e.target.value)}
+          fullWidth
+        >
+          {vaultAssets.length === 0 ? (
+            <MenuItem value={assetMint}>{mintLabel(assetMint)}</MenuItem>
+          ) : (
+            vaultAssets.map((a) => (
+              <MenuItem key={a.mint} value={a.mint}>
+                {mintLabel(a.mint)}
+              </MenuItem>
+            ))
           )}
-          <TextField
-            label="Amount (base units)"
-            value={issueAmount}
-            onChange={(e) => setIssueAmount(e.target.value)}
-            fullWidth
-          />
-          <Stack direction="row" spacing={1}>
-            <Button variant="contained" disabled={issueDisabled} onClick={submitIssue}>
-              {busy === "issue" ? "Signing…" : "Sign & send"}
-            </Button>
-            <Button variant="outlined" disabled={!publicKey || busy !== null} onClick={simulateIssue}>
-              {busy === "sim-issue" ? "…" : "Simulate"}
-            </Button>
-          </Stack>
-        </Stack>
+        </TextField>
 
-        <Stack spacing={1}>
-          <Typography variant="subtitle1">Redeem (unwrap)</Typography>
-          <TextField
-            label="Wrapped amount to burn"
-            value={redeemAmount}
-            onChange={(e) => setRedeemAmount(e.target.value)}
-            fullWidth
-          />
-          {redeemQuote && (
-            <Typography variant="body2" color="text.secondary">
-              Expected output: {redeemQuote.output} base units
-              {redeemQuote.haircutBps > 0
-                ? ` (haircut ${redeemQuote.haircutBps} bps)`
-                : ""}
-              {redeemQuote.maxRedeemable > 0
-                ? ` · max ${redeemQuote.maxRedeemable} wStable from this pool`
-                : ""}
-            </Typography>
+        <Box sx={{ ...cardSx, mb: 0 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, value) => setTab(value)}
+            aria-label="Wrap or unwrap"
+            sx={{ mb: 2, minHeight: 40 }}
+          >
+            <Tab label="Wrap" sx={{ textTransform: "none", fontWeight: 600 }} />
+            <Tab label="Unwrap" sx={{ textTransform: "none", fontWeight: 600 }} />
+          </Tabs>
+
+          {tab === 0 && (
+            <Stack spacing={1} role="tabpanel" aria-label="Wrap">
+              {selectedAsset && !selectedAsset.mintAllowed && (
+                <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
+              )}
+              <TextField
+                label="Collateral amount (base units)"
+                value={issueAmount}
+                onChange={(e) => setIssueAmount(e.target.value)}
+                fullWidth
+              />
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" disabled={issueDisabled} onClick={submitIssue}>
+                  {busy === "issue" ? "Signing…" : "Sign & send"}
+                </Button>
+                <Button variant="outlined" disabled={!publicKey || busy !== null} onClick={simulateIssue}>
+                  {busy === "sim-issue" ? "…" : "Simulate"}
+                </Button>
+              </Stack>
+            </Stack>
           )}
-          {redeemQuote && !redeemQuote.redeemAllowed && (
-            <Alert severity="warning">Redemption is disabled for this asset pool.</Alert>
+
+          {tab === 1 && (
+            <Stack spacing={1} role="tabpanel" aria-label="Unwrap">
+              <TextField
+                label="wStable amount to burn"
+                value={redeemAmount}
+                onChange={(e) => setRedeemAmount(e.target.value)}
+                fullWidth
+              />
+              {redeemQuote && (
+                <Typography variant="body2" color="text.secondary">
+                  Expected output: {redeemQuote.output} base units
+                  {redeemQuote.haircutBps > 0
+                    ? ` (haircut ${redeemQuote.haircutBps} bps)`
+                    : ""}
+                  {redeemQuote.maxRedeemable > 0
+                    ? ` · max ${redeemQuote.maxRedeemable} wStable from this pool`
+                    : ""}
+                </Typography>
+              )}
+              {redeemQuote && !redeemQuote.redeemAllowed && (
+                <Alert severity="warning">Redemption is disabled for this asset pool.</Alert>
+              )}
+              {redeemQuote && redeemQuote.liabilityShortfall > 0 && (
+                <Alert severity="warning">
+                  Amount exceeds pool liability ({redeemQuote.liability}). Use another pool or reduce
+                  the burn amount.
+                </Alert>
+              )}
+              {redeemQuote && redeemQuote.liquidityShortfall > 0 && (
+                <Alert severity="warning">
+                  Free vault liquidity ({redeemQuote.freeLiquidity}) is below expected output. An
+                  operator must withdraw from Kamino first.
+                </Alert>
+              )}
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" color="secondary" disabled={redeemDisabled} onClick={submitRedeem}>
+                  {busy === "redeem" ? "Signing…" : "Sign & send"}
+                </Button>
+                <Button variant="outlined" disabled={!publicKey || busy !== null} onClick={simulateRedeem}>
+                  {busy === "sim-redeem" ? "…" : "Simulate"}
+                </Button>
+              </Stack>
+            </Stack>
           )}
-          {redeemQuote && redeemQuote.liabilityShortfall > 0 && (
-            <Alert severity="warning">
-              Amount exceeds pool liability ({redeemQuote.liability}). Use another pool or reduce
-              the burn amount.
-            </Alert>
-          )}
-          {redeemQuote && redeemQuote.liquidityShortfall > 0 && (
-            <Alert severity="warning">
-              Free vault liquidity ({redeemQuote.freeLiquidity}) is below expected output. An
-              operator must withdraw from Kamino first.
-            </Alert>
-          )}
-          <Stack direction="row" spacing={1}>
-            <Button variant="contained" color="secondary" disabled={redeemDisabled} onClick={submitRedeem}>
-              {busy === "redeem" ? "Signing…" : "Sign & send redeem"}
-            </Button>
-            <Button variant="outlined" disabled={!publicKey || busy !== null} onClick={simulateRedeem}>
-              {busy === "sim-redeem" ? "…" : "Simulate"}
-            </Button>
-          </Stack>
-        </Stack>
+        </Box>
       </Stack>
     </Box>
   );

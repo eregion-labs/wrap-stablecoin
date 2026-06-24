@@ -3,6 +3,7 @@ import * as path from "node:path";
 import {
   Connection,
   Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -32,6 +33,8 @@ export const HALF_M = 500_000_000_000n;
 /** 100M tokens at 6 decimals — local admin wallet target balance */
 export const HUNDRED_M = 100n * ONE_M;
 export const LOCAL_ADMIN_DUMMY_SUPPLY = HUNDRED_M;
+/** Localnet bootstrap target SOL balance per wallet */
+export const LOCAL_SOL_TARGET = 100 * LAMPORTS_PER_SOL;
 /** Smallest wStable burn for doctrine tests */
 export const ONE_UNIT = 1n;
 
@@ -65,6 +68,35 @@ export function netLiability(cfg: {
     BigInt(cfg.totalWrappedMinted.toString()) -
     BigInt(cfg.totalRedemptions.toString())
   );
+}
+
+/** Top up a wallet to at least `minLamports` via localnet airdrop (idempotent). */
+export async function ensureSolBalanceAtLeast(
+  connection: Connection,
+  pubkey: PublicKey,
+  minLamports: number,
+): Promise<void> {
+  const balance = await connection.getBalance(pubkey);
+  if (balance >= minLamports) {
+    return;
+  }
+  const need = minLamports - balance;
+  const sig = await connection.requestAirdrop(pubkey, need);
+  const latest = await connection.getLatestBlockhash();
+  await connection.confirmTransaction(
+    { signature: sig, ...latest },
+    "confirmed",
+  );
+}
+
+export async function fundLocalnetWallets(
+  connection: Connection,
+  wallets: PublicKey[],
+  minLamports: number = LOCAL_SOL_TARGET,
+): Promise<void> {
+  for (const pubkey of wallets) {
+    await ensureSolBalanceAtLeast(connection, pubkey, minLamports);
+  }
 }
 
 export async function ensureDummyMint(

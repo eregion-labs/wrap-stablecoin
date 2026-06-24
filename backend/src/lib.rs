@@ -7,13 +7,15 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
+pub mod admin_wallet;
 pub mod app_state;
 pub mod jupiter;
 pub mod routes;
+pub mod tx_submit;
 pub mod wrap_stablecoin;
 
 use crate::app_state::AppState;
-use crate::routes::{admin, guard, ping, tx, vault};
+use crate::routes::{admin, admin_ops, guard, ping, tx, vault};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -25,6 +27,10 @@ use crate::routes::{admin, guard, ping, tx, vault};
         tx::compose_tx,
         admin::add_asset_tx,
         admin::update_asset_policy_tx,
+        admin_ops::register_asset,
+        admin_ops::update_asset_policy,
+        admin_ops::admin_mint,
+        admin_ops::admin_redeem,
         vault::vault_assets,
         vault::vault_meta,
         vault::redeem_quote_handler,
@@ -39,6 +45,11 @@ use crate::routes::{admin, guard, ping, tx, vault};
         tx::ComposeStep,
         admin::AddAssetRequest,
         admin::UpdateAssetPolicyRequest,
+        admin_ops::ExecuteResponse,
+        admin_ops::RegisterAssetRequest,
+        admin_ops::UpdateAssetPolicyBody,
+        admin_ops::AdminMintRequest,
+        admin_ops::AdminRedeemRequest,
         vault::VaultAssetsResponse,
         vault::VaultMetaResponse,
         vault::RedeemQuoteQuery,
@@ -75,6 +86,16 @@ pub fn app(state: Arc<AppState>) -> Router {
             guard::network_guard,
         ));
 
+    let admin_router: Router<Arc<AppState>> = Router::new()
+        .route("/register-asset", post(admin_ops::register_asset))
+        .route("/update-asset-policy", post(admin_ops::update_asset_policy))
+        .route("/mint", post(admin_ops::admin_mint))
+        .route("/redeem", post(admin_ops::admin_redeem))
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            guard::network_guard,
+        ));
+
     let vault_router: Router<Arc<AppState>> = Router::new()
         .route("/assets", axum::routing::get(vault::vault_assets))
         .route("/meta", axum::routing::get(vault::vault_meta))
@@ -104,6 +125,7 @@ pub fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/ping", axum::routing::get(ping::ping_handler))
         .nest("/v1/tx", tx_router)
+        .nest("/v1/admin", admin_router)
         .nest("/v1/vault", vault_router)
         .nest("/v1/quote", quote_router)
         .with_state(state)

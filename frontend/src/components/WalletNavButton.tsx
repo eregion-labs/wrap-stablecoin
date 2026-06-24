@@ -71,12 +71,7 @@ export default function WalletNavButton() {
         color="primary"
         onClick={openWalletModal}
         startIcon={<AccountBalanceWalletOutlinedIcon />}
-        sx={{
-          minWidth: 148,
-          px: 2.5,
-          py: 1,
-          boxShadow: "0 1px 2px rgba(0,0,0,0.24)",
-        }}
+        sx={{ minWidth: 148, px: 2.5, py: 1 }}
       >
         Connect wallet
       </Button>
@@ -94,8 +89,8 @@ export default function WalletNavButton() {
         sx={{
           minWidth: 148,
           borderColor: "divider",
-          bgcolor: "rgba(255,255,255,0.03)",
-          "&:hover": { bgcolor: "rgba(255,255,255,0.06)", borderColor: "primary.main" },
+          bgcolor: "action.hover",
+          "&:hover": { bgcolor: "action.selected", borderColor: "primary.main" },
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, overflow: "hidden" }}>

@@ -1,6 +1,7 @@
 "use client";
 
 import Box from "@mui/material/Box";
+import { cardSx } from "@/theme/tokens";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -66,7 +67,7 @@ export default function VaultAccountingPanel({ assets, wrappedDecimals }: Props)
   }
 
   return (
-    <Box sx={{ mb: 3, p: 2, bgcolor: "action.hover", borderRadius: 1, overflowX: "auto" }}>
+    <Box sx={cardSx}>
       <Typography variant="subtitle2" gutterBottom>
         Pool accounting
       </Typography>

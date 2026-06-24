@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "wStable",
-  description: "Issue and redeem wrapped stablecoin",
+  title: "wStable Admin",
+  description: "Vault mint operations and collateral policy",
 };
 
 export default function RootLayout({
