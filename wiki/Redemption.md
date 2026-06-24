@@ -6,10 +6,13 @@ When a user burns wStable to receive underlying collateral, liquidity comes **on
 
 ```text
 unwrap(amount):
-  1. Burn wStable; compute out_amount (redemption haircut)
-  2. Require token_vault.balance >= out_amount
-  3. Transfer out_amount from token_vault → user
+  1. Require amount ≤ liability_i (redemption obligation on this pool)
+  2. Burn wStable; compute out_amount (redemption haircut)
+  3. Require token_vault.balance >= out_amount
+  4. Transfer out_amount from token_vault → user
 ```
+
+Redeemability is **liability and liquidity**, not liquidity alone: a pool may hold tokens in `token_vault` and still refuse redemption when `liability_i = 0`. Surplus is admin-extractable via `sweep_home_surplus`, not user-redeemable. See [Accounting.md](Accounting.md) and `wrap-stablecoin/tests/cross_asset.ts`.
 
 If `token_vault` does not hold enough free collateral, the instruction fails with `InsufficientLiquidity`. There is no Kamino CPI, no `refresh_reserve`, and no on-chain slippage floor.
 

@@ -10,6 +10,12 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import * as fs from "node:fs";
 import { WrapStablecoin } from "../target/types/wrap_stablecoin";
 import {
+  bootstrapDummyMints,
+  CCC_MINT,
+  LOCAL_ADMIN_DUMMY_SUPPLY,
+  TTT_MINT,
+} from "../tests/dummy_tokens";
+import {
   ASSET_CONFIG_SEED,
   COLLATERAL_VAULT_SEED,
   KLEND_CONFIG_SEED,
@@ -30,7 +36,7 @@ const RPC_URL =
 const WALLET_PATH =
   process.env.ANCHOR_WALLET ||
   process.env.ANCHOR_WALLET_PATH ||
-  "fixtures/user/wallet.json";
+  ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json";
 
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const KLEND_PROGRAM_ID = new PublicKey(
@@ -86,6 +92,9 @@ export async function seedLocalnet(): Promise<SeedResult> {
 
   const program = anchor.workspace.wrapStablecoin as Program<WrapStablecoin>;
   const programId = program.programId;
+
+  console.log("[seed] bootstrap CCC/TTT dummy mints (100M each to admin)…");
+  await bootstrapDummyMints(connection, authority, LOCAL_ADMIN_DUMMY_SUPPLY);
 
   const vaultConfig = pda(programId, [
     Buffer.from(VAULT_CONFIG_SEED),
@@ -212,6 +221,8 @@ function printEnvBlock(result: SeedResult) {
   console.log(`WRAPPED_MINT=${result.wrappedMint}`);
   console.log(`VAULT_CONFIG=${result.vaultConfig}`);
   console.log(`USDC_ASSET_MINT=${USDC_MINT.toBase58()}`);
+  console.log(`CCC_MINT=${CCC_MINT.toBase58()}`);
+  console.log(`TTT_MINT=${TTT_MINT.toBase58()}`);
   console.log(`DEFAULT_ASSET_MINT=${USDC_MINT.toBase58()}`);
   console.log("NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080");
   console.log("NEXT_PUBLIC_SOLANA_NETWORK=localnet");

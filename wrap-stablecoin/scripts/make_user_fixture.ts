@@ -1,9 +1,8 @@
 /**
- * Generate a deterministic test wallet (first run only — persists to
- * fixtures/user/wallet.json) and build a USDC ATA fixture at that wallet's ATA
- * pubkey with a large balance. The test validator loads this via
- * [[test.validator.account]] so the e2e test has a funded wallet without having
- * to touch Circle's mint authority.
+ * Build validator preload fixtures for the admin/test wallet (fixtures/user/wallet.json,
+ * synced from .secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json): SOL balance
+ * plus a USDC ATA with a large balance. Loaded via [[test.validator.account]] so e2e
+ * tests have a funded wallet without touching Circle's mint authority.
  *
  * Run:
  *   yarn ts-node scripts/make_user_fixture.ts

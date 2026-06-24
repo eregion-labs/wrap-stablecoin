@@ -362,6 +362,11 @@ pub mod wrap_stablecoin {
             ErrorCode::InsufficientBalance
         );
 
+        require!(
+            args.amount <= asset_config.net_liability_saturating(),
+            ErrorCode::InsufficientLiability
+        );
+
         let out_amount = wrapped_to_underlying_amount(
             args.amount,
             token_decimals,
@@ -512,6 +517,25 @@ pub mod wrap_stablecoin {
             ErrorCode::HarvestLeavesUnderbacked
         );
 
+        let total_kamino_value = (liquidity_received as u128)
+            .checked_add(
+                (collateral_after as u128)
+                    .checked_mul(liquidity_received as u128)
+                    .ok_or(ErrorCode::MathOverflow)?
+                    .checked_div(ktokens_redeemed as u128)
+                    .ok_or(ErrorCode::MathOverflow)?,
+            )
+            .ok_or(ErrorCode::MathOverflow)?;
+        let principal = klend_config.total_liquidity_in_klend as u128;
+        require!(total_kamino_value > principal, ErrorCode::NoYieldAvailable);
+        let max_harvestable = total_kamino_value
+            .checked_sub(principal)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(
+            (liquidity_received as u128) <= max_harvestable,
+            ErrorCode::ExceedsHarvestableYield
+        );
+
         emit!(Harvested {
             token_mint: asset_config.token_mint,
             ktokens_redeemed,
@@ -526,6 +550,16 @@ pub mod wrap_stablecoin {
         let vault_config = &ctx.accounts.vault_config;
         let asset_config = &ctx.accounts.asset_config;
         let klend_config = &mut ctx.accounts.klend_config;
+
+        let vault_balance = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+        let remaining = vault_balance
+            .checked_sub(args.amount)
+            .ok_or(ErrorCode::InsufficientBalance)?;
+        require!(
+            remaining >= asset_config.min_liquidity_target,
+            ErrorCode::InsufficientLiquidity
+        );
+
         let vault_config_key = vault_config.key();
         let authority_seeds: &[&[u8]] = &[
             crate::pda_seeds::VAULT_AUTHORITY_SEED,
@@ -579,6 +613,121 @@ pub mod wrap_stablecoin {
             args.amount,
             asset_config.token_mint
         );
+        Ok(())
+    }
+
+    pub fn deposit_all_to_klend(ctx: Context<DepositAllToKlend>) -> Result<()> {
+        let asset_config = &ctx.accounts.asset_config;
+        let vault_balance = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+        let amount = vault_balance.saturating_sub(asset_config.min_liquidity_target);
+        require!(amount > 0, ErrorCode::InvalidAmount);
+
+        let vault_config = &ctx.accounts.vault_config;
+        let klend_config = &mut ctx.accounts.klend_config;
+        let vault_config_key = vault_config.key();
+        let authority_seeds: &[&[u8]] = &[
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
+            vault_config_key.as_ref(),
+            &[vault_config.vault_authority_bump],
+        ];
+
+        let ix = deposit_reserve_liquidity_ix(
+            ctx.accounts.klend_program.key(),
+            ctx.accounts.vault_authority.key(),
+            ctx.accounts.reserve.key(),
+            ctx.accounts.lending_market.key(),
+            ctx.accounts.lending_market_authority.key(),
+            asset_config.token_mint,
+            ctx.accounts.reserve_liquidity_supply.key(),
+            ctx.accounts.reserve_collateral_mint.key(),
+            ctx.accounts.token_vault.key(),
+            ctx.accounts.collateral_vault.key(),
+            ctx.accounts.collateral_token_program.key(),
+            ctx.accounts.token_program.key(),
+            ctx.accounts.instruction_sysvar.key(),
+            amount,
+        );
+
+        invoke_signed(
+            &ix,
+            &[
+                ctx.accounts.vault_authority.to_account_info(),
+                ctx.accounts.reserve.to_account_info(),
+                ctx.accounts.lending_market.to_account_info(),
+                ctx.accounts.lending_market_authority.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
+                ctx.accounts.reserve_liquidity_supply.to_account_info(),
+                ctx.accounts.reserve_collateral_mint.to_account_info(),
+                ctx.accounts.token_vault.to_account_info(),
+                ctx.accounts.collateral_vault.to_account_info(),
+                ctx.accounts.collateral_token_program.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.instruction_sysvar.to_account_info(),
+            ],
+            &[authority_seeds],
+        )?;
+
+        klend_config.total_liquidity_in_klend = klend_config
+            .total_liquidity_in_klend
+            .checked_add(amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        msg!(
+            "Deposited all {} ({} reserve) of {} to KLend",
+            amount,
+            asset_config.min_liquidity_target,
+            asset_config.token_mint
+        );
+        Ok(())
+    }
+
+    pub fn sweep_home_surplus(
+        ctx: Context<SweepHomeSurplus>,
+        args: SweepHomeSurplusArgs,
+    ) -> Result<()> {
+        require!(args.amount > 0, ErrorCode::InvalidAmount);
+
+        let vault_config = &ctx.accounts.vault_config;
+        let asset_config = &ctx.accounts.asset_config;
+        let vault_config_key = vault_config.key();
+
+        let vault_balance = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+        let liability = asset_config.net_liability_saturating();
+        let max_sweep = crate::utils::home_surplus_amount(
+            vault_balance,
+            liability,
+            asset_config.token_decimals,
+            vault_config.wrapped_decimals,
+            asset_config.min_liquidity_target,
+        )?;
+        require!(max_sweep > 0, ErrorCode::NoYieldAvailable);
+        require!(args.amount <= max_sweep, ErrorCode::ExceedsHomeSurplus);
+
+        let authority_seeds: &[&[u8]] = &[
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
+            vault_config_key.as_ref(),
+            &[vault_config.vault_authority_bump],
+        ];
+
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.token_vault.to_account_info(),
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.treasury_vault.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            args.amount,
+            asset_config.token_decimals,
+        )?;
+
+        emit!(HomeSurplusSwept {
+            token_mint: asset_config.token_mint,
+            amount: args.amount,
+        });
         Ok(())
     }
 
@@ -783,6 +932,12 @@ pub struct Harvested {
     pub token_mint: Pubkey,
     pub ktokens_redeemed: u64,
     pub liquidity_received: u64,
+}
+
+#[event]
+pub struct HomeSurplusSwept {
+    pub token_mint: Pubkey,
+    pub amount: u64,
 }
 
 #[event]

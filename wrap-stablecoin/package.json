@@ -6,7 +6,8 @@
     "fetch-klend-so": "bash scripts/fetch_klend_so.sh",
     "print-clones": "ts-node scripts/print_klend_clones.ts",
     "dump-klend": "ts-node scripts/dump_klend_state.ts",
-    "make-user-fixture": "ts-node scripts/make_user_fixture.ts"
+    "make-user-fixture": "ts-node scripts/make_user_fixture.ts",
+    "bootstrap-dummy-mints": "ts-node scripts/bootstrap_dummy_mints.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

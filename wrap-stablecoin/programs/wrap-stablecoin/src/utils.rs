@@ -115,6 +115,30 @@ pub fn wrapped_to_underlying_amount(
     apply_redemption_haircut(scaled, redemption_haircut_bps)
 }
 
+/// Underlying atoms reserved to back outstanding pool liability (no redemption haircut).
+pub fn liability_to_underlying_amount(
+    liability_wstable: u64,
+    underlying_decimals: u8,
+    wrapped_decimals: u8,
+) -> Result<u64> {
+    convert_amount(liability_wstable, wrapped_decimals, underlying_decimals)
+}
+
+/// Post-recall home vault surplus: `max(0, token_vault − liability_underlying − cushion)`.
+pub fn home_surplus_amount(
+    token_vault_balance: u64,
+    liability_wstable: u64,
+    underlying_decimals: u8,
+    wrapped_decimals: u8,
+    cushion: u64,
+) -> Result<u64> {
+    let liability_underlying =
+        liability_to_underlying_amount(liability_wstable, underlying_decimals, wrapped_decimals)?;
+    Ok(token_vault_balance
+        .saturating_sub(liability_underlying)
+        .saturating_sub(cushion))
+}
+
 const POW10_U128: [u128; 19] = [
     1,
     10,
@@ -224,6 +248,15 @@ mod tests {
     fn wrapped_to_underlying_six_to_eight() {
         let out = wrapped_to_underlying_amount(1_000_000, 8, 6, 0).unwrap();
         assert_eq!(out, 100_000_000);
+    }
+
+    #[test]
+    fn home_surplus_after_liability_and_cushion() {
+        let surplus =
+            home_surplus_amount(1_100_000, 1_000_000, 6, 6, 0).unwrap();
+        assert_eq!(surplus, 100_000);
+        let none = home_surplus_amount(900_000, 1_000_000, 6, 6, 0).unwrap();
+        assert_eq!(none, 0);
     }
 
     #[test]

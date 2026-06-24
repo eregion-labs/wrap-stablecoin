@@ -2,7 +2,9 @@ use anchor_lang::AccountDeserialize;
 use anchor_lang::AnchorSerialize;
 use anyhow::{anyhow, Context, Result};
 use wrap_stablecoin::state::{AssetConfig, AssetStatus, KLendConfig, VaultConfig};
-use wrap_stablecoin::utils::wrapped_to_underlying_amount;
+use wrap_stablecoin::utils::{
+    home_surplus_amount, liability_to_underlying_amount, wrapped_to_underlying_amount,
+};
 use wrap_stablecoin::{UnwrapArgs, WrapArgs};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
@@ -241,6 +243,78 @@ pub fn unsigned_wrap_tx_bytes(
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
+fn max_wrapped_for_liquidity(
+    free_liquidity: u64,
+    underlying_decimals: u8,
+    wrapped_decimals: u8,
+    redemption_haircut_bps: u16,
+) -> Result<u64> {
+    if free_liquidity == 0 {
+        return Ok(0);
+    }
+    let pre_haircut = if redemption_haircut_bps == 0 {
+        free_liquidity
+    } else {
+        let denom = 10_000u64 - redemption_haircut_bps as u64;
+        ((free_liquidity as u128)
+            .checked_mul(10_000)
+            .ok_or_else(|| anyhow!("liquidity cap overflow"))?
+            .checked_add(denom as u128 - 1)
+            .ok_or_else(|| anyhow!("liquidity cap overflow"))?
+            / denom as u128) as u64
+    };
+    wrap_stablecoin::utils::convert_amount(pre_haircut, underlying_decimals, wrapped_decimals)
+        .map_err(|e| anyhow!("liquidity cap convert: {e}"))
+}
+
+fn max_redeemable_wstable(
+    cfg: &AssetConfig,
+    vault: &VaultConfig,
+    free_liquidity: u64,
+) -> Result<u64> {
+    let liability = cfg.net_liability_saturating();
+    if liability == 0 {
+        return Ok(0);
+    }
+    let from_liquidity = max_wrapped_for_liquidity(
+        free_liquidity,
+        cfg.token_decimals,
+        vault.wrapped_decimals,
+        cfg.redemption_haircut_bps,
+    )?;
+    Ok(liability.min(from_liquidity))
+}
+
+fn validate_unwrap_amount(
+    cfg: &AssetConfig,
+    vault: &VaultConfig,
+    free_liquidity: u64,
+    amount: u64,
+) -> Result<()> {
+    if !cfg.redeem_allowed() {
+        return Err(anyhow!("redemption disabled for asset"));
+    }
+    let liability = cfg.net_liability_saturating();
+    if amount > liability {
+        return Err(anyhow!(
+            "amount {amount} exceeds pool liability obligation {liability}"
+        ));
+    }
+    let output = wrapped_to_underlying_amount(
+        amount,
+        cfg.token_decimals,
+        vault.wrapped_decimals,
+        cfg.redemption_haircut_bps,
+    )
+    .map_err(|e| anyhow!("unwrap conversion: {e}"))?;
+    if output > free_liquidity {
+        return Err(anyhow!(
+            "expected output {output} exceeds free liquidity {free_liquidity}"
+        ));
+    }
+    Ok(())
+}
+
 pub fn unsigned_unwrap_tx_bytes(
     rpc: &RpcClient,
     program_id: &Pubkey,
@@ -259,9 +333,9 @@ pub fn unsigned_unwrap_tx_bytes(
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, asset_cfg) =
         fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
-    if !asset_cfg.redeem_allowed() {
-        return Err(anyhow!("redemption disabled for asset"));
-    }
+
+    let free_liquidity = get_token_account_amount(rpc, &asset_cfg.token_vault).unwrap_or(0);
+    validate_unwrap_amount(&asset_cfg, &vault, free_liquidity, amount)?;
 
     let create_user_asset_ata = create_associated_token_account_idempotent(
         user,
@@ -291,8 +365,17 @@ pub struct VaultAssetView {
     pub mint: String,
     pub free_liquidity: u64,
     pub deployed_to_kamino: u64,
+    pub backing: u64,
+    pub liability: u64,
+    pub liability_underlying: u64,
+    pub cushion: u64,
+    pub kamino_surplus: u64,
+    pub home_surplus: u64,
+    pub max_redeemable: u64,
     pub mint_enabled: bool,
     pub redeem_enabled: bool,
+    pub mint_allowed: bool,
+    pub redeem_allowed: bool,
     pub mint_haircut_bps: u16,
     pub redemption_haircut_bps: u16,
     pub net_liability: u64,
@@ -309,7 +392,13 @@ pub struct RedeemQuoteView {
     pub asset_mint: String,
     pub free_liquidity: u64,
     pub deployed_to_kamino: u64,
+    pub liability: u64,
     pub redeem_enabled: bool,
+    pub redeem_allowed: bool,
+    pub can_redeem: bool,
+    pub liquidity_shortfall: u64,
+    pub liability_shortfall: u64,
+    pub max_redeemable: u64,
 }
 
 pub fn redeem_quote(
@@ -329,6 +418,11 @@ pub fn redeem_quote(
     let (asset_config_key, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
     let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
     let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
+    let deployed = klend
+        .as_ref()
+        .map(|k| k.total_liquidity_in_klend)
+        .unwrap_or(0);
+    let liability = cfg.net_liability_saturating();
     let output = wrapped_to_underlying_amount(
         amount,
         cfg.token_decimals,
@@ -336,17 +430,25 @@ pub fn redeem_quote(
         cfg.redemption_haircut_bps,
     )
     .map_err(|e| anyhow!("quote conversion: {e}"))?;
+    let max_redeemable = max_redeemable_wstable(&cfg, &vault, free_liquidity)?;
+    let redeem_allowed = cfg.redeem_allowed();
+    let liquidity_shortfall = output.saturating_sub(free_liquidity);
+    let liability_shortfall = amount.saturating_sub(liability);
+    let can_redeem = redeem_allowed && liquidity_shortfall == 0 && liability_shortfall == 0;
     Ok(RedeemQuoteView {
         input: amount,
         output,
         haircut_bps: cfg.redemption_haircut_bps,
         asset_mint: asset_mint.to_string(),
         free_liquidity,
-        deployed_to_kamino: klend
-            .as_ref()
-            .map(|k| k.total_liquidity_in_klend)
-            .unwrap_or(0),
-        redeem_enabled: cfg.redeem_allowed(),
+        deployed_to_kamino: deployed,
+        liability,
+        redeem_enabled: cfg.redeem_enabled,
+        redeem_allowed,
+        can_redeem,
+        liquidity_shortfall,
+        liability_shortfall,
+        max_redeemable,
     })
 }
 
@@ -369,21 +471,47 @@ pub fn fetch_vault_assets(
         );
         let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
         let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
-        let net_liability = cfg
-            .total_wrapped_minted
-            .saturating_sub(cfg.total_redemptions);
+        let deployed = klend
+            .as_ref()
+            .map(|k| k.total_liquidity_in_klend)
+            .unwrap_or(0);
+        let liability = cfg.net_liability_saturating();
+        let liability_underlying = liability_to_underlying_amount(
+            liability,
+            cfg.token_decimals,
+            vault.wrapped_decimals,
+        )
+        .unwrap_or(0);
+        let cushion = cfg.min_liquidity_target;
+        // Live Kamino mark requires CPI; on-chain harvest_yield enforces kamino surplus.
+        let kamino_surplus = 0u64;
+        let home_surplus = home_surplus_amount(
+            free_liquidity,
+            liability,
+            cfg.token_decimals,
+            vault.wrapped_decimals,
+            cushion,
+        )
+        .unwrap_or(0);
+        let max_redeemable = max_redeemable_wstable(&cfg, &vault, free_liquidity).unwrap_or(0);
         out.push(VaultAssetView {
             mint: mint.to_string(),
             free_liquidity,
-            deployed_to_kamino: klend
-                .as_ref()
-                .map(|k| k.total_liquidity_in_klend)
-                .unwrap_or(0),
+            deployed_to_kamino: deployed,
+            backing: free_liquidity.saturating_add(deployed),
+            liability,
+            liability_underlying,
+            cushion,
+            kamino_surplus,
+            home_surplus,
+            max_redeemable,
             mint_enabled: cfg.mint_enabled,
             redeem_enabled: cfg.redeem_enabled,
+            mint_allowed: cfg.mint_allowed(),
+            redeem_allowed: cfg.redeem_allowed(),
             mint_haircut_bps: cfg.mint_haircut_bps,
             redemption_haircut_bps: cfg.redemption_haircut_bps,
-            net_liability,
+            net_liability: liability,
             asset_status: asset_status_label(cfg.asset_status),
             klend_enabled: klend.is_some(),
         });

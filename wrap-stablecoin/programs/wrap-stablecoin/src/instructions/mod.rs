@@ -1,11 +1,13 @@
 pub mod admin;
 pub mod add_asset;
+pub mod deposit_all_to_klend;
 pub mod deposit_to_klend;
 pub mod enable_klend;
 #[cfg(feature = "flash-mint")]
 pub mod flash_mint;
 pub mod harvest_yield;
 pub mod initialize;
+pub mod sweep_home_surplus;
 pub mod unwrap;
 pub mod update_asset_policy;
 pub mod withdraw_all_from_klend;
@@ -15,12 +17,14 @@ pub mod wrap;
 
 pub use admin::*;
 pub use add_asset::*;
+pub use deposit_all_to_klend::*;
 pub use deposit_to_klend::*;
 pub use enable_klend::*;
 #[cfg(feature = "flash-mint")]
 pub use flash_mint::*;
 pub use harvest_yield::*;
 pub use initialize::*;
+pub use sweep_home_surplus::*;
 pub use unwrap::*;
 pub use update_asset_policy::*;
 pub use withdraw_all_from_klend::*;

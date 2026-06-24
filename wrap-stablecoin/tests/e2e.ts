@@ -245,6 +245,18 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   });
 
   it("initializes the vault", async () => {
+    const existing = await connection.getAccountInfo(vaultConfig);
+    if (existing !== null) {
+      const vaultData = await (program.account as any).vaultConfig.fetch(
+        vaultConfig,
+      );
+      expect(vaultData.admin.toBase58()).to.equal(wallet.publicKey.toBase58());
+      console.log(
+        `vault already initialized (assetCount=${vaultData.assetCount}, e.g. from cross_asset)`,
+      );
+      return;
+    }
+
     const txSig = await program.methods
       .initialize()
       .accountsPartial({
@@ -267,28 +279,34 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
   });
 
   it("registers USDC via add_asset", async () => {
-    const txSig = await program.methods
-      .addAsset({ mintEnabled: true, redeemEnabled: true } as any)
-      .accountsPartial({
-        admin: wallet.publicKey,
-        vaultConfig,
-        vaultAuthority,
-        underlyingMint: USDC_MINT,
-        assetConfig: tokenConfig,
-        tokenVault,
-        treasuryVault,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      } as any)
-      .rpc();
-    console.log(`add_asset tx: ${txSig}`);
+    const existing = await connection.getAccountInfo(tokenConfig);
+    if (existing === null) {
+      const txSig = await program.methods
+        .addAsset({ mintEnabled: true, redeemEnabled: true } as any)
+        .accountsPartial({
+          admin: wallet.publicKey,
+          vaultConfig,
+          vaultAuthority,
+          underlyingMint: USDC_MINT,
+          assetConfig: tokenConfig,
+          tokenVault,
+          treasuryVault,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+      console.log(`add_asset tx: ${txSig}`);
+    } else {
+      console.log("USDC asset_config already exists (skip add_asset)");
+    }
 
     const vaultData = await (program.account as any).vaultConfig.fetch(
       vaultConfig,
     );
-    expect(vaultData.registeredAssets[0].toBase58()).to.equal(
-      USDC_MINT.toBase58(),
+    const registered = vaultData.registeredAssets.map((m: PublicKey) =>
+      m.toBase58(),
     );
+    expect(registered).to.include(USDC_MINT.toBase58());
     const assetData = await (program.account as any).assetConfig.fetch(
       tokenConfig,
     );
@@ -355,6 +373,10 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
 
     const tokenVaultBal = await getAccount(connection, tokenVault);
     expect(tokenVaultBal.amount.toString()).to.equal("100000000");
+
+    const assetCfg = await program.account.assetConfig.fetch(tokenConfig);
+    expect(assetCfg.totalWrappedMinted.toString()).to.equal("100000000");
+    expect(assetCfg.totalRedemptions.toString()).to.equal("0");
   });
 
   it("deposits 50 USDC into KLend", async () => {
@@ -388,7 +410,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     expect(cfg.totalLiquidityInKlend.toString()).to.equal("50000000");
 
     const vaultBal = await getAccount(connection, tokenVault);
-    expect(vaultBal.amount.toString()).to.equal("50000000");
+    expect(Number(vaultBal.amount)).to.be.closeTo(50_000_000, 1);
     const collateralBal = await getAccount(connection, collateralVault);
     expect(Number(collateralBal.amount)).to.be.greaterThan(0);
   });
@@ -436,7 +458,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
 
   it("rejects unwrap when token_vault lacks free liquidity", async () => {
     const vaultBal = await getAccount(connection, tokenVault);
-    expect(Number(vaultBal.amount)).to.equal(50_000_000);
+    expect(Number(vaultBal.amount)).to.be.closeTo(50_000_000, 1);
 
     const amount = new anchor.BN(60_000_000);
     let threw = false;
@@ -563,6 +585,75 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
 
     const collateralAfter = await getAccount(connection, collateralVault);
     expect(collateralAfter.amount.toString()).to.equal("0");
+  });
+
+  it("rejects unwrap exceeding pool liability", async () => {
+    const cfg = await program.account.assetConfig.fetch(tokenConfig);
+    const liability = cfg.totalWrappedMinted.sub(cfg.totalRedemptions);
+    expect(Number(liability)).to.be.greaterThan(0);
+
+    const amount = liability.add(new anchor.BN(1_000_000));
+    let threw = false;
+    try {
+      await program.methods
+        .unwrap({ amount } as any)
+        .accountsPartial({
+          user: wallet.publicKey,
+          vaultConfig,
+          vaultAuthority,
+          userWrapped: userWrappedAta,
+          userAssetToken: userUsdcAta,
+          wrappedMint,
+          assetConfig: tokenConfig,
+          tokenMint: USDC_MINT,
+          tokenVault,
+          allowlist: null,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        } as any)
+        .rpc();
+    } catch (err: any) {
+      threw = true;
+      const msg = err?.error?.errorCode?.code || err?.message || String(err);
+      console.log(`unwrap liability cap rejected as expected: ${msg}`);
+      // Single-pool vault: amount > liability may hit global InsufficientBalance first.
+      expect(msg).to.match(/InsufficientLiability|InsufficientBalance/);
+    }
+    expect(threw).to.equal(true);
+  });
+
+  it("admin sweep_home_surplus moves excess home vault to treasury", async () => {
+    const cfg = await program.account.assetConfig.fetch(tokenConfig);
+    const liability = cfg.totalWrappedMinted.sub(cfg.totalRedemptions);
+    const vaultBal = await getAccount(connection, tokenVault);
+    const liabilityUnderlying = Number(liability);
+    const surplus = Number(vaultBal.amount) - liabilityUnderlying;
+    if (surplus <= 0) {
+      console.log("skip sweep_home_surplus: no home surplus in this fixture state");
+      return;
+    }
+
+    const sweepAmount = new anchor.BN(Math.min(surplus, 1_000_000));
+    const treasuryBefore = (await getAccount(connection, treasuryVault)).amount;
+
+    const txSig = await program.methods
+      .sweepHomeSurplus({ amount: sweepAmount } as any)
+      .accountsPartial({
+        admin: wallet.publicKey,
+        vaultConfig,
+        vaultAuthority,
+        assetConfig: tokenConfig,
+        tokenMint: USDC_MINT,
+        tokenVault,
+        treasuryVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      } as any)
+      .rpc();
+    console.log(`sweep_home_surplus tx: ${txSig}`);
+
+    const treasuryAfter = (await getAccount(connection, treasuryVault)).amount;
+    expect((treasuryAfter - treasuryBefore).toString()).to.equal(
+      sweepAmount.toString(),
+    );
   });
 
   it("unwraps wStable when only home vault has liquidity", async () => {

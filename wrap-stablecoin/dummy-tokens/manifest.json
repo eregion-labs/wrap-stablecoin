@@ -1,0 +1,15 @@
+{
+  "decimals": 6,
+  "tokens": {
+    "CCC": {
+      "mint": "ccc58277Rfo3mCue4aHD3RcUfQzw8PoNSXimfNMnDqu",
+      "keypair": "ccc58277Rfo3mCue4aHD3RcUfQzw8PoNSXimfNMnDqu.json",
+      "symbol": "CCC"
+    },
+    "TTT": {
+      "mint": "tttv7GkTAwb1pE6J2Gb3xghGcTXfxrk5B7cM8G2QNWR",
+      "keypair": "tttv7GkTAwb1pE6J2Gb3xghGcTXfxrk5B7cM8G2QNWR.json",
+      "symbol": "TTT"
+    }
+  }
+}

@@ -25,11 +25,13 @@ Asset
 | `enable_klend` | admin | Attach `KLendConfig` + collateral vault for Kamino CPI |
 | `update_asset_policy` | admin | Mint/redeem flags, haircuts, caps, status |
 | `wrap` | user | Deposit chosen asset → `token_vault` → mint wStable |
-| `unwrap` | user | Burn wStable → transfer from `token_vault` only |
-| `deposit_to_klend` | admin | Per-asset KLend CPI (requires `KLendConfig`) |
+| `unwrap` | user | Burn wStable → transfer from `token_vault` only; capped by pool `liability` |
+| `deposit_to_klend` | admin | Per-asset KLend CPI; respects `min_liquidity_target` cushion |
+| `deposit_all_to_klend` | admin | Deploy `token_vault − cushion` to Kamino |
 | `withdraw_from_klend` | admin | Per-asset KLend CPI → free vault |
 | `withdraw_all_from_klend` | admin | Recall full Kamino position → free vault |
-| `harvest_yield` | admin | Per-asset yield → `treasury_vault` |
+| `harvest_yield` | admin | Kamino surplus → `treasury_vault` (enforced on-chain) |
+| `sweep_home_surplus` | admin | Home vault surplus → `treasury_vault` (post-recall) |
 | `withdraw_treasury` | admin | Move yield from `treasury_vault` to a destination ATA |
 
 ## AssetConfig (per collateral)

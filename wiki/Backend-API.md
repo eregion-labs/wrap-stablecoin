@@ -52,13 +52,24 @@ Response: `{ "transactionB64": "..." }` — bincode-serialized `VersionedTransac
   "assetMint": "...",
   "freeLiquidity": 500000,
   "deployedToKamino": 500000,
-  "redeemEnabled": true
+  "liability": 1000000,
+  "redeemEnabled": true,
+  "redeemAllowed": true,
+  "canRedeem": false,
+  "liquidityShortfall": 480000,
+  "liabilityShortfall": 0,
+  "maxRedeemable": 500000
 }
 ```
 
 - `output` uses the same formula as on-chain `wrapped_to_underlying_amount`
-- `freeLiquidity` is the current `token_vault` balance (what unwrap can pay right now)
-- `deployedToKamino` is informational only
+- `freeLiquidity` is the current `token_vault` balance
+- `canRedeem` is false when policy blocks, liability exceeds pool obligation, or vault is short
+- `POST /v1/tx/redeem` returns 400 when the burn would fail on-chain
+
+## Vault assets
+
+**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`. See [Accounting.md](Accounting.md).
 
 ## Compose
 

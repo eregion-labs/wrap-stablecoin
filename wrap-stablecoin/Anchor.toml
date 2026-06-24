@@ -13,13 +13,13 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = ".secrets/depxPDoQBS9JXgwVumiJeuaaSU9b8FaCRwEVTaGD1v9.json"
+wallet = ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json"
 
 [scripts]
 local = "bash scripts/run_local.sh"
 local-stop = "bash scripts/local_stop.sh"
 stop-local = "bash scripts/local_stop.sh"
-test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/e2e.ts"
+test = "yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/cross_asset.ts tests/e2e.ts"
 
 [test]
 startup_wait = 50000
@@ -66,9 +66,9 @@ address = "3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH"
 filename = "fixtures/klend/scope_prices.json"
 
 [[test.validator.account]]
-address = "5s72BFe78FWbXRzPHGoq7p8J6Ky2qWWDf4Nmk5aWWxtU"
+address = "admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x"
 filename = "fixtures/user/wallet_account.json"
 
 [[test.validator.account]]
-address = "Fs2pMyCiKAfnhG6ucMLWSW945UrUkfcLP5UFsASKbbK1"
+address = "5wV2s8cBkF5K2aLiWRSvEj8JFeq4GtvnvjskKebrQRDK"
 filename = "fixtures/user/usdc_ata.json"

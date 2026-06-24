@@ -9,7 +9,7 @@ LOCAL_ENV_LOADED=1
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 KLEND_PROGRAM_ID="KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
-FIXTURE_WALLET_PUBKEY="5s72BFe78FWbXRzPHGoq7p8J6Ky2qWWDf4Nmk5aWWxtU"
+FIXTURE_WALLET_PUBKEY="admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x"
 USDC_MINT="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 
 # Resolved from target/deploy/wrap_stablecoin-keypair.json after `anchor build`.
@@ -99,8 +99,8 @@ local_env_start_validator() {
     --account BbDUrk1bVtSixgQsPLBJFZEF7mwGstnD5joA1WzYvYFX "$ROOT/fixtures/klend/reserve_fee_vault.json"
     --account EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v "$ROOT/fixtures/klend/liquidity_mint_usdc.json"
     --account 3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH "$ROOT/fixtures/klend/scope_prices.json"
-    --account 5s72BFe78FWbXRzPHGoq7p8J6Ky2qWWDf4Nmk5aWWxtU "$ROOT/fixtures/user/wallet_account.json"
-    --account Fs2pMyCiKAfnhG6ucMLWSW945UrUkfcLP5UFsASKbbK1 "$ROOT/fixtures/user/usdc_ata.json"
+    --account admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x "$ROOT/fixtures/user/wallet_account.json"
+    --account 5wV2s8cBkF5K2aLiWRSvEj8JFeq4GtvnvjskKebrQRDK "$ROOT/fixtures/user/usdc_ata.json"
   )
 
   if [[ "${LOCAL_VALIDATOR_LOG_TO_FILE:-0}" == "1" ]]; then

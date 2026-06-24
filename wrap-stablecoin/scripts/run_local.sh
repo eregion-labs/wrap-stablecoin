@@ -27,7 +27,7 @@ if [[ -f "$ROOT/.env" ]]; then
 fi
 
 export CLUSTER=localnet
-ANCHOR_WALLET_PATH="${ANCHOR_WALLET_PATH:-fixtures/user/wallet.json}"
+ANCHOR_WALLET_PATH="${ANCHOR_WALLET_PATH:-.secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json}"
 export ANCHOR_WALLET="$ANCHOR_WALLET_PATH"
 
 echo "═══ Phase A: env ═══"

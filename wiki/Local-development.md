@@ -30,7 +30,7 @@ cp .env.example .env
 
 | Variable | Role |
 |----------|------|
-| `ANCHOR_WALLET_PATH` | Pays bootstrap txs; vault authority/admin (default: `fixtures/user/wallet.json`) |
+| `ANCHOR_WALLET_PATH` | Pays bootstrap txs; vault authority/admin (default: `.secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json`) |
 | `RPC_PORT` | Validator RPC port (default `8901`) |
 
 ### 3. One-time artifacts (not in git)
@@ -61,7 +61,7 @@ cd backend
 # SOLANA_RPC_URL=http://127.0.0.1:8901
 # SOLANA_NETWORK=localnet
 # PROGRAM_ID=<from anchor run local output>
-# VAULT_AUTHORITY=5s72BFe78FWbXRzPHGoq7p8J6Ky2qWWDf4Nmk5aWWxtU
+# VAULT_AUTHORITY=admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x
 cargo run
 
 # Terminal 3 — frontend
@@ -114,6 +114,7 @@ PID written to `.localnet/validator.pid`. Warmup: `sleep 3` then RPC health chec
 | 1 | `initialize` | `vault_config` exists |
 | 2 | `add_asset(USDC)` | `asset_config` exists |
 | 3 | `enable_klend` | `klend_config` exists |
+| — | `bootstrap_dummy_mints` (CCC / TTT, 100M each to admin) | always tops up admin balance |
 
 ### Phase E — Env snippets
 
@@ -157,4 +158,5 @@ yarn dump-klend
 - **`so/klend.so` not in git** — run `yarn fetch-klend-so` on fresh clones.
 - **Do not use `anchor localnet`** — broken on Anchor 0.31.1 for this workspace; use `anchor run local`.
 - **Program ID** must match `target/deploy/wrap_stablecoin-keypair.json` (printed by `anchor run local`). Set backend `PROGRAM_ID` from the env block — do not assume a fixed pubkey across clones.
-- **`anchor test` is separate** — ephemeral lifecycle; does not depend on persistent localnet.
+- **`anchor test` is separate** — ephemeral lifecycle; does not depend on persistent localnet. Runs `tests/cross_asset.ts` (CCC / TTT liability doctrine) then `tests/e2e.ts` (USDC + KLend).
+- **Dummy tokens (CCC / TTT)** — vault-only test mints in `dummy-tokens/`. Bootstrap on a running validator: `yarn bootstrap-dummy-mints` (idempotent mint creation + payer funding). `anchor test` bootstraps them automatically in the cross-asset suite.

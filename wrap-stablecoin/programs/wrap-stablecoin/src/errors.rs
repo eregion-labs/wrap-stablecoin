@@ -23,6 +23,9 @@ pub enum ErrorCode {
     #[msg("Insufficient liquidity for redemption")]
     InsufficientLiquidity,
 
+    #[msg("Redemption exceeds pool liability obligation")]
+    InsufficientLiability,
+
     #[msg("Flash mint feature is disabled")]
     FlashMintDisabled,
 
@@ -64,6 +67,9 @@ pub enum ErrorCode {
 
     #[msg("Harvest amount exceeds available yield")]
     ExceedsHarvestableYield,
+
+    #[msg("Sweep amount exceeds home vault surplus")]
+    ExceedsHomeSurplus,
 
     #[msg("Flash mint amount exceeds configured maximum")]
     FlashMintAmountExceeded,

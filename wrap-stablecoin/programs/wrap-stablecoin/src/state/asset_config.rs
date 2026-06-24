@@ -53,6 +53,12 @@ impl AssetConfig {
             .ok_or(error!(crate::errors::ErrorCode::MathOverflow))
     }
 
+    /// Redemption obligation (wStable atoms); saturates at zero when redemptions exceed mints.
+    pub fn net_liability_saturating(&self) -> u64 {
+        self.total_wrapped_minted
+            .saturating_sub(self.total_redemptions)
+    }
+
     pub fn mint_allowed(&self) -> bool {
         self.mint_enabled
             && matches!(
