@@ -22,6 +22,7 @@ import { selectRowMints } from "@/stores/selectors";
 import { usePolicyStore } from "@/stores/policyStore";
 import type { AssetStatus } from "@/types/vault";
 import { useVaultStore } from "@/stores/vaultStore";
+import { adminCopy } from "@/theme/copy";
 
 const STATUS_OPTIONS: AssetStatus[] = [
   "active",
@@ -74,21 +75,21 @@ export default function AssetPolicyTable() {
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3, gap: 2 }}>
         <Box>
           <Typography variant="h5" gutterBottom>
-            Collateral policy
+            {adminCopy.reserveGovernance}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
-            Register CCC and TTT as vault collateral and configure mint/redeem flags, haircuts,
-            caps, and status. The backend signs and submits with the vault admin keypair.
+            Register collateral reserves and configure issue/redeem flags, haircuts, caps, and
+            status. The treasury signer composes and submits transactions via the backend.
           </Typography>
         </Box>
         <Button variant="outlined" size="small" onClick={() => refresh()} disabled={busyMint != null}>
-          Refresh
+          {adminCopy.refreshLedger}
         </Button>
       </Stack>
 
       {paused && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Vault is globally paused. User wrap/unwrap is blocked until an operator clears pause.
+          {adminCopy.pausedVaultAlert}
         </Alert>
       )}
 

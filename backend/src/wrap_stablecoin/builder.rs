@@ -579,7 +579,7 @@ pub fn fetch_vault_meta(
         vault_config: vault_config_key.to_string(),
         wrapped_mint: vault.wrapped_mint.to_string(),
         wrapped_decimals: vault.wrapped_decimals,
-        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)?,
+        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals).ok().flatten(),
     })
 }
 

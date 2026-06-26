@@ -15,6 +15,7 @@ import { useSnackbar } from "notistack";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
 import { cardSx } from "@/theme/tokens";
+import { adminCopy } from "@/theme/copy";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultAsset, selectVaultLoading } from "@/stores/selectors";
 import { useMintStore } from "@/stores/mintStore";
@@ -81,12 +82,10 @@ export default function MintDashboard() {
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4, gap: 2 }}>
         <Box>
           <Typography variant="h5" gutterBottom>
-            Mint dashboard
+            {adminCopy.treasuryPageTitle}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520 }}>
-            Wrap collateral from the vault admin wallet into {wrappedName} or burn {wrappedSymbol} back to
-            underlying. The backend composes, signs, and submits transactions. Amounts are in
-            smallest on-chain units.
+            {adminCopy.treasuryPageDescription(wrappedName, wrappedSymbol)}
           </Typography>
           {summary?.admin && (
             <Typography
@@ -95,12 +94,12 @@ export default function MintDashboard() {
               display="block"
               sx={{ mt: 1, fontFamily: "monospace" }}
             >
-              Admin wallet: {summary.admin}
+              {adminCopy.treasurySigner}: {summary.admin}
             </Typography>
           )}
         </Box>
         <Button size="small" variant="outlined" onClick={() => refresh()} disabled={busy !== null}>
-          Refresh
+          {adminCopy.refreshLedger}
         </Button>
       </Stack>
 
@@ -121,7 +120,7 @@ export default function MintDashboard() {
       <Stack spacing={3} sx={{ mt: 3 }}>
         <TextField
           select
-          label="Collateral asset"
+          label={adminCopy.reserveCollateral}
           value={assetMint}
           onChange={(e) => setAssetMint(e.target.value)}
           fullWidth
@@ -142,20 +141,20 @@ export default function MintDashboard() {
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
-            aria-label="Wrap or unwrap"
+            aria-label="Mint or redeem Florin"
             sx={{ mb: 2, minHeight: 40 }}
           >
-            <Tab label="Wrap" sx={{ textTransform: "none", fontWeight: 600 }} />
-            <Tab label="Unwrap" sx={{ textTransform: "none", fontWeight: 600 }} />
+            <Tab label={adminCopy.tabMint} sx={{ textTransform: "none", fontWeight: 600 }} />
+            <Tab label={adminCopy.tabRedeem} sx={{ textTransform: "none", fontWeight: 600 }} />
           </Tabs>
 
           {tab === 0 && (
-            <Stack spacing={1} role="tabpanel" aria-label="Wrap">
+            <Stack spacing={1} role="tabpanel" aria-label={adminCopy.tabMint}>
               {selectedAsset && !selectedAsset.mintAllowed && (
                 <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
               )}
               <TextField
-                label="Collateral amount (base units)"
+                label={adminCopy.collateralAmount}
                 value={mintAmount}
                 onChange={(e) => setMintAmount(e.target.value)}
                 fullWidth
@@ -167,15 +166,15 @@ export default function MintDashboard() {
                 }
                 onClick={onMint}
               >
-                {busy === "mint" ? "Submitting…" : "Mint via backend"}
+                {busy === "mint" ? adminCopy.submitting : adminCopy.issueViaTreasury}
               </Button>
             </Stack>
           )}
 
           {tab === 1 && (
-            <Stack spacing={1} role="tabpanel" aria-label="Unwrap">
+            <Stack spacing={1} role="tabpanel" aria-label={adminCopy.tabRedeem}>
               <TextField
-                label={`${wrappedSymbol} amount to burn`}
+                label={adminCopy.redeemAmount(wrappedSymbol)}
                 value={redeemAmount}
                 onChange={(e) => setRedeemAmount(e.target.value)}
                 fullWidth
@@ -201,7 +200,7 @@ export default function MintDashboard() {
                 }
                 onClick={onRedeem}
               >
-                {busy === "redeem" ? "Submitting…" : "Redeem via backend"}
+                {busy === "redeem" ? adminCopy.submitting : adminCopy.redeemViaTreasury}
               </Button>
             </Stack>
           )}

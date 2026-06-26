@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
@@ -11,13 +10,14 @@ import WalletNavButton from "@/components/WalletNavButton";
 import NetworkSwitch from "@/components/NetworkSwitch";
 import { BRANDING } from "@/branding";
 import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
-import { solPurple } from "@/theme/tokens";
+import { publicCopy } from "@/theme/copy";
+import { florinGold } from "@/theme/tokens";
 
 export default function AppHeader() {
   const network = useNetworkStore((s) => s.network);
 
   return (
-    <AppBar position="sticky" color="transparent">
+    <AppBar position="sticky" color="transparent" elevation={0}>
       <Container maxWidth="lg" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
         <Toolbar disableGutters sx={{ minHeight: 64, gap: 2 }}>
           <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
@@ -26,10 +26,11 @@ export default function AppHeader() {
               component={Link}
               href="/"
               sx={{
+                fontFamily: "var(--font-cormorant), Georgia, serif",
                 fontWeight: 700,
-                letterSpacing: "-0.03em",
-                fontSize: "1.125rem",
-                color: solPurple,
+                letterSpacing: "0.02em",
+                fontSize: "1.375rem",
+                color: florinGold,
                 textDecoration: "none",
               }}
             >
@@ -40,7 +41,7 @@ export default function AppHeader() {
               color="text.secondary"
               sx={{ display: { xs: "none", sm: "block" } }}
             >
-              Issuance & redemption · {appNetworkLabel(network)}
+              {publicCopy.headerTagline} · {appNetworkLabel(network)}
             </Typography>
           </Box>
           <NetworkSwitch />

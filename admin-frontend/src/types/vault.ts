@@ -1,5 +1,12 @@
 import { BRANDING } from "@/branding";
 
+export type AssetStatus =
+  | "active"
+  | "paused"
+  | "mint_only"
+  | "redeem_only"
+  | "deprecated";
+
 export type MintMetadata = {
   name: string;
   symbol: string;
@@ -32,7 +39,7 @@ export type VaultAsset = {
   exposureCap: number;
   minLiquidityTarget: number;
   netLiability: number;
-  assetStatus: string;
+  assetStatus: AssetStatus;
   klendEnabled: boolean;
 };
 
@@ -55,6 +62,20 @@ export type VaultMeta = {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+};
+
+export type RedeemQuote = {
+  input: number;
+  output: number;
+  haircutBps: number;
+  assetMint: string;
+  freeLiquidity: number;
+  liability: number;
+  redeemAllowed: boolean;
+  canRedeem: boolean;
+  liquidityShortfall: number;
+  liabilityShortfall: number;
+  maxRedeemable: number;
 };
 
 export function wrappedTokenSymbol(

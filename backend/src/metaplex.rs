@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use mpl_token_metadata::accounts::Metadata;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -32,9 +32,9 @@ pub fn fetch_mint_metadata(
     decimals: u8,
 ) -> Result<Option<MintMetadata>> {
     let (metadata_key, _) = metadata_pda(mint);
-    let account = rpc
-        .get_account(&metadata_key)
-        .context("fetch metadata account")?;
+    let Some(account) = rpc.get_account(&metadata_key).ok() else {
+        return Ok(None);
+    };
     if account.data.is_empty() {
         return Ok(None);
     }

@@ -7373,6 +7373,7 @@ dependencies = [
  "anchor-spl",
  "mpl-token-metadata",
  "sha2 0.10.9",
+ "spl-token-2022",
 ]
 
 [[package]]

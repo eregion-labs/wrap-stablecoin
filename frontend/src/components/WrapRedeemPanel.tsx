@@ -19,6 +19,7 @@ import { sendWithBlockhashRefresh } from "@/lib/sendWithRefresh";
 import { fetchWalletBalances } from "@/lib/walletBalances";
 import { mintLabel } from "@/lib/mints";
 import { cardSx } from "@/theme/tokens";
+import { publicCopy } from "@/theme/copy";
 import { useNetworkStore } from "@/stores/networkStore";
 import {
   wrappedTokenName,
@@ -261,15 +262,14 @@ export default function WrapRedeemPanel() {
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4, gap: 2 }}>
         <Box>
           <Typography variant="h5" gutterBottom>
-            Wrap & redeem
+            {publicCopy.pageTitle}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520 }}>
-            Mint {wrappedName} against registered collateral or burn to redeem underlying. Amounts are in
-            smallest on-chain units.
+            {publicCopy.pageDescription.replace("Florin", wrappedName)}
           </Typography>
         </Box>
         <Button size="small" variant="outlined" onClick={refreshAll} disabled={busy !== null}>
-          Refresh data
+          {publicCopy.refreshLedger}
         </Button>
       </Stack>
 
@@ -282,7 +282,7 @@ export default function WrapRedeemPanel() {
 
         <TextField
           select
-          label="Collateral asset"
+          label={publicCopy.reserveCollateral}
           value={assetMint}
           onChange={(e) => setAssetMint(e.target.value)}
           fullWidth
@@ -302,39 +302,39 @@ export default function WrapRedeemPanel() {
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
-            aria-label="Wrap or unwrap"
+            aria-label="Mint or redeem Florin"
             sx={{ mb: 2, minHeight: 40 }}
           >
-            <Tab label="Wrap" sx={{ textTransform: "none", fontWeight: 600 }} />
-            <Tab label="Unwrap" sx={{ textTransform: "none", fontWeight: 600 }} />
+            <Tab label={publicCopy.tabMint} sx={{ textTransform: "none", fontWeight: 600 }} />
+            <Tab label={publicCopy.tabRedeem} sx={{ textTransform: "none", fontWeight: 600 }} />
           </Tabs>
 
           {tab === 0 && (
-            <Stack spacing={1} role="tabpanel" aria-label="Wrap">
+            <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabMint}>
               {selectedAsset && !selectedAsset.mintAllowed && (
                 <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
               )}
               <TextField
-                label="Collateral amount (base units)"
+                label={publicCopy.collateralAmount}
                 value={issueAmount}
                 onChange={(e) => setIssueAmount(e.target.value)}
                 fullWidth
               />
               <Stack direction="row" spacing={1}>
                 <Button variant="contained" disabled={issueDisabled} onClick={submitIssue}>
-                  {busy === "issue" ? "Signing…" : "Sign & send"}
+                  {busy === "issue" ? publicCopy.signing : publicCopy.signAndSend}
                 </Button>
                 <Button variant="outlined" disabled={!publicKey || busy !== null} onClick={simulateIssue}>
-                  {busy === "sim-issue" ? "…" : "Simulate"}
+                  {busy === "sim-issue" ? "…" : publicCopy.simulate}
                 </Button>
               </Stack>
             </Stack>
           )}
 
           {tab === 1 && (
-            <Stack spacing={1} role="tabpanel" aria-label="Unwrap">
+            <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabRedeem}>
               <TextField
-                label={`${wrappedSymbol} amount to burn`}
+                label={publicCopy.redeemAmount(wrappedSymbol)}
                 value={redeemAmount}
                 onChange={(e) => setRedeemAmount(e.target.value)}
                 fullWidth
@@ -367,10 +367,10 @@ export default function WrapRedeemPanel() {
               )}
               <Stack direction="row" spacing={1}>
                 <Button variant="contained" color="secondary" disabled={redeemDisabled} onClick={submitRedeem}>
-                  {busy === "redeem" ? "Signing…" : "Sign & send"}
+                  {busy === "redeem" ? publicCopy.signing : publicCopy.signAndSend}
                 </Button>
                 <Button variant="outlined" disabled={!publicKey || busy !== null} onClick={simulateRedeem}>
-                  {busy === "sim-redeem" ? "…" : "Simulate"}
+                  {busy === "sim-redeem" ? "…" : publicCopy.simulate}
                 </Button>
               </Stack>
             </Stack>

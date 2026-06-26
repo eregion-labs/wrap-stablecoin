@@ -221,9 +221,7 @@ export async function seedLocalnet(): Promise<SeedResult> {
     console.log("[seed] klend_config exists — skip enable_klend");
   }
 
-  console.log("[seed] initialize mint metadata (if needed)…");
-  const { metadataInitialize } = await import("../cli/commands/metadata");
-  await metadataInitialize();
+  console.log("[seed] skip mint metadata on localnet (use `pnpm cli metadata initialize` before mainnet)");
 
   return {
     programId: programId.toBase58(),

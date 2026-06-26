@@ -13,6 +13,7 @@ import Typography from "@mui/material/Typography";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { BRANDING } from "@/branding";
+import { adminCopy } from "@/theme/copy";
 import type { VaultAsset } from "@/types/vault";
 
 type Props = {
@@ -75,11 +76,10 @@ export default function VaultAccountingPanel({
   return (
     <Box sx={cardSx}>
       <Typography variant="subtitle2" gutterBottom>
-        Pool accounting
+        {adminCopy.accounts}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Home vault = free liquidity for unwrap. Treasury = harvested / swept yield sitting in
-        treasury vault. Kamino surplus requires live reserve mark (shown as 0 until exposed).
+        {adminCopy.accountsCaption}
       </Typography>
       <Table size="small" sx={{ minWidth: 720 }}>
         <TableHead>

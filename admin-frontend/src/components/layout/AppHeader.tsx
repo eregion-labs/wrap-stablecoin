@@ -12,14 +12,19 @@ import Typography from "@mui/material/Typography";
 import NetworkSwitch from "@/components/NetworkSwitch";
 import { BRANDING } from "@/branding";
 import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
-import { solPurple } from "@/theme/tokens";
+import { adminCopy } from "@/theme/copy";
+import { florinGold } from "@/theme/tokens";
 
 export default function AppHeader() {
   const pathname = usePathname();
   const network = useNetworkStore((s) => s.network);
 
+  const subtitle = pathname.startsWith("/policy")
+    ? adminCopy.reserveGovernanceSubtitle
+    : `${adminCopy.treasuryOperations} · ${appNetworkLabel(network)}`;
+
   return (
-    <AppBar position="sticky" color="transparent">
+    <AppBar position="sticky" color="transparent" elevation={0}>
       <Container maxWidth="lg" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
         <Toolbar disableGutters sx={{ minHeight: 64, gap: 2 }}>
           <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
@@ -28,23 +33,22 @@ export default function AppHeader() {
               component={Link}
               href="/"
               sx={{
+                fontFamily: "var(--font-cormorant), Georgia, serif",
                 fontWeight: 700,
-                letterSpacing: "-0.03em",
-                fontSize: "1.125rem",
-                color: solPurple,
+                letterSpacing: "0.02em",
+                fontSize: "1.375rem",
+                color: florinGold,
                 textDecoration: "none",
               }}
             >
-              {BRANDING.name} Admin
+              {BRANDING.name} {adminCopy.officeTitle}
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{ display: { xs: "none", sm: "block" } }}
             >
-              {pathname.startsWith("/policy")
-                ? "Collateral policy"
-                : `Mint operations · ${appNetworkLabel(network)}`}
+              {subtitle}
             </Typography>
           </Box>
           <NetworkSwitch />
@@ -55,7 +59,7 @@ export default function AppHeader() {
               size="small"
               variant={pathname === "/" ? "contained" : "text"}
             >
-              Mint
+              {adminCopy.treasury}
             </Button>
             <Button
               component={Link}
@@ -63,7 +67,7 @@ export default function AppHeader() {
               size="small"
               variant={pathname.startsWith("/policy") ? "contained" : "text"}
             >
-              Policy
+              {adminCopy.chamber}
             </Button>
           </Stack>
         </Toolbar>

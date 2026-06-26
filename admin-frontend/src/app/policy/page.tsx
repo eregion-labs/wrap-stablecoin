@@ -9,6 +9,7 @@ import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useVaultStore } from "@/stores/vaultStore";
+import { adminCopy } from "@/theme/copy";
 
 export default function PolicyPage() {
   const status = useVaultStore((s) => s.status);
@@ -37,7 +38,7 @@ export default function PolicyPage() {
       {summary && summary.assets.length > 0 && (
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, pb: 5 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Pool accounting
+            {adminCopy.accounts}
           </Typography>
           <VaultAccountingPanel
             assets={summary.assets}

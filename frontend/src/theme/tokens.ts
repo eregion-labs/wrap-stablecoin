@@ -1,62 +1,59 @@
-import type { SxProps, Theme } from "@mui/material/styles";
+/** Florin design language — Renaissance merchant-republic palette. */
 
-/** Design language — single source of truth for colors and surfaces. */
+export const ivory = "#F7F3EB";
+export const parchment = "#EFE6D2";
+export const marble = "#E4DED3";
+export const stone = "#B8B1A4";
 
-export const bgPrimary = "#070A12";
-export const bgSecondary = "#120A1F";
-export const surfaceCard = "#111827";
-export const surfaceElevated = "#1A2233";
+export const florinGold = "#C6A44A";
+export const republicBronze = "#8A6742";
+export const merchantCopper = "#A86B3D";
 
-export const solPurple = "#9945FF";
-export const solGreen = "#14F195";
-export const solBlue = "#00C2FF";
+export const ledgerInk = "#202020";
+export const textMuted = "#5C574E";
+export const textDisabled = "#9A9488";
 
-export const textPrimary = "#F8FAFC";
-export const textMuted = "#94A3B8";
-export const textDisabled = "#64748B";
+export const venetianGreen = "#21594D";
+export const florentineRed = "#873A35";
+export const deepIndigo = "#29344B";
 
-export const border = "rgba(255, 255, 255, 0.10)";
-export const borderStrong = "rgba(255, 255, 255, 0.12)";
+export const border = `1px solid ${republicBronze}`;
+export const borderSubtle = `1px solid ${stone}`;
 
-export const colorSuccess = "#14F195";
-export const colorWarning = "#FACC15";
-export const colorError = "#FB7185";
+export const colorSuccess = venetianGreen;
+export const colorWarning = merchantCopper;
+export const colorError = florentineRed;
+export const colorInfo = deepIndigo;
 
-export const gradientBgGlow = `
-  radial-gradient(circle at 20% 20%, rgba(153, 69, 255, 0.22), transparent 32%),
-  radial-gradient(circle at 80% 10%, rgba(20, 241, 149, 0.16), transparent 28%),
-  ${bgPrimary}
+export const cardShadow = "0 2px 12px rgba(32, 32, 32, 0.08)";
+export const focusRing = `0 0 0 2px ${florinGold}55`;
+
+export const gradientBg = `
+  linear-gradient(180deg, ${ivory} 0%, ${parchment} 100%)
 `;
 
-export const focusRing = "0 0 0 3px rgba(20, 241, 149, 0.35)";
-
-export const glassCardBackground = "rgba(17, 24, 39, 0.82)";
-export const glassCardShadow = "0 24px 80px rgba(0, 0, 0, 0.32)";
-
-/** Memo card spec — glass surface for panels (layout props unchanged). */
-export const cardSx: SxProps<Theme> = {
+/** Marble slab card — no glassmorphism. */
+export const cardSx = {
   p: 2,
   mb: 3,
-  borderRadius: "24px",
-  bgcolor: glassCardBackground,
-  border: `1px solid ${border}`,
-  boxShadow: glassCardShadow,
-  backdropFilter: "blur(20px)",
+  borderRadius: "10px",
+  bgcolor: marble,
+  border: border,
+  boxShadow: cardShadow,
   overflowX: "auto",
 };
 
-/** CSS custom properties mirrored in globals.css */
+/** CSS custom properties mirrored in florin-globals.css */
 export const cssVars = {
-  "--wstable-bg": bgPrimary,
-  "--wstable-bg-secondary": bgSecondary,
-  "--wstable-surface-card": surfaceCard,
-  "--wstable-surface-elevated": surfaceElevated,
-  "--wstable-purple": solPurple,
-  "--wstable-green": solGreen,
-  "--wstable-blue": solBlue,
-  "--wstable-text": textPrimary,
-  "--wstable-text-muted": textMuted,
-  "--wstable-border": border,
-  "--background": bgPrimary,
-  "--foreground": textPrimary,
+  "--florin-ivory": ivory,
+  "--florin-parchment": parchment,
+  "--florin-marble": marble,
+  "--florin-stone": stone,
+  "--florin-gold": florinGold,
+  "--florin-bronze": republicBronze,
+  "--florin-ink": ledgerInk,
+  "--florin-text-muted": textMuted,
+  "--florin-border": republicBronze,
+  "--background": ivory,
+  "--foreground": ledgerInk,
 } as const;
