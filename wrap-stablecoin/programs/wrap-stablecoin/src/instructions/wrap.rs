@@ -18,7 +18,8 @@ pub struct Wrap<'info> {
         mut,
         seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        constraint = !vault_config.paused @ ErrorCode::VaultPaused
+        constraint = !vault_config.paused @ ErrorCode::VaultPaused,
+        constraint = !vault_config.mint_authority_transferred @ ErrorCode::MintAuthorityTransferred
     )]
     pub vault_config: Box<Account<'info, VaultConfig>>,
 

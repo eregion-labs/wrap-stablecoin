@@ -34,6 +34,10 @@ pub struct VaultConfig {
     pub flash_mint_max_amount: u64,
     /// Reserved for optional `flash-mint` feature; unused in shipped build.
     pub flash_mint_fee_receiver: Pubkey,
+    /// Pending destination for two-step mint authority transfer. Default means no pending transfer.
+    pub pending_mint_authority: Pubkey,
+    /// When true, SPL mint authority has left this vault and `wrap` is permanently disabled.
+    pub mint_authority_transferred: bool,
 }
 
 impl VaultConfig {

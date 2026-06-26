@@ -139,4 +139,16 @@ pub enum ErrorCode {
 
     #[msg("Token decimals must be between 1 and 18")]
     InvalidDecimals,
+
+    #[msg("Mint authority has been transferred; wrapping is permanently disabled")]
+    MintAuthorityTransferred,
+
+    #[msg("No pending mint authority transfer")]
+    NoPendingMintAuthorityTransfer,
+
+    #[msg("Mint authority transfer already completed")]
+    MintAuthorityAlreadyTransferred,
+
+    #[msg("Remaining asset config accounts do not match registered assets")]
+    InvalidAssetConfigAccounts,
 }

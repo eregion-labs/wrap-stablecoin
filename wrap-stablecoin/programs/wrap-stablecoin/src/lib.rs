@@ -3,6 +3,7 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
+use crate::state::VaultConfig;
 
 pub mod constants;
 pub mod errors;
@@ -71,6 +72,41 @@ fn check_mint_cap(asset_config: &crate::state::AssetConfig, mint_amount: u64) ->
     Ok(())
 }
 
+fn disable_all_asset_minting<'info>(
+    vault_config: &VaultConfig,
+    vault_config_key: Pubkey,
+    remaining_accounts: &'info [AccountInfo<'info>],
+    program_id: &Pubkey,
+) -> Result<()> {
+    let count = vault_config.asset_count as usize;
+    require!(
+        remaining_accounts.len() == count,
+        ErrorCode::InvalidAssetConfigAccounts
+    );
+
+    for (i, asset_mint) in vault_config.registered_assets[..count].iter().enumerate() {
+        let asset_config_info = &remaining_accounts[i];
+        let (expected, _bump) = Pubkey::find_program_address(
+            &[
+                crate::pda_seeds::ASSET_CONFIG_SEED,
+                vault_config_key.as_ref(),
+                asset_mint.as_ref(),
+            ],
+            program_id,
+        );
+        require!(
+            asset_config_info.key() == expected,
+            ErrorCode::InvalidAssetConfigAccounts
+        );
+
+        let mut asset_config: Account<crate::state::AssetConfig> =
+            Account::try_from(asset_config_info)?;
+        asset_config.mint_enabled = false;
+        asset_config.exit(program_id)?;
+    }
+    Ok(())
+}
+
 #[program]
 pub mod wrap_stablecoin {
     use super::*;
@@ -82,8 +118,10 @@ pub mod wrap_stablecoin {
     };
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_spl::token_interface::{
-        burn, mint_to, transfer_checked, Burn, MintTo, TransferChecked,
+        burn, mint_to, set_authority, transfer_checked, Burn, MintTo, SetAuthority,
+        TransferChecked,
     };
+    use spl_token_2022::instruction::AuthorityType;
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
@@ -107,6 +145,8 @@ pub mod wrap_stablecoin {
         vault_config.flash_mint_fee_bps = 0;
         vault_config.flash_mint_max_amount = 0;
         vault_config.flash_mint_fee_receiver = Pubkey::default();
+        vault_config.pending_mint_authority = Pubkey::default();
+        vault_config.mint_authority_transferred = false;
 
         msg!("Vault initialized; register assets via add_asset");
         Ok(())
@@ -916,6 +956,78 @@ pub mod wrap_stablecoin {
         Ok(())
     }
 
+    pub fn propose_mint_authority(ctx: Context<ProposeMintAuthority>) -> Result<()> {
+        let new_mint_authority = ctx.accounts.new_mint_authority.key();
+        require!(
+            new_mint_authority != Pubkey::default(),
+            ErrorCode::Unauthorized
+        );
+        ctx.accounts.vault_config.pending_mint_authority = new_mint_authority;
+        emit!(MintAuthorityTransferProposed {
+            admin: ctx.accounts.vault_config.admin,
+            pending_mint_authority: new_mint_authority,
+            wrapped_mint: ctx.accounts.vault_config.wrapped_mint,
+        });
+        Ok(())
+    }
+
+    pub fn cancel_propose_mint_authority(
+        ctx: Context<CancelProposeMintAuthority>,
+    ) -> Result<()> {
+        ctx.accounts.vault_config.pending_mint_authority = Pubkey::default();
+        msg!("Mint authority transfer proposal cancelled");
+        Ok(())
+    }
+
+    pub fn accept_mint_authority<'info>(
+        ctx: Context<'_, '_, 'info, 'info, AcceptMintAuthority<'info>>,
+    ) -> Result<()> {
+        require!(
+            ctx.accounts.vault_config.pending_mint_authority != Pubkey::default(),
+            ErrorCode::NoPendingMintAuthorityTransfer
+        );
+
+        let vault_config = &mut ctx.accounts.vault_config;
+        let vault_config_key = vault_config.key();
+        let vault_authority_bump = vault_config.vault_authority_bump;
+        let new_mint_authority = ctx.accounts.new_mint_authority.key();
+
+        let authority_seeds: &[&[u8]] = &[
+            crate::pda_seeds::VAULT_AUTHORITY_SEED,
+            vault_config_key.as_ref(),
+            &[vault_authority_bump],
+        ];
+
+        set_authority(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                SetAuthority {
+                    current_authority: ctx.accounts.vault_authority.to_account_info(),
+                    account_or_mint: ctx.accounts.wrapped_mint.to_account_info(),
+                },
+                &[authority_seeds],
+            ),
+            AuthorityType::MintTokens,
+            Some(new_mint_authority),
+        )?;
+
+        disable_all_asset_minting(
+            vault_config,
+            vault_config_key,
+            ctx.remaining_accounts,
+            ctx.program_id,
+        )?;
+
+        vault_config.mint_authority_transferred = true;
+        vault_config.pending_mint_authority = Pubkey::default();
+
+        emit!(MintAuthorityTransferred {
+            wrapped_mint: vault_config.wrapped_mint,
+            new_mint_authority,
+        });
+        Ok(())
+    }
+
     #[cfg(feature = "flash-mint")]
     include!("instructions/flash_ix_handlers.rs");
 }
@@ -1002,4 +1114,17 @@ pub struct AdminTransferProposed {
 pub struct AdminTransferred {
     pub old_admin: Pubkey,
     pub new_admin: Pubkey,
+}
+
+#[event]
+pub struct MintAuthorityTransferProposed {
+    pub admin: Pubkey,
+    pub pending_mint_authority: Pubkey,
+    pub wrapped_mint: Pubkey,
+}
+
+#[event]
+pub struct MintAuthorityTransferred {
+    pub wrapped_mint: Pubkey,
+    pub new_mint_authority: Pubkey,
 }

@@ -33,6 +33,20 @@ Asset
 | `harvest_yield` | admin | Kamino surplus → `treasury_vault` (enforced on-chain) |
 | `sweep_home_surplus` | admin | Home vault surplus → `treasury_vault` (post-recall) |
 | `withdraw_treasury` | admin | Move yield from `treasury_vault` to a destination ATA |
+| `propose_mint_authority` | admin | Begin two-step SPL mint authority transfer |
+| `cancel_propose_mint_authority` | admin | Cancel pending mint authority transfer |
+| `accept_mint_authority` | pending destination | Finalize mint authority transfer; permanently disable `wrap` |
+
+## Mint authority extraction
+
+See [Mint-authority-migration.md](Mint-authority-migration.md) for the full handoff procedure, post-transfer invariants, and overlap guidance.
+
+After `accept_mint_authority`:
+
+- `VaultConfig.mint_authority_transferred == true`
+- `wrap` fails with `MintAuthorityTransferred` before accepting user collateral
+- `unwrap` continues for legacy liability
+- SPL mint authority resides on the accepted destination
 
 ## AssetConfig (per collateral)
 
