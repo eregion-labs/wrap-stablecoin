@@ -102,7 +102,7 @@ fn require_ctx<'a>(
     state.require_network(network.0).map_err(bad_request)
 }
 
-/// Decode `raw` and confirm at least one instruction targets our wStable program.
+/// Decode `raw` and confirm at least one instruction targets the wrap-stablecoin program.
 /// Returns `(status, body)` suitable for propagating as an axum error tuple.
 fn verify_tx_bytes(
     raw: &[u8],

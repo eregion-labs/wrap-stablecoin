@@ -20,7 +20,12 @@ import { fetchWalletBalances } from "@/lib/walletBalances";
 import { mintLabel } from "@/lib/mints";
 import { cardSx } from "@/theme/tokens";
 import { useNetworkStore } from "@/stores/networkStore";
-import type { RedeemQuote, VaultSummary } from "@/types/vault";
+import {
+  wrappedTokenName,
+  wrappedTokenSymbol,
+  type RedeemQuote,
+  type VaultSummary,
+} from "@/types/vault";
 
 type TxResponse = { transactionB64: string };
 
@@ -45,6 +50,8 @@ export default function WrapRedeemPanel() {
 
   const address = publicKey?.toBase58();
   const vaultAssets = vaultSummary?.assets ?? [];
+  const wrappedSymbol = wrappedTokenSymbol(vaultSummary);
+  const wrappedName = wrappedTokenName(vaultSummary);
 
   const selectedAsset = useMemo(
     () => vaultAssets.find((a) => a.mint === assetMint),
@@ -257,7 +264,7 @@ export default function WrapRedeemPanel() {
             Wrap & redeem
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520 }}>
-            Mint wStable against registered collateral or burn to redeem underlying. Amounts are in
+            Mint {wrappedName} against registered collateral or burn to redeem underlying. Amounts are in
             smallest on-chain units.
           </Typography>
         </Box>
@@ -327,7 +334,7 @@ export default function WrapRedeemPanel() {
           {tab === 1 && (
             <Stack spacing={1} role="tabpanel" aria-label="Unwrap">
               <TextField
-                label="wStable amount to burn"
+                label={`${wrappedSymbol} amount to burn`}
                 value={redeemAmount}
                 onChange={(e) => setRedeemAmount(e.target.value)}
                 fullWidth
@@ -339,7 +346,7 @@ export default function WrapRedeemPanel() {
                     ? ` (haircut ${redeemQuote.haircutBps} bps)`
                     : ""}
                   {redeemQuote.maxRedeemable > 0
-                    ? ` · max ${redeemQuote.maxRedeemable} wStable from this pool`
+                    ? ` · max ${redeemQuote.maxRedeemable} ${wrappedSymbol} from this pool`
                     : ""}
                 </Typography>
               )}

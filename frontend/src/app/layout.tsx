@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "@/providers/providers";
+import { BRANDING } from "@/branding";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "wStable",
-  description: "Issue and redeem wrapped stablecoin",
+  title: BRANDING.name,
+  description: BRANDING.description,
 };
 
 export default function RootLayout({

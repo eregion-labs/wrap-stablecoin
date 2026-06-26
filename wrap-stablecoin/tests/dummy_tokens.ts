@@ -35,7 +35,7 @@ export const HUNDRED_M = 100n * ONE_M;
 export const LOCAL_ADMIN_DUMMY_SUPPLY = HUNDRED_M;
 /** Localnet bootstrap target SOL balance per wallet */
 export const LOCAL_SOL_TARGET = 100 * LAMPORTS_PER_SOL;
-/** Smallest wStable burn for doctrine tests */
+/** Smallest Florin (FLRN) burn for doctrine tests */
 export const ONE_UNIT = 1n;
 
 export const CCC_MINT = new PublicKey(

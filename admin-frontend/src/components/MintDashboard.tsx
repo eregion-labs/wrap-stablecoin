@@ -15,6 +15,7 @@ import { useSnackbar } from "notistack";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
 import { cardSx } from "@/theme/tokens";
+import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultAsset, selectVaultLoading } from "@/stores/selectors";
 import { useMintStore } from "@/stores/mintStore";
 import { useVaultStore } from "@/stores/vaultStore";
@@ -41,12 +42,14 @@ export default function MintDashboard() {
 
   const loading = selectVaultLoading(status);
   const vaultAssets = summary?.assets ?? [];
+  const wrappedSymbol = wrappedTokenSymbol(summary);
+  const wrappedName = wrappedTokenName(summary);
   const selectedAsset = selectVaultAsset(summary, assetMint);
 
   const onMint = async () => {
     const result = await submitMint();
     if (result.ok) {
-      enqueueSnackbar(`Minted wStable — ${result.data.signature.slice(0, 8)}…`, {
+      enqueueSnackbar(`Minted ${wrappedSymbol} — ${result.data.signature.slice(0, 8)}…`, {
         variant: "success",
       });
     } else {
@@ -81,7 +84,7 @@ export default function MintDashboard() {
             Mint dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520 }}>
-            Wrap collateral from the vault admin wallet into wStable or burn wStable back to
+            Wrap collateral from the vault admin wallet into {wrappedName} or burn {wrappedSymbol} back to
             underlying. The backend composes, signs, and submits transactions. Amounts are in
             smallest on-chain units.
           </Typography>
@@ -108,7 +111,11 @@ export default function MintDashboard() {
       )}
 
       {summary && summary.assets.length > 0 && (
-        <VaultAccountingPanel assets={summary.assets} wrappedDecimals={summary.wrappedDecimals} />
+        <VaultAccountingPanel
+          assets={summary.assets}
+          wrappedDecimals={summary.wrappedDecimals}
+          wrappedSymbol={wrappedSymbol}
+        />
       )}
 
       <Stack spacing={3} sx={{ mt: 3 }}>
@@ -168,7 +175,7 @@ export default function MintDashboard() {
           {tab === 1 && (
             <Stack spacing={1} role="tabpanel" aria-label="Unwrap">
               <TextField
-                label="wStable amount to burn"
+                label={`${wrappedSymbol} amount to burn`}
                 value={redeemAmount}
                 onChange={(e) => setRedeemAmount(e.target.value)}
                 fullWidth

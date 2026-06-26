@@ -1,6 +1,6 @@
-# wStable / Olympus Complex Wiki
+# Florin (FLRN) / Olympus Complex Wiki
 
-Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrapped stablecoin (wStable) on Solana.
+Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrapped stablecoin (Florin (FLRN)) on Solana.
 
 ## Pages
 
@@ -18,7 +18,7 @@ Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrap
 |------|-------|
 | Program name | `wrap_stablecoin` |
 | Program ID | `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT` |
-| Base collateral | USDC (1:1 wStable mint/burn) |
+| Base collateral | USDC (1:1 Florin (FLRN) mint/burn) |
 | Yield venue | Kamino KLend |
 | Off-chain swaps | Jupiter (backend only) |
 

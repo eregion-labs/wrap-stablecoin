@@ -4,13 +4,13 @@ use anchor_spl::token_interface::{Mint, TokenInterface};
 use crate::errors::ErrorCode;
 use crate::state::VaultConfig;
 
-/// Bootstrap vault + wStable mint. Register collateral via `add_asset`; enable Kamino via `enable_klend`.
+/// Bootstrap vault + wrapped token mint. Register collateral via `add_asset`; enable Kamino via `enable_klend`.
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    /// Mint whose `decimals` field sets wStable precision (any value in 1..=18).
+    /// Mint whose `decimals` field sets wrapped token precision (any value in 1..=18).
     #[account(
         constraint = decimals_mint.decimals >= crate::utils::MIN_TOKEN_DECIMALS @ ErrorCode::InvalidDecimals,
         constraint = decimals_mint.decimals <= crate::utils::MAX_TOKEN_DECIMALS @ ErrorCode::InvalidDecimals,

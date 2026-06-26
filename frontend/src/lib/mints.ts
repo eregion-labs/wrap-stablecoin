@@ -1,4 +1,6 @@
 /** Known collateral mints for display labels. */
+import { BRANDING } from "@/branding";
+
 export const MINT_LABELS: Record<string, string> = {
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
@@ -6,11 +8,11 @@ export const MINT_LABELS: Record<string, string> = {
   tttv7GkTAwb1pE6J2Gb3xghGcTXfxrk5B7cM8G2QNWR: "TTT",
 };
 
-/** Token chip colors from wStable design language. */
+/** Token chip colors keyed by protocol role, not brand symbol. */
 export const TOKEN_CHIP_COLORS: Record<string, string> = {
   USDC: "#2775CA",
   USDT: "#26A17B",
-  wStable: "#9945FF",
+  WRAPPED: BRANDING.primaryColor,
 };
 
 export function tokenChipColor(label: string): string | undefined {

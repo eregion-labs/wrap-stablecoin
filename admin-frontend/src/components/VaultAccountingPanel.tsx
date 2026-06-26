@@ -12,11 +12,13 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
+import { BRANDING } from "@/branding";
 import type { VaultAsset } from "@/types/vault";
 
 type Props = {
   assets: VaultAsset[];
   wrappedDecimals: number;
+  wrappedSymbol?: string;
 };
 
 function AmountCell({ amount, decimals }: { amount: number; decimals: number }) {
@@ -61,7 +63,11 @@ function AssetRow({
   );
 }
 
-export default function VaultAccountingPanel({ assets, wrappedDecimals }: Props) {
+export default function VaultAccountingPanel({
+  assets,
+  wrappedDecimals,
+  wrappedSymbol = BRANDING.symbol,
+}: Props) {
   if (assets.length === 0) {
     return null;
   }
@@ -83,7 +89,7 @@ export default function VaultAccountingPanel({ assets, wrappedDecimals }: Props)
             <TableCell align="right">In Kamino</TableCell>
             <TableCell align="right">Treasury</TableCell>
             <TableCell align="right">Kamino surplus</TableCell>
-            <TableCell align="right">Liability (wStable)</TableCell>
+            <TableCell align="right">Liability ({wrappedSymbol})</TableCell>
             <TableCell align="right">Liability (underlying)</TableCell>
             <TableCell align="right">Home surplus</TableCell>
             <TableCell align="right">Max redeemable</TableCell>

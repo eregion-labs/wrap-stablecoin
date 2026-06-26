@@ -58,7 +58,7 @@ pub struct Wrap<'info> {
     )]
     pub user_wrapped: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// wStable mint; precision fixed at vault init (`vault_config.wrapped_decimals`).
+    /// wrapped token mint; precision fixed at vault init (`vault_config.wrapped_decimals`).
     #[account(
         mut,
         address = vault_config.wrapped_mint,

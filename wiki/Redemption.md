@@ -1,13 +1,13 @@
 # Redemption (`unwrap`)
 
-When a user burns wStable to receive underlying collateral, liquidity comes **only** from the home vault (`token_vault`). Kamino is not part of the user redemption path.
+When a user burns Florin (FLRN) to receive underlying collateral, liquidity comes **only** from the home vault (`token_vault`). Kamino is not part of the user redemption path.
 
 ## Flow
 
 ```text
 unwrap(amount):
   1. Require amount ≤ liability_i (redemption obligation on this pool)
-  2. Burn wStable; compute out_amount (redemption haircut)
+  2. Burn Florin (FLRN); compute out_amount (redemption haircut)
   3. Require token_vault.balance >= out_amount
   4. Transfer out_amount from token_vault → user
 ```
@@ -24,8 +24,8 @@ Clients should call `GET /v1/quote/redeem?assetMint=&amount=` for the expected `
 
 | Path | Who | Purpose |
 |------|-----|---------|
-| `unwrap` | user | Burn wStable; pay from `token_vault` only |
-| `withdraw_from_klend` | admin | Move kTokens → home vault without burning wStable |
+| `unwrap` | user | Burn Florin (FLRN); pay from `token_vault` only |
+| `withdraw_from_klend` | admin | Move kTokens → home vault without burning Florin (FLRN) |
 | `withdraw_all_from_klend` | admin | Recall entire Kamino position to home vault |
 
 Before heavy redemption windows, operators pre-fill `token_vault` via `withdraw_from_klend` or `withdraw_all_from_klend`. Kamino outages affect treasury yield and admin ops, not user unwrap atomicity.

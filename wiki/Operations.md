@@ -8,11 +8,11 @@ Operator runbook for deposit/redemption decoupling and per-pool surplus manageme
 |---|---|
 | `freeLiquidity` | `token_vault` balance (home vault) |
 | `deployedToKamino` | Principal tracked in Kamino (`total_liquidity_in_klend`) |
-| `liability` | wStable redemption obligation for this pool |
+| `liability` | Florin (FLRN) redemption obligation for this pool |
 | `backing` | `freeLiquidity + deployedToKamino` |
 | `homeSurplus` | Sweepable home vault excess above liability + cushion |
 | `cushion` | `min_liquidity_target` (reserved home balance) |
-| `maxRedeemable` | Max wStable burnable from this pool now |
+| `maxRedeemable` | Max Florin (FLRN) burnable from this pool now |
 
 See [Accounting.md](Accounting.md) for formulas.
 

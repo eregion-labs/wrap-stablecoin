@@ -31,7 +31,7 @@ pub fn tx_targets_program(vtx: &VersionedTransaction, program_id: &Pubkey) -> bo
         .any(|i| keys.get(i as usize) == Some(program_id))
 }
 
-/// Reject a transaction that does not invoke our wStable program. Every tx the
+/// Reject a transaction that does not invoke the wrap-stablecoin program. Every tx the
 /// backend builds, previews, or returns must route through our program so a
 /// client can never coerce the API into endorsing an unrelated transaction.
 pub fn ensure_tx_targets_program(vtx: &VersionedTransaction, program_id: &Pubkey) -> Result<()> {
@@ -39,7 +39,7 @@ pub fn ensure_tx_targets_program(vtx: &VersionedTransaction, program_id: &Pubkey
         Ok(())
     } else {
         Err(anyhow!(
-            "transaction does not invoke wStable program {program_id}"
+            "transaction does not invoke wrap-stablecoin program {program_id}"
         ))
     }
 }

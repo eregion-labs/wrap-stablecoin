@@ -1,3 +1,14 @@
+import { BRANDING } from "@/branding";
+
+export type MintMetadata = {
+  name: string;
+  symbol: string;
+  decimals: number;
+  uri: string;
+  updateAuthority: string | null;
+  isMutable: boolean;
+};
+
 export type VaultAsset = {
   mint: string;
   tokenDecimals: number;
@@ -32,6 +43,7 @@ export type VaultSummary = {
   vaultConfig: string;
   wrappedMint: string;
   wrappedDecimals: number;
+  mintMetadata?: MintMetadata | null;
   assets: VaultAsset[];
 };
 
@@ -42,25 +54,17 @@ export type VaultMeta = {
   vaultConfig: string;
   wrappedMint: string;
   wrappedDecimals: number;
+  mintMetadata?: MintMetadata | null;
 };
 
-export type AssetStatus =
-  | "active"
-  | "paused"
-  | "mint_only"
-  | "redeem_only"
-  | "deprecated";
+export function wrappedTokenSymbol(
+  summary: { mintMetadata?: MintMetadata | null } | null | undefined,
+): string {
+  return summary?.mintMetadata?.symbol ?? BRANDING.symbol;
+}
 
-export type RedeemQuote = {
-  input: number;
-  output: number;
-  haircutBps: number;
-  assetMint: string;
-  freeLiquidity: number;
-  liability: number;
-  redeemAllowed: boolean;
-  canRedeem: boolean;
-  liquidityShortfall: number;
-  liabilityShortfall: number;
-  maxRedeemable: number;
-};
+export function wrappedTokenName(
+  summary: { mintMetadata?: MintMetadata | null } | null | undefined,
+): string {
+  return summary?.mintMetadata?.name ?? BRANDING.name;
+}

@@ -28,6 +28,7 @@ check-cfg = [
 [dependencies]
 anchor-lang = "0.31.1"
 anchor-spl = "0.31.1"
+mpl-token-metadata = "5.1.0"
 sha2 = "0.10"
 
 [dev-dependencies]

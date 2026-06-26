@@ -1,4 +1,4 @@
-# wStable Admin
+# Florin Admin
 
 Operator console for vault mint operations and collateral policy. **No wallet connection** — the backend signs and submits transactions using the configured vault admin keypair.
 

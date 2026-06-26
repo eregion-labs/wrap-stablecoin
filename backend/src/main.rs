@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(AppState::from_env()?);
     info!(
         networks = ?state.configured_networks(),
-        "wrap-stablecoin API listening (multi-network; cluster chosen via x-solana-network)"
+        "Florin API listening (multi-network; cluster chosen via x-solana-network)"
     );
     let app = app(state);
 
@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(8080);
     let addr: SocketAddr = format!("{host}:{port}").parse()?;
-    info!(%addr, "wrap-stablecoin API listening");
+    info!(%addr, "Florin API listening");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

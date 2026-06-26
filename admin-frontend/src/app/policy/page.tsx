@@ -6,6 +6,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AssetPolicyTable from "@/components/AssetPolicyTable";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
+import { wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useVaultStore } from "@/stores/vaultStore";
 
@@ -41,6 +42,7 @@ export default function PolicyPage() {
           <VaultAccountingPanel
             assets={summary.assets}
             wrappedDecimals={summary.wrappedDecimals}
+            wrappedSymbol={wrappedTokenSymbol(summary)}
           />
         </Box>
       )}

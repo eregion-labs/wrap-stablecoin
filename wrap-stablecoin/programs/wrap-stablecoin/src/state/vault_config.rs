@@ -21,7 +21,7 @@ pub struct VaultConfig {
     pub asset_count: u8,
     /// Mints with an `AssetConfig` PDA under this vault.
     pub registered_assets: [Pubkey; MAX_REGISTERED_ASSETS],
-    /// Global wStable liability counter (wraps − unwraps).
+    /// Global wrapped token liability counter (wraps − unwraps).
     pub total_stable_deposited: u64,
     pub paused: bool,
     pub wrap_public: bool,

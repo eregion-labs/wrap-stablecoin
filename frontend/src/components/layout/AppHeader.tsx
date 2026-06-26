@@ -9,6 +9,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import WalletNavButton from "@/components/WalletNavButton";
 import NetworkSwitch from "@/components/NetworkSwitch";
+import { BRANDING } from "@/branding";
 import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
 import { solPurple } from "@/theme/tokens";
 
@@ -32,7 +33,7 @@ export default function AppHeader() {
                 textDecoration: "none",
               }}
             >
-              wStable
+              {BRANDING.name}
             </Typography>
             <Typography
               variant="body2"

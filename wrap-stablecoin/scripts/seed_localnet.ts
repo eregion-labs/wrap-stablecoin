@@ -221,6 +221,10 @@ export async function seedLocalnet(): Promise<SeedResult> {
     console.log("[seed] klend_config exists — skip enable_klend");
   }
 
+  console.log("[seed] initialize mint metadata (if needed)…");
+  const { metadataInitialize } = await import("../cli/commands/metadata");
+  await metadataInitialize();
+
   return {
     programId: programId.toBase58(),
     vaultAuthority: authority.publicKey.toBase58(),

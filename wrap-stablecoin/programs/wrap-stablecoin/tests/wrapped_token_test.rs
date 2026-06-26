@@ -765,7 +765,7 @@ fn test_03_initialize_wrapped_vault() -> Result<()> {
     eprintln!("===========================================");
     eprintln!("Wrapped Vault initialized!");
     eprintln!("Vault Config: {}", vault_config);
-    eprintln!("Wrapped Mint (wStable): {}", wrapped_mint);
+    eprintln!("Wrapped Mint (Florin (FLRN)): {}", wrapped_mint);
     eprintln!("Vault Authority: {}", vault_authority);
     eprintln!("Tx: {}", signature);
     eprintln!("===========================================");
@@ -870,7 +870,7 @@ fn test_05_unwrap_wstable() -> Result<()> {
     let user_usdc = get_associated_token_address(&payer.pubkey(), &usdc_mint);
     let user_wrapped = get_associated_token_address(&payer.pubkey(), &wrapped_mint);
 
-    let unwrap_amount = 1_000_000u64; // 1 wStable
+    let unwrap_amount = 1_000_000u64; // 1 Florin (FLRN)
 
     let ix = wrapped_token_unwrap_ix(
         program_id,
@@ -898,7 +898,7 @@ fn test_05_unwrap_wstable() -> Result<()> {
     let signature = rpc.send_and_confirm_transaction(&tx)?;
 
     eprintln!("===========================================");
-    eprintln!("Unwrapped {} wStable!", unwrap_amount);
+    eprintln!("Unwrapped {} Florin (FLRN)!", unwrap_amount);
     eprintln!("Tx: {}", signature);
     eprintln!("===========================================");
 

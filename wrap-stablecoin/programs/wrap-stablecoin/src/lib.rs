@@ -112,6 +112,15 @@ pub mod wrap_stablecoin {
         Ok(())
     }
 
+    pub fn initialize_mint_metadata(
+        ctx: Context<InitializeMintMetadata>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        initialize_mint_metadata_handler(ctx, name, symbol, uri)
+    }
+
     pub fn add_asset(ctx: Context<AddAsset>, args: AddAssetArgs) -> Result<()> {
         let vault_config = &mut ctx.accounts.vault_config;
         let asset_config = &mut ctx.accounts.asset_config;

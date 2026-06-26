@@ -119,8 +119,17 @@ pub enum ErrorCode {
     #[msg("Asset not registered in vault")]
     AssetNotRegistered,
 
-    #[msg("wStable cannot back itself as collateral")]
+    #[msg("Wrapped token cannot back itself as collateral")]
     ReflexiveCollateralForbidden,
+
+    #[msg("Invalid mint metadata")]
+    InvalidMetadata,
+
+    #[msg("Mint metadata account address mismatch")]
+    InvalidMetadataAccount,
+
+    #[msg("Mint metadata already initialized")]
+    MetadataAlreadyInitialized,
 
     #[msg("KLend is not enabled for this asset")]
     KlendNotEnabled,

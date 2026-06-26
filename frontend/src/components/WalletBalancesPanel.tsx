@@ -10,7 +10,7 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
-import type { VaultSummary } from "@/types/vault";
+import { wrappedTokenSymbol, type VaultSummary } from "@/types/vault";
 
 type Props = {
   summary: VaultSummary | null;
@@ -32,7 +32,7 @@ export default function WalletBalancesPanel({ summary, walletBalances, connected
     })),
     {
       key: summary.wrappedMint,
-      label: "wStable",
+      label: wrappedTokenSymbol(summary),
       amount: connected ? (walletBalances.get(summary.wrappedMint) ?? 0) : null,
       decimals: summary.wrappedDecimals,
     },

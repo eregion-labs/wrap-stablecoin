@@ -10,6 +10,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod admin_wallet;
 pub mod app_state;
 pub mod jupiter;
+pub mod metaplex;
 pub mod routes;
 pub mod tx_submit;
 pub mod wrap_stablecoin;
@@ -56,13 +57,14 @@ use crate::routes::{admin, admin_ops, guard, ping, tx, vault};
         crate::wrap_stablecoin::VaultAssetView,
         crate::wrap_stablecoin::VaultMetaView,
         crate::wrap_stablecoin::RedeemQuoteView,
+        crate::metaplex::MintMetadata,
     )),
     tags(
         (name = "health", description = "Health check"),
         (name = "transactions", description = "Unsigned Solana transactions"),
     ),
     info(
-        title = "Wrap stablecoin API",
+        title = "Florin API",
         version = "0.1.0",
         description = "Build unsigned wrap / unwrap (issue / redeem) transactions; optional Jupiter composition."
     )

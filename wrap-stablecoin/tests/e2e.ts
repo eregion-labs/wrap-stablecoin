@@ -656,7 +656,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     );
   });
 
-  it("unwraps wStable when only home vault has liquidity", async () => {
+  it("unwraps Florin (FLRN) when only home vault has liquidity", async () => {
     const wrapAmount = new anchor.BN(10_000_000);
     await program.methods
       .wrap({ amount: wrapAmount } as any)

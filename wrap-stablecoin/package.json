@@ -3,6 +3,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "cli": "ts-node cli/index.ts",
     "fetch-klend-so": "bash scripts/fetch_klend_so.sh",
     "print-clones": "ts-node scripts/print_klend_clones.ts",
     "dump-klend": "ts-node scripts/dump_klend_state.ts",
@@ -12,6 +13,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
     "@kamino-finance/klend-sdk": "^7.3.22",
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
     "@solana/spl-token": "^0.4.8",
     "@solana/web3.js": "^1.95.0"
   },

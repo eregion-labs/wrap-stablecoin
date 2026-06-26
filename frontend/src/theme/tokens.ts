@@ -1,6 +1,6 @@
 import type { SxProps, Theme } from "@mui/material/styles";
 
-/** wStable design language — single source of truth for colors and surfaces. */
+/** Design language — single source of truth for colors and surfaces. */
 
 export const bgPrimary = "#070A12";
 export const bgSecondary = "#120A1F";

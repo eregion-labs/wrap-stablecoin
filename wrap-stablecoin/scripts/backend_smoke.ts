@@ -15,7 +15,7 @@
  *   2. Generates a fresh throwaway signer keypair.
  *   3. Airdrops SOL and transfers USDC from the fixture wallet to the signer.
  *   4. POST /v1/tx/issue — signs returned VersionedTransaction with the
- *      throwaway keypair, submits, confirms, asserts wStable balance.
+ *      throwaway keypair, submits, confirms, asserts Florin (FLRN) balance.
  *   5. POST /v1/tx/redeem — same flow, asserts USDC balance returned.
  *
  * This specifically validates the allowlist-slot sentinel fix in
@@ -163,7 +163,7 @@ async function main() {
     signer.publicKey,
   );
   const wrappedBal = await getAccount(connection, signerWrappedAta);
-  console.log(`[issue] signer wStable balance: ${wrappedBal.amount}`);
+  console.log(`[issue] signer Florin (FLRN) balance: ${wrappedBal.amount}`);
   if (wrappedBal.amount !== BigInt(WRAP_AMOUNT)) {
     throw new Error(
       `issue amount mismatch: got ${wrappedBal.amount}, expected ${WRAP_AMOUNT}`,
@@ -172,7 +172,7 @@ async function main() {
 
   // ─── Step 5: POST /v1/tx/redeem, sign, submit ────────────────────────────
   console.log("\n[redeem] POST /v1/tx/redeem…");
-  const REDEEM_AMOUNT = 20_000_000; // 20 wStable
+  const REDEEM_AMOUNT = 20_000_000; // 20 Florin (FLRN)
   const redeemRes = await postJson<{ transactionB64: string }>(
     "/v1/tx/redeem",
     {
@@ -190,7 +190,7 @@ async function main() {
 
   const wrappedAfter = await getAccount(connection, signerWrappedAta);
   const usdcAfter = await getAccount(connection, signerUsdcAta);
-  console.log(`[redeem] signer wStable: ${wrappedAfter.amount}`);
+  console.log(`[redeem] signer Florin (FLRN): ${wrappedAfter.amount}`);
   console.log(`[redeem] signer USDC:    ${usdcAfter.amount}`);
 
   const expectedWrapped = BigInt(WRAP_AMOUNT - REDEEM_AMOUNT);

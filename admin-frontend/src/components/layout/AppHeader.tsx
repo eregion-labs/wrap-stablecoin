@@ -10,6 +10,7 @@ import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import NetworkSwitch from "@/components/NetworkSwitch";
+import { BRANDING } from "@/branding";
 import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
 import { solPurple } from "@/theme/tokens";
 
@@ -34,7 +35,7 @@ export default function AppHeader() {
                 textDecoration: "none",
               }}
             >
-              wStable Admin
+              {BRANDING.name} Admin
             </Typography>
             <Typography
               variant="body2"

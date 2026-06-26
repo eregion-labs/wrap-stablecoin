@@ -1,6 +1,6 @@
 # wrap-stablecoin
 
-Anchor program implementing wStable — a collateral-backed wrapped token with optional Kamino KLend yield. See [../../README.md](../../README.md) for the high-level flow and design.
+Anchor program implementing Florin (FLRN) — a collateral-backed wrapped token with optional Kamino KLend yield. See [../../README.md](../../README.md) for the high-level flow and design.
 
 Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
 
@@ -42,7 +42,7 @@ flowchart TB
 |---|---|---|
 | `vault_config` | `["vault_config", authority]` | Global config |
 | `vault_authority` | `["vault_authority", vault_config]` | Signs token + CPI operations |
-| `wrapped_mint` | `["wrapped_mint", vault_config]` | wStable mint |
+| `wrapped_mint` | `["wrapped_mint", vault_config]` | Florin (FLRN) mint |
 | `asset_config` | `["token_config", vault_config, token_mint]` | Per-asset config |
 | `token_collateral_vault` | `["token_collateral_vault", asset_config]` | Holds kTokens |
 | `token_vault` | `["token_vault", asset_config]` | Holds free collateral |
@@ -59,9 +59,9 @@ flowchart TB
 | `authority` | `Pubkey` | Immutable; PDA seed root |
 | `admin` | `Pubkey` | Operational admin; `has_one` gate on privileged ix |
 | `pending_admin` | `Pubkey` | Set by `transfer_authority`; cleared on `accept_authority` |
-| `wrapped_mint` | `Pubkey` | wStable mint |
+| `wrapped_mint` | `Pubkey` | Florin (FLRN) mint |
 | `wrapped_mint_bump`, `vault_authority_bump`, `bump` | `u8` | PDA bumps |
-| `total_stable_deposited` | `u64` | Aggregate user wStable liability |
+| `total_stable_deposited` | `u64` | Aggregate user Florin (FLRN) liability |
 | `paused` | `bool` | Hard gate on wrap / unwrap / admin KLend ops |
 | `wrap_public`, `unwrap_public` | `bool` | If false, require admin or allowlist |
 | `flash_mint_*` (4 fields) | various | **Reserved** — unused in shipped build; see Flash-mint.md |
@@ -85,9 +85,9 @@ flowchart TB
 
 ### User flows
 
-**`wrap(amount)`** — transfers collateral to `token_vault`, mints wStable 1:1 on delta received.
+**`wrap(amount)`** — transfers collateral to `token_vault`, mints Florin (FLRN) 1:1 on delta received.
 
-**`unwrap(amount)`** — burns wStable, transfers collateral from `token_vault`. Fails with `InsufficientLiquidity` if vault is under-funded.
+**`unwrap(amount)`** — burns Florin (FLRN), transfers collateral from `token_vault`. Fails with `InsufficientLiquidity` if vault is under-funded.
 
 ### Admin — KLend rebalancing
 

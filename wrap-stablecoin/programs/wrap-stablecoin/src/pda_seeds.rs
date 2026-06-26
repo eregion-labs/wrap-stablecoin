@@ -12,7 +12,7 @@ pub const VAULT_CONFIG_SEED: &[u8] = b"vault_config";
 /// Token-authority PDA for vault-owned ATAs. Seeds: `["vault_authority", vault_config]`.
 pub const VAULT_AUTHORITY_SEED: &[u8] = b"vault_authority";
 
-/// wStable mint. Seeds: `["wrapped_mint", vault_config]`.
+/// wrapped token mint. Seeds: `["wrapped_mint", vault_config]`.
 pub const WRAPPED_MINT_SEED: &[u8] = b"wrapped_mint";
 
 /// Per-collateral registry (`AssetConfig`). Seeds: `["token_config", vault_config, underlying_mint]`.
@@ -25,7 +25,7 @@ pub const TOKEN_CONFIG_SEED: &[u8] = ASSET_CONFIG_SEED;
 /// Free backing vault for an asset. Seeds: `["token_vault", asset_config]`.
 pub const TOKEN_VAULT_SEED: &[u8] = b"token_vault";
 
-/// Protocol yield vault (not wStable backing). Seeds: `["treasury_vault", asset_config]`.
+/// Protocol yield vault (not wrapped token backing). Seeds: `["treasury_vault", asset_config]`.
 pub const TREASURY_VAULT_SEED: &[u8] = b"treasury_vault";
 
 /// Optional Kamino integration config. Seeds: `["klend_config", asset_config]`.

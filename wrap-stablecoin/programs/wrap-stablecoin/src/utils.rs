@@ -80,12 +80,12 @@ pub fn apply_mint_haircut(amount: u64, haircut_bps: u16) -> Result<u64> {
         .ok_or(ErrorCode::MathOverflow)? as u64)
 }
 
-/// Apply redemption haircut: underlying out per wStable burned.
+/// Apply redemption haircut: underlying out per wrapped token burned.
 pub fn apply_redemption_haircut(amount: u64, haircut_bps: u16) -> Result<u64> {
     apply_mint_haircut(amount, haircut_bps)
 }
 
-/// Underlying atoms received → wStable atoms to mint (scale, then mint haircut).
+/// Underlying atoms received → wrapped token atoms to mint (scale, then mint haircut).
 pub fn underlying_to_wrapped_amount(
     underlying_amount: u64,
     underlying_decimals: u8,
@@ -100,7 +100,7 @@ pub fn underlying_to_wrapped_amount(
     apply_mint_haircut(scaled, mint_haircut_bps)
 }
 
-/// wStable atoms burned → underlying atoms to pay (scale, then redemption haircut).
+/// wrapped token atoms burned → underlying atoms to pay (scale, then redemption haircut).
 pub fn wrapped_to_underlying_amount(
     wrapped_amount: u64,
     underlying_decimals: u8,

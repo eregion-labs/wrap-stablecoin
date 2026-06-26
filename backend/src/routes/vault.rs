@@ -69,7 +69,7 @@ pub async fn vault_meta(
     get,
     path = "/v1/quote/redeem",
     params(
-        ("amount" = u64, Query, description = "wStable atoms to burn"),
+        ("amount" = u64, Query, description = "Wrapped token atoms to burn"),
         ("assetMint" = Option<String>, Query, description = "Collateral mint; defaults to server DEFAULT_ASSET_MINT"),
     ),
     responses((status = 200, body = RedeemQuoteView), (status = 400))

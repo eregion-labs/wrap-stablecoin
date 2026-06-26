@@ -10,26 +10,26 @@ pub struct AssetConfig {
     pub token_mint: Pubkey,
     /// `underlying_mint.decimals` snapshot (1..=18).
     pub token_decimals: u8,
-    /// Protocol yield vault (PDA). Not part of wStable backing.
+    /// Protocol yield vault (PDA). Not part of wrapped token backing.
     pub treasury_vault: Pubkey,
     pub treasury_vault_bump: u8,
     pub token_vault: Pubkey,
     pub token_vault_bump: u8,
     /// Cumulative underlying deposited via `wrap` (underlying token atoms).
     pub total_deposits: u64,
-    /// Cumulative wStable minted from this pool (wrapped token atoms).
+    /// Cumulative wrapped token minted from this pool (wrapped token atoms).
     pub total_wrapped_minted: u64,
-    /// Cumulative wStable burned via `unwrap` against this pool (wrapped token atoms).
+    /// Cumulative wrapped token burned via `unwrap` against this pool (wrapped token atoms).
     pub total_redemptions: u64,
     pub mint_enabled: bool,
     pub redeem_enabled: bool,
-    /// Bps discount on wStable minted per unit underlying (200 = mint 0.98 wStable per 1 USDT).
+    /// Bps discount on wrapped token minted per unit underlying (200 = mint 0.98 wStable per 1 USDT).
     pub mint_haircut_bps: u16,
-    /// Bps discount on underlying paid per unit wStable burned.
+    /// Bps discount on underlying paid per unit wrapped token burned.
     pub redemption_haircut_bps: u16,
-    /// Max outstanding wStable liability (`total_wrapped_minted - total_redemptions`). 0 = unlimited.
+    /// Max outstanding wrapped token liability (`total_wrapped_minted - total_redemptions`). 0 = unlimited.
     pub mint_cap: u64,
-    /// Alias exposure cap in wStable atoms for governance dashboards. 0 = unlimited.
+    /// Alias exposure cap in wrapped token atoms for governance dashboards. 0 = unlimited.
     pub exposure_cap: u64,
     /// Policy hint: target free-vault liquidity for redemption UX.
     pub min_liquidity_target: u64,
@@ -46,14 +46,14 @@ pub enum AssetStatus {
 }
 
 impl AssetConfig {
-    /// Outstanding wStable liability backed by this pool.
+    /// Outstanding wrapped token liability backed by this pool.
     pub fn net_liability(&self) -> Result<u64> {
         self.total_wrapped_minted
             .checked_sub(self.total_redemptions)
             .ok_or(error!(crate::errors::ErrorCode::MathOverflow))
     }
 
-    /// Redemption obligation (wStable atoms); saturates at zero when redemptions exceed mints.
+    /// Redemption obligation (wrapped token atoms); saturates at zero when redemptions exceed mints.
     pub fn net_liability_saturating(&self) -> u64 {
         self.total_wrapped_minted
             .saturating_sub(self.total_redemptions)

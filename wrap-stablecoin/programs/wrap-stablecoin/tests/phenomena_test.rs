@@ -7,8 +7,8 @@
 //! 4. If init_reserve fails: use vault-only path with our own collateral mint
 //! 5. Initialize wrapped vault
 //! 6. Add base token (USDC)
-//! 7. Wrap: user deposits USDC → receives wStable
-//! 8. Unwrap: user burns wStable → receives USDC back
+//! 7. Wrap: user deposits USDC → receives Florin (FLRN)
+//! 8. Unwrap: user burns Florin (FLRN) → receives USDC back
 
 use anchor_client::solana_sdk::{pubkey::Pubkey, signature::read_keypair_file};
 use anchor_client::{solana_sdk::commitment_config::CommitmentConfig, Client, Cluster};
@@ -307,13 +307,13 @@ fn test_setup_wrap_unwrap() {
     )
     .unwrap();
     println!("✓ Vault config: {}", vault_config);
-    println!("✓ Wrapped mint (wStable): {}", wrapped_mint);
+    println!("✓ Wrapped mint (Florin (FLRN)): {}", wrapped_mint);
     println!("✓ Base token (USDC) registered");
 
     // ========================================
-    // Step 6: Wrap (mint wStable)
+    // Step 6: Wrap (mint Florin (FLRN))
     // ========================================
-    println!("\n[6/7] Wrapping USDC → wStable...");
+    println!("\n[6/7] Wrapping USDC → Florin (FLRN)...");
     let user_wrapped = get_ata(&payer.pubkey(), &wrapped_mint);
     let create_user_wrapped_ix = create_ata_ix(&payer.pubkey(), &payer.pubkey(), &wrapped_mint);
     send_tx(
@@ -341,15 +341,15 @@ fn test_setup_wrap_unwrap() {
     );
     send_tx(&rpc, vec![wrap_ix], &payer.pubkey(), &[&payer]).unwrap();
     println!(
-        "✓ Wrapped {} USDC into wStable",
+        "✓ Wrapped {} USDC into Florin (FLRN)",
         wrap_amount / USDC_LAMPORTS_PER_USDC
     );
 
     // ========================================
-    // Step 7: Unwrap (redeem wStable → USDC)
+    // Step 7: Unwrap (redeem Florin (FLRN) → USDC)
     // ========================================
-    println!("\n[7/7] Unwrapping wStable → USDC...");
-    let unwrap_amount = 50_000_000u64; // 50 wStable
+    println!("\n[7/7] Unwrapping Florin (FLRN) → USDC...");
+    let unwrap_amount = 50_000_000u64; // 50 Florin (FLRN)
     let unwrap_ix = wrapped_unwrap_ix(
         wrapped_program_id,
         &payer.pubkey(),
@@ -366,7 +366,7 @@ fn test_setup_wrap_unwrap() {
     );
     send_tx(&rpc, vec![unwrap_ix], &payer.pubkey(), &[&payer]).unwrap();
     println!(
-        "✓ Unwrapped {} wStable back to USDC",
+        "✓ Unwrapped {} Florin (FLRN) back to USDC",
         unwrap_amount / USDC_LAMPORTS_PER_USDC
     );
 

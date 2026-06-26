@@ -1,6 +1,6 @@
 # Flash mint (experimental, disabled in shipped build)
 
-Flash mint is a **same-transaction borrow** of wStable: mint principal to a borrower, require matching repayment (principal + fee) before the transaction completes. The implementation remains in the repository for optional future market-making, but **Folkmoot and production deploy only the default build** — flash instructions are not compiled into the shipped program binary and do not appear in the IDL.
+Flash mint is a **same-transaction borrow** of Florin (FLRN): mint principal to a borrower, require matching repayment (principal + fee) before the transaction completes. The implementation remains in the repository for optional future market-making, but **Folkmoot and production deploy only the default build** — flash instructions are not compiled into the shipped program binary and do not appear in the IDL.
 
 ## Shipped vs experimental
 
@@ -24,7 +24,7 @@ sequenceDiagram
     B->>P: flash_mint_start(amount)
     P->>Sysvar: scan forward for flash_mint_end
     Sysvar-->>P: matching ix at later index
-    P-->>B: mint amount wStable, create FlashLoanState
+    P-->>B: mint amount Florin (FLRN), create FlashLoanState
     B->>B: strategy / arbitrage
     B->>P: flash_mint_end
     P-->>P: burn principal, send fee to flash_mint_fee_receiver, close PDA
@@ -35,7 +35,7 @@ sequenceDiagram
 - **Transaction introspection** — `flash_mint_start` walks the instructions sysvar to confirm a matching `flash_mint_end` exists later in the same transaction before minting.
 - **One-shot PDA** — `["flash_loan", borrower, vault_config]` is created on start and closed on end; prevents replay and double-mint in one tx.
 - **Admin override when disabled** — if `flash_mint_enabled` is false, only the vault admin may start a flash mint.
-- **Separate fee receiver** — wStable fees go to `flash_mint_fee_receiver` (distinct from per-asset USDC treasury used by `harvest_yield`).
+- **Separate fee receiver** — Florin (FLRN) fees go to `flash_mint_fee_receiver` (distinct from per-asset USDC treasury used by `harvest_yield`).
 
 ### Admin levers (feature-gated)
 

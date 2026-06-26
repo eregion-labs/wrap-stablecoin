@@ -20,6 +20,8 @@ use spl_associated_token_account::instruction::create_associated_token_account_i
 use spl_token::id as spl_token_program_id;
 use utoipa::ToSchema;
 
+use crate::metaplex::{fetch_mint_metadata, MintMetadata};
+
 use super::{asset_config, vault_authority, vault_config};
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
@@ -397,6 +399,7 @@ pub struct VaultSummaryView {
     pub vault_config: String,
     pub wrapped_mint: String,
     pub wrapped_decimals: u8,
+    pub mint_metadata: Option<MintMetadata>,
     pub assets: Vec<VaultAssetView>,
 }
 
@@ -409,6 +412,7 @@ pub struct VaultMetaView {
     pub vault_config: String,
     pub wrapped_mint: String,
     pub wrapped_decimals: u8,
+    pub mint_metadata: Option<MintMetadata>,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -557,6 +561,7 @@ pub fn fetch_vault_assets(
         vault_config: vault_config_key.to_string(),
         wrapped_mint: vault.wrapped_mint.to_string(),
         wrapped_decimals: vault.wrapped_decimals,
+        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals).ok().flatten(),
         assets: out,
     })
 }
@@ -574,6 +579,7 @@ pub fn fetch_vault_meta(
         vault_config: vault_config_key.to_string(),
         wrapped_mint: vault.wrapped_mint.to_string(),
         wrapped_decimals: vault.wrapped_decimals,
+        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)?,
     })
 }
 

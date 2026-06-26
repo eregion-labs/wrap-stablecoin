@@ -1,29 +1,29 @@
 # Per-asset accounting
 
-wStable is fungible globally, but each collateral asset has its own **mini balance sheet**. The protocol does not track where a unit of wStable was originally minted.
+Florin (FLRN) is fungible globally, but each collateral asset has its own **mini balance sheet**. The protocol does not track where a unit of Florin (FLRN) was originally minted.
 
 ## Liability (redemption obligation)
 
 For each asset pool `i`:
 
 ```text
-liability_i = total_wrapped_minted_i − total_redemptions_i   (wStable atoms)
+liability_i = total_wrapped_minted_i − total_redemptions_i   (Florin (FLRN) atoms)
 ```
 
-This is the amount of wStable that can still be redeemed **through pool `i`**.
+This is the amount of Florin (FLRN) that can still be redeemed **through pool `i`**.
 
 | Event | Pool effect |
 |---|---|
-| `wrap` via pool `i` | `token_vault_i += deposit`; `liability_i += wStable_minted` |
-| `unwrap` from pool `j` | `token_vault_j -= payout`; `liability_j -= wStable_burned` |
+| `wrap` via pool `i` | `token_vault_i += deposit`; `liability_i += Florin (FLRN)_minted` |
+| `unwrap` from pool `j` | `token_vault_j -= payout`; `liability_j -= Florin (FLRN)_burned` |
 
-Cross-asset: redeeming via USDT only updates USDT counters, not the pool where wStable was minted.
+Cross-asset: redeeming via USDT only updates USDT counters, not the pool where Florin (FLRN) was minted.
 
 On-chain fields: `AssetConfig.total_wrapped_minted`, `AssetConfig.total_redemptions`. Global fungible supply: `VaultConfig.total_stable_deposited`.
 
 ## Backing and surplus
 
-Assume 1:1 stable value between registered collaterals and wStable (modulo per-asset haircuts on wrap/unwrap).
+Assume 1:1 stable value between registered collaterals and Florin (FLRN) (modulo per-asset haircuts on wrap/unwrap).
 
 ```text
 backing_i   = token_vault_i + kamino_value_i
@@ -41,7 +41,7 @@ Redeemability requires **both** gates (not liquidity alone):
 maxRedeemable_i = min(liability_i, liquidity_i)
 ```
 
-Where `liquidity_i` is the home vault balance converted to wStable atoms (1:1 at matching decimals, before redemption haircut).
+Where `liquidity_i` is the home vault balance converted to Florin (FLRN) atoms (1:1 at matching decimals, before redemption haircut).
 
 | Gate | On-chain check | Error |
 |---|---|---|
@@ -51,7 +51,7 @@ Where `liquidity_i` is the home vault balance converted to wStable atoms (1:1 at
 `unwrap` from pool `i` also requires:
 
 1. `redeem_enabled` and allowed `asset_status`
-2. Global wStable balance (`InsufficientBalance` if user or vault supply insufficient)
+2. Global Florin (FLRN) balance (`InsufficientBalance` if user or vault supply insufficient)
 
 Surplus (`token_vault_i > liability` in underlying terms) is **not** user-redeemable. Reference proof: `wrap-stablecoin/tests/cross_asset.ts` (CCC / TTT vault-only pools).
 
@@ -75,7 +75,7 @@ After recall, `token_vault = 1.1M`, `liability = 1M`, `cushion = 0`:
 home_surplus = 100k  →  sweep_home_surplus
 ```
 
-User with 1.1M wStable can redeem at most **1M** from USDT (`liability` cap); 100k must use another pool with capacity. After 1M redeemed: `token_vault = 100k`, `liability = 0` — remaining 100k is fully sweepable.
+User with 1.1M Florin (FLRN) can redeem at most **1M** from USDT (`liability` cap); 100k must use another pool with capacity. After 1M redeemed: `token_vault = 100k`, `liability = 0` — remaining 100k is fully sweepable.
 
 ## Related
 

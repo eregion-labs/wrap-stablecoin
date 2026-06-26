@@ -176,7 +176,7 @@ pub async fn update_asset_policy(
     }))
 }
 
-/// Wrap collateral from the admin wallet into wStable (issue).
+/// Wrap collateral from the admin wallet into the wrapped token (issue).
 #[utoipa::path(
     post,
     path = "/v1/admin/mint",
@@ -212,7 +212,7 @@ pub async fn admin_mint(
     }))
 }
 
-/// Burn wStable from the admin wallet and receive underlying (redeem).
+/// Burn wrapped token from the admin wallet and receive underlying (redeem).
 #[utoipa::path(
     post,
     path = "/v1/admin/redeem",

@@ -1,6 +1,6 @@
-# wStable — Kamino KLend wrapped stablecoin
+# Florin (FLRN) — Kamino KLend wrapped stablecoin
 
-A Solana program that mints a wrapped stablecoin (wStable) 1:1 against USDC. User deposits stay in an intermediate vault until the admin moves them into Kamino KLend to earn yield. Excess yield above user-backed collateral can be harvested to a treasury.
+A Solana program that mints a wrapped stablecoin (Florin (FLRN)) 1:1 against USDC. User deposits stay in an intermediate vault until the admin moves them into Kamino KLend to earn yield. Excess yield above user-backed collateral can be harvested to a treasury.
 
 Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
 
@@ -11,7 +11,7 @@ flowchart LR
     U([User]) -->|wrap amount| WR[wrap]
     WR -->|transfer amount| TV[(token_vault)]
     WR -->|mint amount| WM[(wrapped_mint)]
-    WM -->|amount wStable| U
+    WM -->|amount Florin (FLRN)| U
 
     A([Admin]) -->|deposit_to_klend| DTK[deposit_to_klend]
     DTK -->|CPI deposit_reserve_liquidity| KL[/KLend reserve/]
@@ -34,7 +34,7 @@ flowchart LR
     HY -->|excess USDC| TR([treasury])
 ```
 
-The design splits user-facing flows from KLend interaction. `wrap` and `unwrap` only burn/mint wStable and move USDC between user and `token_vault`. The admin rebalances between `token_vault` and KLend via `deposit_to_klend` / `withdraw_from_klend`, and skims yield via `harvest_yield`. This means users can always unwrap as long as `token_vault` holds enough USDC; admins are responsible for keeping reserves high enough to service redemptions.
+The design splits user-facing flows from KLend interaction. `wrap` and `unwrap` only burn/mint Florin (FLRN) and move USDC between user and `token_vault`. The admin rebalances between `token_vault` and KLend via `deposit_to_klend` / `withdraw_from_klend`, and skims yield via `harvest_yield`. This means users can always unwrap as long as `token_vault` holds enough USDC; admins are responsible for keeping reserves high enough to service redemptions.
 
 ## Accounts
 

@@ -1259,7 +1259,7 @@ fn test_full_integration() -> Result<()> {
     )?;
 
     eprintln!("✓ Vault config: {}", vault_config);
-    eprintln!("✓ Wrapped mint (wStable): {}", wrapped_mint);
+    eprintln!("✓ Wrapped mint (Florin (FLRN)): {}", wrapped_mint);
     eprintln!("✓ Vault authority: {}", vault_authority);
     eprintln!("✓ Base token (USDC) registered");
 
@@ -1268,7 +1268,7 @@ fn test_full_integration() -> Result<()> {
     // ========================================
     eprintln!("\n[6/8] Testing wrap...");
 
-    // Create user wStable account
+    // Create user Florin (FLRN) account
     let user_wrapped = get_ata(&ctx.payer.pubkey(), &wrapped_mint);
     let create_user_wrapped_ix =
         create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &wrapped_mint);
@@ -1290,14 +1290,14 @@ fn test_full_integration() -> Result<()> {
         wrap_amount,
     );
     ctx.send_tx(&[wrap_ix], &[&ctx.payer])?;
-    eprintln!("✓ Wrapped {} USDC into wStable", wrap_amount / 1_000_000);
+    eprintln!("✓ Wrapped {} USDC into Florin (FLRN)", wrap_amount / 1_000_000);
 
     // ========================================
     // Step 7: Test unwrap
     // ========================================
     eprintln!("\n[7/8] Testing unwrap...");
 
-    let unwrap_amount = 50_000_000u64; // 50 wStable
+    let unwrap_amount = 50_000_000u64; // 50 Florin (FLRN)
 
     let unwrap_ix = wrapped_unwrap_ix(
         ctx.wrapped_program_id,
@@ -1315,7 +1315,7 @@ fn test_full_integration() -> Result<()> {
     );
     ctx.send_tx(&[unwrap_ix], &[&ctx.payer])?;
     eprintln!(
-        "✓ Unwrapped {} wStable back to USDC",
+        "✓ Unwrapped {} Florin (FLRN) back to USDC",
         unwrap_amount / 1_000_000
     );
 
@@ -1572,13 +1572,13 @@ fn test_flash_mint() -> Result<()> {
     )?;
     eprintln!("✓ Vault initialized");
 
-    // Create user wStable account (for ctx.payer - used in some tests)
+    // Create user Florin (FLRN) account (for ctx.payer - used in some tests)
     let user_wrapped = get_ata(&ctx.payer.pubkey(), &wrapped_mint);
     let create_user_wrapped_ix =
         create_ata_ix(&ctx.payer.pubkey(), &ctx.payer.pubkey(), &wrapped_mint);
     ctx.send_tx(&[create_user_wrapped_ix], &[&ctx.payer])?;
 
-    // Create admin (flash_authority) wStable account for admin flash mint test
+    // Create admin (flash_authority) Florin (FLRN) account for admin flash mint test
     let flash_authority_wrapped = get_ata(&flash_authority.pubkey(), &wrapped_mint);
     let create_flash_authority_wrapped_ix = create_ata_ix(
         &ctx.payer.pubkey(),
@@ -1587,7 +1587,7 @@ fn test_flash_mint() -> Result<()> {
     );
     ctx.send_tx(&[create_flash_authority_wrapped_ix], &[&ctx.payer])?;
 
-    eprintln!("✓ User wStable account created");
+    eprintln!("✓ User Florin (FLRN) account created");
 
     // Derive flash loan state PDA for ctx.payer
     let (flash_loan_state, _) = Pubkey::find_program_address(
@@ -1609,7 +1609,7 @@ fn test_flash_mint() -> Result<()> {
         &ctx.wrapped_program_id,
     );
 
-    // Create fee receiver account (treasury wStable account)
+    // Create fee receiver account (treasury Florin (FLRN) account)
     let fee_receiver_wrapped = get_ata(&ctx.payer.pubkey(), &wrapped_mint);
     // Already created as user_wrapped
 
@@ -1639,7 +1639,7 @@ fn test_flash_mint() -> Result<()> {
         system_instruction::transfer(&ctx.payer.pubkey(), &non_admin.pubkey(), 100_000_000);
     ctx.send_tx(&[fund_ix], &[&ctx.payer])?;
 
-    // Create non-admin's wStable account
+    // Create non-admin's Florin (FLRN) account
     let non_admin_wrapped = get_ata(&non_admin.pubkey(), &wrapped_mint);
     let create_non_admin_wrapped_ix =
         create_ata_ix(&ctx.payer.pubkey(), &non_admin.pubkey(), &wrapped_mint);
@@ -1664,7 +1664,7 @@ fn test_flash_mint() -> Result<()> {
         &vault_authority,
         &wrapped_mint,
         &non_admin_wrapped,
-        1_000_000, // 1 wStable
+        1_000_000, // 1 Florin (FLRN)
     );
     let flash_end_ix = wrapped_flash_mint_end_ix(
         ctx.wrapped_program_id,
@@ -1708,7 +1708,7 @@ fn test_flash_mint() -> Result<()> {
         &vault_authority,
         &wrapped_mint,
         &flash_authority_wrapped,
-        1_000_000, // 1 wStable
+        1_000_000, // 1 Florin (FLRN)
     );
     let flash_end_ix = wrapped_flash_mint_end_ix(
         ctx.wrapped_program_id,
@@ -1790,7 +1790,7 @@ fn test_flash_mint() -> Result<()> {
     eprintln!("\n[Test 6] Testing complete flash mint flow...");
 
     // For this test, we need the user to have enough tokens to repay
-    // Since we can't easily mint wStable without KLend working,
+    // Since we can't easily mint Florin (FLRN) without KLend working,
     // we test that the transaction introspection and account setup works
     let flash_start_ix = wrapped_flash_mint_start_ix(
         ctx.wrapped_program_id,
@@ -1800,7 +1800,7 @@ fn test_flash_mint() -> Result<()> {
         &vault_authority,
         &wrapped_mint,
         &user_wrapped,
-        1_000_000, // 1 wStable
+        1_000_000, // 1 Florin (FLRN)
     );
     let flash_end_ix = wrapped_flash_mint_end_ix(
         ctx.wrapped_program_id,

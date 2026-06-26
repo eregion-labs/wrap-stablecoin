@@ -2,11 +2,25 @@
 
 ## Purpose
 
-Olympus Complex is a Solana protocol that issues a **yield-bearing wrapped stablecoin (wStable)** backed 1:1 by registered collateral (USDC at launch). Users deposit collateral and receive wStable; underlying assets can be supplied to **Kamino KLend** to earn yield. Yield accrues to per-asset treasury vaults controlled by the protocol, not to wStable supply.
+Olympus Complex is a Solana protocol that issues a **yield-bearing wrapped stablecoin (Florin (FLRN))** backed 1:1 by registered collateral (USDC at launch). Users deposit collateral and receive Florin (FLRN); underlying assets can be supplied to **Kamino KLend** to earn yield. Yield accrues to per-asset treasury vaults controlled by the protocol, not to Florin (FLRN) supply.
 
-**Core value proposition:** Deposit stables → receive wStable → protocol captures KLend yield to treasury; redemptions draw from backing vaults at 1:1.
+**Core value proposition:** Deposit stables → receive Florin (FLRN) → protocol captures KLend yield to treasury; redemptions draw from backing vaults at 1:1.
 
 Flash mint is **not compiled into the shipped program**. See [../wiki/Flash-mint.md](../wiki/Flash-mint.md) for the experimental, feature-gated design preserved for optional future market-making.
+
+---
+
+## Branding vs protocol
+
+> **Florin is a presentation-layer identity.** Protocol identifiers (`wrapped_mint`, `wrappedMint`, PDA seeds, account names, package names, APIs, and state fields) remain stable indefinitely. Branding may change without affecting protocol compatibility or on-chain state.
+
+| Layer | Examples |
+|-------|----------|
+| **Brand** | Florin, FLRN, `branding/florin.json`, Metaplex metadata |
+| **Protocol** | `wrapped_mint`, `WRAPPED_MINT_SEED`, `wrappedMint` API fields |
+| **Governance** | Metadata update authority, CLI `metadata update-uri` |
+
+Canonical token name/symbol/decimals for runtime display come from on-chain Metaplex metadata via the backend API.
 
 ---
 
@@ -16,7 +30,7 @@ Flash mint is **not compiled into the shipped program**. See [../wiki/Flash-mint
 
 The on-chain program is intentionally thin. KLend handles lending; the backend (off-chain) routes non-backing inputs through Jupiter and bundles them with `wrap` / `unwrap` into a single user-signed transaction. The on-chain program never CPIs into Jupiter.
 
-### 2. Multi-asset collateral, single wStable mint
+### 2. Multi-asset collateral, single Florin (FLRN) mint
 
 Each registered asset has its own vaults and optional KLend wiring. Off-chain swap aggregation lets users enter/exit via tokens other than the backing asset while on-chain accounting stays per-asset.
 
@@ -33,7 +47,7 @@ Each vault is keyed by an immutable **authority** (the PDA-seed creator). A sepa
 
 ### 5. Yield to treasury, not to wrapped supply
 
-wStable supply tracks deposited collateral 1:1. Lending yield accumulates in KLend kTokens; the admin redeems surplus into the asset treasury via `harvest_yield`. wStable redemption value does not float above 1:1 from yield accrual.
+Florin (FLRN) supply tracks deposited collateral 1:1. Lending yield accumulates in KLend kTokens; the admin redeems surplus into the asset treasury via `harvest_yield`. Florin (FLRN) redemption value does not float above 1:1 from yield accrual.
 
 ---
 
@@ -51,7 +65,7 @@ Related types: `VaultConfig`, `AssetConfig`, `KLendConfig`, `Allowlist`.
 | --- | --- | --- |
 | `vault_config` | `["vault_config", authority]` | Vault state, admin policy |
 | `vault_authority` | `["vault_authority", vault_config]` | Signer for token + KLend CPIs |
-| `wrapped_mint` | `["wrapped_mint", vault_config]` | wStable mint |
+| `wrapped_mint` | `["wrapped_mint", vault_config]` | Florin (FLRN) mint |
 | `asset_config` | `["token_config", vault_config, token_mint]` | Per-asset registry |
 | `token_collateral_vault` | `["token_collateral_vault", asset_config]` | KLend kToken vault |
 | `token_vault` | `["token_vault", asset_config]` | Free collateral vault |
@@ -68,17 +82,17 @@ Related types: `VaultConfig`, `AssetConfig`, `KLendConfig`, `Allowlist`.
 ```mermaid
 flowchart LR
     User -->|collateral transfer_checked| TokenVault[token_vault]
-    Program -->|mint 1:1 of received| UserWStable[user wStable ATA]
+    Program -->|mint 1:1 of received| UserWStable[user Florin (FLRN) ATA]
     Program -. updates .-> Totals[totals]
 ```
 
-Wrap snapshots vault balance before and after transfer, then mints wStable on the **delta received**.
+Wrap snapshots vault balance before and after transfer, then mints Florin (FLRN) on the **delta received**.
 
 ### Unwrap
 
 ```mermaid
 flowchart LR
-    User -->|wStable| Burn((burn))
+    User -->|Florin (FLRN)| Burn((burn))
     TokenVault[token_vault] -->|collateral 1:1| User
     Program -. updates .-> Totals
 ```
@@ -148,7 +162,7 @@ Single allowlist per vault, capped at 64 entries. `check_access` re-derives the 
 | Admin under-backing via harvest | Residual-backing invariant from CPI rate |
 | Reserve substitution post-init | KLend accounts pinned at `enable_klend` |
 | Unauthorized admin actions | `has_one = admin` on admin instructions |
-| Reflexive collateral | wStable cannot back itself |
+| Reflexive collateral | Florin (FLRN) cannot back itself |
 
 ---
 
@@ -166,8 +180,8 @@ anchor build   # no --features flash-mint
 
 Olympus Complex is a **multi-asset collateral wrapper** that:
 
-1. Mints wStable 1:1 against registered assets and supplies principal to KLend when enabled.
-2. Routes lending yield to per-asset treasury vaults; wStable supply stays at par.
+1. Mints Florin (FLRN) 1:1 against registered assets and supplies principal to KLend when enabled.
+2. Routes lending yield to per-asset treasury vaults; Florin (FLRN) supply stays at par.
 3. Separates immutable `authority` from rotatable `admin`.
 4. Defers swap aggregation to the backend Jupiter bundler.
 5. Ships without flash mint (see [Flash-mint.md](../wiki/Flash-mint.md) for experimental re-enable path).
