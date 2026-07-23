@@ -20,8 +20,10 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(AppState::from_env()?);
     info!(
-        networks = ?state.configured_networks(),
-        "Florin API listening (multi-network; cluster chosen via x-solana-network)"
+        network = %state.primary_solana_network,
+        deployment_id = %state.public_client_config.deployment_id,
+        environment = %state.public_client_config.environment,
+        "Florin API ready (single-network deployment; public config at /v1/client-config)"
     );
     let app = app(state);
 

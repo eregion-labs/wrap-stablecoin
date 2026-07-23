@@ -19,6 +19,18 @@ cd "$ROOT"
 # shellcheck source=local_env.sh
 source "$ROOT/scripts/local_env.sh"
 
+print_deploy_banner() {
+  cat <<'EOF'
+⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+⭐⭐                                    ⭐⭐
+⭐⭐     MIRACLE: MACHINE DEPLOYED      ⭐⭐
+⭐⭐                                    ⭐⭐
+⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+EOF
+}
+
 if [[ -f "$ROOT/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -63,7 +75,7 @@ ANCHOR_WALLET="$ANCHOR_WALLET_PATH" \
   yarn ts-node scripts/seed_localnet.ts
 
 echo ""
-echo "═══ Phase E: done ═══"
+print_deploy_banner
 echo "Validator still running on $RPC_URL (pid $(cat "$PID_FILE"), background job in this shell)."
 echo "Slot/processed logs continue in this tab while it stays open."
 echo "Stop: anchor run stop-local   or   kill -9 \$(lsof -ti:$RPC_PORT)"

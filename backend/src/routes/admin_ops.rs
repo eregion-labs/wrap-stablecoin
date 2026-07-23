@@ -77,8 +77,7 @@ fn require_admin_keypair(
         (
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             format!(
-                "admin keypair not configured for `{network}` — set {}_ADMIN_KEYPAIR_PATH",
-                network.env_prefix()
+                "admin keypair not configured for `{network}` — set ADMIN_KEYPAIR_PATH"
             ),
         )
     })?;

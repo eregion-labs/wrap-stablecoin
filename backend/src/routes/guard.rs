@@ -10,46 +10,43 @@ use crate::app_state::{AppState, SolanaNetwork};
 
 pub const NETWORK_HEADER: &str = "x-solana-network";
 
-/// Resolve the client-selected cluster and attach it to the request.
-/// The backend serves every configured network from one process; the frontend
-/// picks the cluster via `x-solana-network`.
+/// Attach this deployment's primary network to the request.
+///
+/// - Header absent → use `primary_solana_network`.
+/// - Header present → must equal primary, else 400 (no silent network switch).
 pub async fn network_guard(
     State(state): State<Arc<AppState>>,
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response, (StatusCode, String)> {
-    let header = req
-        .headers()
-        .get(NETWORK_HEADER)
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                format!(
-                    "missing `{NETWORK_HEADER}` header; expected one of: {}",
-                    state.configured_networks().join(", ")
-                ),
-            )
-        })?
-        .to_str()
-        .map_err(|_| {
+    let primary = state.primary_solana_network;
+
+    if let Some(raw) = req.headers().get(NETWORK_HEADER) {
+        let header = raw.to_str().map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
                 format!("`{NETWORK_HEADER}` header is not valid utf-8"),
             )
-        })?
-        .to_string();
+        })?;
 
-    let client_network: SolanaNetwork = header.parse().map_err(|e: String| {
-        (
-            StatusCode::BAD_REQUEST,
-            format!("`{NETWORK_HEADER}` invalid: {e}"),
-        )
-    })?;
+        let client_network: SolanaNetwork = header.parse().map_err(|e: String| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("`{NETWORK_HEADER}` invalid: {e}"),
+            )
+        })?;
 
-    state
-        .require_network(client_network)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        if client_network != primary {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "`{NETWORK_HEADER}` `{client_network}` does not match this deployment's \
+                     primary network `{primary}`"
+                ),
+            ));
+        }
+    }
 
-    req.extensions_mut().insert(client_network);
+    req.extensions_mut().insert(primary);
     Ok(next.run(req).await)
 }

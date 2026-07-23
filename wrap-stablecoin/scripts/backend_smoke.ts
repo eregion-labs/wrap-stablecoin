@@ -54,7 +54,6 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-solana-network": "localnet",
     },
     body: JSON.stringify(body),
   });

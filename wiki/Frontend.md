@@ -2,16 +2,35 @@
 
 Next.js 16 app with MUI and Solana wallet adapter.
 
-Source: `frontend/src/`
+Source: `frontend/src/` (public app) and `admin-frontend/src/` (operator console).
 
 ## Stack
 
 - **Next.js 16** — App router
 - **MUI** — UI components
 - **Wallet Standard + Wallet Adapter** — `@solana/wallet-adapter-react` with `wallets={[]}` (auto-detects Phantom, Solflare, Backpack, Coinbase Wallet, etc.)
+- **Zod** — validates `GET /v1/client-config` (`@florin/client-config`)
 - **notistack** — transaction feedback
 
-## Wallet integration
+## Bootstrap
+
+```text
+NEXT_PUBLIC_BACKEND_URL
+        ↓
+GET /v1/client-config
+        ↓
+Zod validate + Object.freeze
+        ↓
+createApplicationServices → API client + (public app) Solana ConnectionProvider
+        ↓
+Render UI
+```
+
+`ClientConfigProvider` blocks wallet/providers until config is ready. Fatal validation errors show the backend URL and field path; transport errors are retryable.
+
+There is **no** in-app network switch. Point `NEXT_PUBLIC_BACKEND_URL` at a local or development API deployment to select environment.
+
+## Wallet integration (public app)
 
 ```text
 Wallet Standard (browser wallets)
@@ -21,11 +40,7 @@ Wallet Standard (browser wallets)
 @solana/wallet-adapter-react-ui  (WalletModalProvider + useWalletModal)
 ```
 
-No vendor-specific SDKs. `SolanaWalletProviders` passes an empty `wallets` array; `WalletProvider` merges Wallet Standard adapters at runtime. **Do not** mount a second `<WalletModal />` — `WalletModalProvider` owns the picker.
-
-Layout: `AppShell` → sticky `AppHeader` (brand + `WalletNavButton`). Connected users get a dropdown: copy address, change wallet, disconnect.
-
-Components use `useWallet()` / `useConnection()` from `@solana/wallet-adapter-react`.
+RPC endpoint comes from frozen client-config (`solana.rpcUrl`), not from frontend env.
 
 ## Main flow
 
@@ -35,35 +50,39 @@ Components use `useWallet()` / `useConnection()` from `@solana/wallet-adapter-re
 2. Panel loads `GET /v1/vault/assets` (per-pool liability, liquidity, surplus)
 3. Redeem flow polls `GET /v1/quote/redeem` for `canRedeem`, shortfalls, and `maxRedeemable`
 4. User enters wrap (issue) or unwrap (redeem) amount
-5. Frontend calls backend `POST /v1/tx/issue` or `POST /v1/tx/redeem`
+5. Frontend calls backend `POST /v1/tx/issue` or `POST /v1/tx/redeem` (no `x-solana-network`)
 6. Issue/redeem buttons disabled when `!mintAllowed` or `!canRedeem`
 7. Deserializes `transactionB64` to `VersionedTransaction`
 8. Signs and sends via wallet; simulate buttons call `/v1/tx/preview` path via local simulation
 
-API client: `frontend/src/lib/api.ts`
+API client: `frontend/src/lib/api.ts` (uses bootstrap services).
 
 ## Configuration
 
-`.env.local`:
+`.env.local` (both apps):
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXT_PUBLIC_API_BASE` | Backend origin (no trailing slash) |
-| `NEXT_PUBLIC_SOLANA_NETWORK` | `devnet` / `mainnet` / `localnet` |
-| `NEXT_PUBLIC_SOLANA_RPC_URL` | Optional RPC override (default localnet: `http://127.0.0.1:8901`) |
+| `NEXT_PUBLIC_BACKEND_URL` | Backend origin (trailing slash normalized once) |
+
+All other deployment public config comes from `/v1/client-config`.
+
+Static enforcement: `./scripts/check_frontend_env.sh`
 
 ## Run locally
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd frontend   # or admin-frontend
+pnpm install
+pnpm run dev
 ```
 
-Default: http://localhost:3001
+- Public app: http://localhost:3001
+- Admin: http://localhost:3002
 
 ## Providers
 
-- `SolanaWalletProviders` — `ConnectionProvider` + Wallet Standard `WalletProvider`
-- `AppShell` / `AppHeader` — sticky navbar with `WalletNavButton`
-- `providers.tsx` — app-wide providers (theme, snackbar, etc.)
+- `ClientConfigProvider` — fetch / validate / freeze public config
+- `SolanaWalletProviders` (public only) — `ConnectionProvider` + Wallet Standard `WalletProvider`
+- `AppShell` / `AppHeader` — sticky navbar (read-only deployment chip)
+- `providers.tsx` — theme, snackbar, bootstrap

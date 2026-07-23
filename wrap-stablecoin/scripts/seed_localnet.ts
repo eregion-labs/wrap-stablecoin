@@ -238,20 +238,23 @@ export async function seedLocalnet(): Promise<SeedResult> {
 
 function printEnvBlock(result: SeedResult) {
   console.log("");
-  console.log("─── Localnet env (copy into backend/.env and frontend/.env.local) ───");
+  console.log("─── Localnet env (copy into backend/.env) ───");
+  console.log("APP_ENV=local");
   console.log(`SOLANA_RPC_URL=${RPC_URL}`);
   console.log("SOLANA_NETWORK=localnet");
   console.log(`PROGRAM_ID=${result.programId}`);
   console.log(`VAULT_AUTHORITY=${result.vaultAuthority}`);
+  console.log(`DEFAULT_ASSET_MINT=${USDC_MINT.toBase58()}`);
+  console.log(`PUBLIC_SOLANA_RPC_URL=${RPC_URL}`);
+  console.log("PUBLIC_SOLANA_WS_URL=ws://127.0.0.1:8900");
   console.log(`WRAPPED_MINT=${result.wrappedMint}`);
   console.log(`VAULT_CONFIG=${result.vaultConfig}`);
   console.log(`USDC_ASSET_MINT=${USDC_MINT.toBase58()}`);
   console.log(`CCC_MINT=${CCC_MINT.toBase58()}`);
   console.log(`TTT_MINT=${TTT_MINT.toBase58()}`);
-  console.log(`DEFAULT_ASSET_MINT=${USDC_MINT.toBase58()}`);
-  console.log("NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080");
-  console.log("NEXT_PUBLIC_DEFAULT_NETWORK=localnet");
-  console.log("# Backend: set LOCALNET_* vars in backend/.env (see backend/.env.example)");
+  console.log("");
+  console.log("─── Frontend / admin (.env.local) ───");
+  console.log("NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8080");
   console.log("──────────────────────────────────────────────────────────────────────");
   console.log("");
   console.log(`Validator RPC:  ${RPC_URL}  (pid file: .localnet/validator.pid)`);

@@ -3,18 +3,18 @@
 import Link from "next/link";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
 import Container from "@mui/material/Container";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import WalletNavButton from "@/components/WalletNavButton";
-import NetworkSwitch from "@/components/NetworkSwitch";
 import { BRANDING } from "@/branding";
-import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
+import { useClientConfig } from "@/providers/ClientConfigProvider";
 import { publicCopy } from "@/theme/copy";
 import { florinGold } from "@/theme/tokens";
 
 export default function AppHeader() {
-  const network = useNetworkStore((s) => s.network);
+  const config = useClientConfig();
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
@@ -41,10 +41,15 @@ export default function AppHeader() {
               color="text.secondary"
               sx={{ display: { xs: "none", sm: "block" } }}
             >
-              {publicCopy.headerTagline} · {appNetworkLabel(network)}
+              {publicCopy.headerTagline}
             </Typography>
           </Box>
-          <NetworkSwitch />
+          <Chip
+            size="small"
+            label={`${config.solana.network} · ${config.deploymentId}`}
+            variant="outlined"
+            sx={{ display: { xs: "none", md: "flex" } }}
+          />
           <WalletNavButton />
         </Toolbar>
       </Container>

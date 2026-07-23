@@ -4,11 +4,14 @@ Rust service (Axum + utoipa + Solana SDK) that builds **unsigned** transactions 
 
 Source: `backend/src/`
 
+One process serves **exactly one** Solana network. Frontends discover public deployment config via REST bootstrap (not GraphQL).
+
 ## Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/ping` | Health check |
+| `GET` | `/ping` | Health check (`network`, `deploymentId`) |
+| `GET` | `/v1/client-config` | Immutable public bootstrap config (schemaVersion 1) |
 | `GET` | `/v1/vault/assets` | Per-asset vault balances and policy |
 | `GET` | `/v1/quote/redeem` | Expected unwrap output and free liquidity |
 | `POST` | `/v1/tx/issue` | Unsigned wrap transaction |
@@ -18,9 +21,41 @@ Source: `backend/src/`
 
 OpenAPI / Swagger: `/doc`
 
+## Client config (bootstrap)
+
+`GET /v1/client-config` is unauthenticated and returns camelCase JSON, e.g.:
+
+```json
+{
+  "schemaVersion": 1,
+  "deploymentId": "local-dev",
+  "environment": "local",
+  "solana": {
+    "network": "localnet",
+    "rpcUrl": "http://127.0.0.1:8901",
+    "wsUrl": "ws://127.0.0.1:8900",
+    "programIds": { "wrapStablecoin": "..." }
+  },
+  "assets": { "defaultAssetMint": "..." },
+  "features": {
+    "capabilities": { "jupiterCompose": true, "adminDashboard": true }
+  },
+  "links": { "adminDashboardUrl": "http://localhost:3002" }
+}
+```
+
+Caching: `Cache-Control: public, max-age=60, stale-while-revalidate=300` + `ETag`.
+
+Never includes secrets (admin keypairs, internal privileged RPC credentials).
+
 ## Network guard
 
-`/v1/tx/*` routes require an `x-solana-network` header matching the server's configured cluster so clients never receive txs built for the wrong network.
+Guarded `/v1/tx/*`, `/v1/vault/*`, `/v1/admin/*`, `/v1/quote/*` routes:
+
+- **No** `x-solana-network` header → use this deployment’s primary network.
+- Header present and ≠ primary → **400** (no silent multi-network switch).
+
+Browser clients should omit the header.
 
 ## Issue / redeem
 
@@ -93,9 +128,10 @@ Jupiter integration lives entirely in the backend (`backend/src/jupiter.rs`). Th
 
 Set in `.env` (see `.env.example`):
 
-- `SOLANA_RPC_URL`
-- `PROGRAM_ID`
-- `VAULT_AUTHORITY` — seeds `vault_config` PDA
+- `SOLANA_RPC_URL`, `SOLANA_NETWORK`, `PROGRAM_ID`, `VAULT_AUTHORITY`
+- `PUBLIC_SOLANA_RPC_URL`, `PUBLIC_SOLANA_WS_URL` (required for bootstrap)
+- `APP_ENV`, optional `DEPLOYMENT_ID` / `ADMIN_DASHBOARD_URL`
+- `ADMIN_KEYPAIR_PATH` (optional, for `/v1/admin/*`)
 - `BIND_PORT` (optional, default 8080)
 
 PDA derivation and instruction building: `backend/src/wrap_stablecoin/`.

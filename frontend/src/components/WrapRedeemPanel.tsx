@@ -20,7 +20,7 @@ import { fetchWalletBalances } from "@/lib/walletBalances";
 import { mintLabel } from "@/lib/mints";
 import { cardSx } from "@/theme/tokens";
 import { publicCopy } from "@/theme/copy";
-import { useNetworkStore } from "@/stores/networkStore";
+import { useClientConfig } from "@/providers/ClientConfigProvider";
 import {
   wrappedTokenName,
   wrappedTokenSymbol,
@@ -30,19 +30,16 @@ import {
 
 type TxResponse = { transactionB64: string };
 
-const DEFAULT_ASSET_MINT =
-  process.env.NEXT_PUBLIC_DEFAULT_ASSET_MINT ||
-  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-
 export default function WrapRedeemPanel() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, connected } = useWallet();
   const { enqueueSnackbar } = useSnackbar();
-  const network = useNetworkStore((s) => s.network);
+  const config = useClientConfig();
+  const deploymentKey = config.deploymentId;
 
   const [issueAmount, setIssueAmount] = useState("1000000");
   const [redeemAmount, setRedeemAmount] = useState("1000000");
-  const [assetMint, setAssetMint] = useState(DEFAULT_ASSET_MINT);
+  const [assetMint, setAssetMint] = useState(config.assets.defaultAssetMint);
   const [vaultSummary, setVaultSummary] = useState<VaultSummary | null>(null);
   const [walletBalances, setWalletBalances] = useState<Map<string, number>>(new Map());
   const [redeemQuote, setRedeemQuote] = useState<RedeemQuote | null>(null);
@@ -91,7 +88,7 @@ export default function WrapRedeemPanel() {
 
   useEffect(() => {
     loadVaultSummary();
-  }, [loadVaultSummary, network]);
+  }, [loadVaultSummary, deploymentKey]);
 
   useEffect(() => {
     if (!vaultSummary || vaultSummary.assets.length === 0) return;
@@ -119,7 +116,7 @@ export default function WrapRedeemPanel() {
     apiGet<RedeemQuote>(`/v1/quote/redeem?${params.toString()}`)
       .then(setRedeemQuote)
       .catch(() => setRedeemQuote(null));
-  }, [redeemAmount, assetMint, network]);
+  }, [redeemAmount, assetMint, deploymentKey]);
 
   const afterTx = async (signature: string, label: string) => {
     enqueueSnackbar(`${label} — ${signature}`, { variant: "success" });

@@ -53,22 +53,29 @@ cp .env.example .env
 anchor run local
 ```
 
-The script prints an env block — copy into `backend/.env` and `frontend/.env.local`, then start those services manually.
+The script prints an env block — copy into `backend/.env`, then set frontends to the API URL only.
 
 ```bash
 # Terminal 2 — backend
 cd backend
+# APP_ENV=local
 # SOLANA_RPC_URL=http://127.0.0.1:8901
 # SOLANA_NETWORK=localnet
 # PROGRAM_ID=<from anchor run local output>
 # VAULT_AUTHORITY=admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x
+# PUBLIC_SOLANA_RPC_URL=http://127.0.0.1:8901
+# PUBLIC_SOLANA_WS_URL=ws://127.0.0.1:8900
 cargo run
 
 # Terminal 3 — frontend
 cd frontend
-# NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080
-# NEXT_PUBLIC_SOLANA_NETWORK=localnet
-npm run dev
+# NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8080
+pnpm run dev
+
+# Terminal 4 — admin (optional)
+cd admin-frontend
+# NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8080
+pnpm run dev
 ```
 
 ---
@@ -118,7 +125,7 @@ PID written to `.localnet/validator.pid`. Warmup: `sleep 3` then RPC health chec
 
 ### Phase E — Env snippets
 
-Prints `SOLANA_RPC_URL`, `PROGRAM_ID`, `VAULT_AUTHORITY`, `WRAPPED_MINT`, etc.
+Prints backend single-network vars (`SOLANA_*`, `PUBLIC_SOLANA_*`, `PROGRAM_ID`, …) and `NEXT_PUBLIC_BACKEND_URL` for the Next apps.
 
 ---
 

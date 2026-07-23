@@ -5,23 +5,23 @@ import { usePathname } from "next/navigation";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import NetworkSwitch from "@/components/NetworkSwitch";
 import { BRANDING } from "@/branding";
-import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
+import { useClientConfig } from "@/providers/ClientConfigProvider";
 import { adminCopy } from "@/theme/copy";
 import { florinGold } from "@/theme/tokens";
 
 export default function AppHeader() {
   const pathname = usePathname();
-  const network = useNetworkStore((s) => s.network);
+  const config = useClientConfig();
 
   const subtitle = pathname.startsWith("/policy")
     ? adminCopy.reserveGovernanceSubtitle
-    : `${adminCopy.treasuryOperations} · ${appNetworkLabel(network)}`;
+    : adminCopy.treasuryOperations;
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
@@ -51,7 +51,12 @@ export default function AppHeader() {
               {subtitle}
             </Typography>
           </Box>
-          <NetworkSwitch />
+          <Chip
+            size="small"
+            label={`${config.solana.network} · ${config.deploymentId}`}
+            variant="outlined"
+            sx={{ display: { xs: "none", md: "flex" } }}
+          />
           <Stack direction="row" spacing={1}>
             <Button
               component={Link}

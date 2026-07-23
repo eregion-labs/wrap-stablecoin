@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -10,8 +9,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 
 use crate::admin_wallet::load_keypair_arc;
+use crate::config::PublicClientConfig;
 
-/// Cluster selected by the frontend via `x-solana-network`.
+/// Solana cluster this API deployment serves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SolanaNetwork {
     Mainnet,
@@ -25,14 +25,6 @@ impl SolanaNetwork {
             SolanaNetwork::Mainnet => "mainnet",
             SolanaNetwork::Devnet => "devnet",
             SolanaNetwork::Localnet => "localnet",
-        }
-    }
-
-    pub fn env_prefix(self) -> &'static str {
-        match self {
-            SolanaNetwork::Mainnet => "MAINNET",
-            SolanaNetwork::Devnet => "DEVNET",
-            SolanaNetwork::Localnet => "LOCALNET",
         }
     }
 
@@ -55,14 +47,6 @@ impl SolanaNetwork {
             SolanaNetwork::Mainnet
         }
     }
-
-    pub fn all() -> [Self; 3] {
-        [
-            SolanaNetwork::Localnet,
-            SolanaNetwork::Devnet,
-            SolanaNetwork::Mainnet,
-        ]
-    }
 }
 
 impl fmt::Display for SolanaNetwork {
@@ -78,7 +62,7 @@ impl FromStr for SolanaNetwork {
     }
 }
 
-/// Per-cluster RPC + on-chain deployment settings.
+/// Per-deployment RPC + on-chain settings (exactly one cluster per process).
 pub struct NetworkContext {
     pub network: SolanaNetwork,
     pub rpc: Arc<RpcClient>,
@@ -100,34 +84,44 @@ impl NetworkContext {
     }
 }
 
-/// Shared application state. Cluster is chosen per request by the client header.
+/// Shared application state. One Solana network per deployment.
 pub struct AppState {
     pub http: reqwest::Client,
     pub jupiter_swap_api_base: String,
     pub jupiter_quote_api_base: String,
-    networks: HashMap<SolanaNetwork, NetworkContext>,
+    pub primary_solana_network: SolanaNetwork,
+    pub network: NetworkContext,
+    pub public_client_config: Arc<PublicClientConfig>,
 }
 
 impl AppState {
     pub fn from_env() -> Result<Self> {
-        let mut networks = HashMap::new();
+        let rpc_url = env_required("SOLANA_RPC_URL")?;
+        let network = match env_opt("SOLANA_NETWORK") {
+            Some(v) => SolanaNetwork::from_str(&v).map_err(|e| anyhow::anyhow!("{e}"))?,
+            None => SolanaNetwork::infer_from_rpc(&rpc_url),
+        };
 
-        for network in SolanaNetwork::all() {
-            if let Some(ctx) = Self::try_load_prefixed(network)? {
-                networks.insert(network, ctx);
-            }
-        }
+        let program_id = env_required("PROGRAM_ID")?;
+        let vault_authority = env_required("VAULT_AUTHORITY")?;
+        let default_asset_mint = env_opt("DEFAULT_ASSET_MINT")
+            .unwrap_or_else(|| "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string());
+        let admin_keypair_path = env_opt("ADMIN_KEYPAIR_PATH");
 
-        if let Some((network, ctx)) = Self::try_load_legacy()? {
-            networks.entry(network).or_insert(ctx);
-        }
+        let ctx = Self::build_context(
+            network,
+            rpc_url,
+            program_id,
+            vault_authority,
+            default_asset_mint,
+            admin_keypair_path,
+        )?;
 
-        if networks.is_empty() {
-            bail!(
-                "configure at least one network via LOCALNET_* / DEVNET_* env vars \
-                 (or legacy SOLANA_RPC_URL + PROGRAM_ID + VAULT_AUTHORITY)"
-            );
-        }
+        let public_client_config = Arc::new(PublicClientConfig::from_env(
+            network,
+            &ctx.program_id,
+            &ctx.default_asset_mint,
+        )?);
 
         let jupiter_quote_api_base = std::env::var("JUPITER_QUOTE_API_BASE")
             .unwrap_or_else(|_| "https://quote-api.jup.ag/v6".to_string());
@@ -143,95 +137,21 @@ impl AppState {
             http,
             jupiter_swap_api_base,
             jupiter_quote_api_base,
-            networks,
+            primary_solana_network: network,
+            network: ctx,
+            public_client_config,
         })
     }
 
-    pub fn configured_networks(&self) -> Vec<&'static str> {
-        let mut out: Vec<_> = self
-            .networks
-            .keys()
-            .map(|n| n.as_header())
-            .collect();
-        out.sort_unstable();
-        out
-    }
-
+    /// Resolve network context. With single-network deployments this must match primary.
     pub fn require_network(&self, network: SolanaNetwork) -> Result<&NetworkContext, String> {
-        self.networks.get(&network).ok_or_else(|| {
-            format!(
-                "network `{network}` is not configured on this API; available: {}",
-                self.configured_networks().join(", ")
-            )
-        })
-    }
-
-    fn env_opt(key: &str) -> Option<String> {
-        std::env::var(key)
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-    }
-
-    fn try_load_prefixed(network: SolanaNetwork) -> Result<Option<NetworkContext>> {
-        let prefix = network.env_prefix();
-        let rpc_url = Self::env_opt(&format!("{prefix}_RPC_URL"));
-        let program_id = Self::env_opt(&format!("{prefix}_PROGRAM_ID"));
-        let vault_authority = Self::env_opt(&format!("{prefix}_VAULT_AUTHORITY"));
-
-        let set = [rpc_url.is_some(), program_id.is_some(), vault_authority.is_some()];
-        if !set.iter().any(|v| *v) {
-            return Ok(None);
+        if network != self.primary_solana_network {
+            return Err(format!(
+                "network `{network}` does not match this deployment's primary network `{}`",
+                self.primary_solana_network
+            ));
         }
-        if !set.iter().all(|v| *v) {
-            bail!(
-                "incomplete {prefix}_* config: set {prefix}_RPC_URL, {prefix}_PROGRAM_ID, and {prefix}_VAULT_AUTHORITY together"
-            );
-        }
-
-        let default_asset_mint = Self::env_opt(&format!("{prefix}_DEFAULT_ASSET_MINT"))
-            .unwrap_or_else(|| "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string());
-        let admin_keypair_path = Self::env_opt(&format!("{prefix}_ADMIN_KEYPAIR_PATH"));
-
-        Self::build_context(
-            network,
-            rpc_url.unwrap(),
-            program_id.unwrap(),
-            vault_authority.unwrap(),
-            default_asset_mint,
-            admin_keypair_path,
-        )
-        .map(Some)
-    }
-
-    fn try_load_legacy() -> Result<Option<(SolanaNetwork, NetworkContext)>> {
-        let rpc_url = match Self::env_opt("SOLANA_RPC_URL") {
-            Some(v) => v,
-            None => return Ok(None),
-        };
-
-        let network = match Self::env_opt("SOLANA_NETWORK") {
-            Some(v) => SolanaNetwork::from_str(&v).map_err(|e| anyhow::anyhow!("{e}"))?,
-            None => SolanaNetwork::infer_from_rpc(&rpc_url),
-        };
-
-        let program_id = Self::env_opt("PROGRAM_ID")
-            .context("PROGRAM_ID required when SOLANA_RPC_URL is set")?;
-        let vault_authority = Self::env_opt("VAULT_AUTHORITY")
-            .context("VAULT_AUTHORITY required when SOLANA_RPC_URL is set")?;
-        let default_asset_mint = Self::env_opt("DEFAULT_ASSET_MINT")
-            .unwrap_or_else(|| "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string());
-        let admin_keypair_path = Self::env_opt("ADMIN_KEYPAIR_PATH");
-
-        let ctx = Self::build_context(
-            network,
-            rpc_url,
-            program_id,
-            vault_authority,
-            default_asset_mint,
-            admin_keypair_path,
-        )?;
-        Ok(Some((network, ctx)))
+        Ok(&self.network)
     }
 
     fn build_context(
@@ -247,11 +167,13 @@ impl AppState {
             CommitmentConfig::confirmed(),
         ));
         let program_id =
-            Pubkey::from_str(&program_id).context(format!("invalid {} program id", network))?;
+            Pubkey::from_str(&program_id).context(format!("invalid {network} program id"))?;
         let vault_authority_seed = Pubkey::from_str(&vault_authority)
-            .context(format!("invalid {} vault authority", network))?;
+            .context(format!("invalid {network} vault authority"))?;
+        // Reject invalid default mint early (also validated in PublicClientConfig).
+        Pubkey::from_str(&default_asset_mint).context("invalid DEFAULT_ASSET_MINT")?;
         let admin_keypair = admin_keypair_path
-            .map(|p| load_keypair_arc(p))
+            .map(load_keypair_arc)
             .transpose()
             .context(format!("load {network} admin keypair"))?;
 
@@ -263,5 +185,19 @@ impl AppState {
             default_asset_mint,
             admin_keypair,
         })
+    }
+}
+
+fn env_opt(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn env_required(key: &str) -> Result<String> {
+    match env_opt(key) {
+        Some(v) => Ok(v),
+        None => bail!("{key} is required"),
     }
 }

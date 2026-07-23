@@ -9,6 +9,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod admin_wallet;
 pub mod app_state;
+pub mod config;
 pub mod jupiter;
 pub mod metaplex;
 pub mod routes;
@@ -16,12 +17,13 @@ pub mod tx_submit;
 pub mod wrap_stablecoin;
 
 use crate::app_state::AppState;
-use crate::routes::{admin, admin_ops, guard, ping, tx, vault};
+use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         ping::ping_handler,
+        client_config::client_config_handler,
         tx::issue_tx,
         tx::redeem_tx,
         tx::preview_tx,
@@ -37,6 +39,13 @@ use crate::routes::{admin, admin_ops, guard, ping, tx, vault};
         vault::redeem_quote_handler,
     ),
     components(schemas(
+        crate::config::PublicClientConfig,
+        crate::config::public_client_config::PublicSolanaConfig,
+        crate::config::public_client_config::PublicProgramIds,
+        crate::config::public_client_config::PublicAssetsConfig,
+        crate::config::public_client_config::PublicFeaturesConfig,
+        crate::config::public_client_config::PublicCapabilities,
+        crate::config::public_client_config::PublicLinksConfig,
         tx::IssueRequest,
         tx::RedeemRequest,
         tx::PreviewRequest,
@@ -74,8 +83,7 @@ struct ApiDoc;
 pub fn app(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::very_permissive();
 
-    // Guarded routes: every request must carry `x-solana-network` so the backend
-    // builds transactions against the cluster the client selected.
+    // Guarded routes: optional `x-solana-network` must match primary (or omit header).
     let tx_router: Router<Arc<AppState>> = Router::new()
         .route("/issue", post(tx::issue_tx))
         .route("/redeem", post(tx::redeem_tx))
@@ -115,6 +123,10 @@ pub fn app(state: Arc<AppState>) -> Router {
 
     let (_, api) = OpenApiRouter::<Arc<AppState>>::with_openapi(ApiDoc::openapi())
         .route("/ping", axum::routing::get(ping::ping_handler))
+        .route(
+            "/v1/client-config",
+            axum::routing::get(client_config::client_config_handler),
+        )
         .route("/v1/tx/issue", post(tx::issue_tx))
         .route("/v1/tx/redeem", post(tx::redeem_tx))
         .route("/v1/tx/preview", post(tx::preview_tx))
@@ -126,6 +138,10 @@ pub fn app(state: Arc<AppState>) -> Router {
 
     Router::new()
         .route("/ping", axum::routing::get(ping::ping_handler))
+        .route(
+            "/v1/client-config",
+            axum::routing::get(client_config::client_config_handler),
+        )
         .nest("/v1/tx", tx_router)
         .nest("/v1/admin", admin_router)
         .nest("/v1/vault", vault_router)

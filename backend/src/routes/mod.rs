@@ -1,5 +1,6 @@
 pub mod admin;
 pub mod admin_ops;
+pub mod client_config;
 pub mod guard;
 pub mod network;
 pub mod ping;
