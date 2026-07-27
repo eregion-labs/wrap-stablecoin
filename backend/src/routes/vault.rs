@@ -7,10 +7,14 @@ use utoipa::ToSchema;
 
 use crate::app_state::AppState;
 use crate::routes::network::RequestNetwork;
-use crate::wrap_stablecoin::{fetch_vault_assets, fetch_vault_meta, redeem_quote, RedeemQuoteView, VaultMetaView, VaultSummaryView};
+use crate::wrap_stablecoin::{
+    fetch_token_holders, fetch_vault_assets, fetch_vault_meta, redeem_quote, RedeemQuoteView,
+    TokenHoldersView, VaultMetaView, VaultSummaryView,
+};
 
 pub type VaultAssetsResponse = VaultSummaryView;
 pub type VaultMetaResponse = VaultMetaView;
+pub type TokenHoldersResponse = TokenHoldersView;
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +66,28 @@ pub async fn vault_meta(
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     Ok(Json(meta))
+}
+
+/// Largest wrapped-token accounts (RPC top 20). Keys are token-account addresses, not wallet owners.
+#[utoipa::path(
+    get,
+    path = "/v1/vault/token-holders",
+    responses((status = 200, body = TokenHoldersResponse), (status = 400))
+)]
+pub async fn token_holders(
+    State(state): State<Arc<AppState>>,
+    RequestNetwork(network): RequestNetwork,
+) -> Result<Json<TokenHoldersResponse>, (axum::http::StatusCode, String)> {
+    let ctx = state
+        .require_network(network)
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+    let holders = fetch_token_holders(
+        ctx.rpc.as_ref(),
+        &ctx.program_id,
+        &ctx.vault_authority_seed,
+    )
+    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(Json(holders))
 }
 
 /// Deterministic redeem quote from current on-chain policy and vault liquidity.

@@ -36,6 +36,7 @@ use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
         admin_ops::admin_redeem,
         vault::vault_assets,
         vault::vault_meta,
+        vault::token_holders,
         vault::redeem_quote_handler,
     ),
     components(schemas(
@@ -62,9 +63,11 @@ use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
         admin_ops::AdminRedeemRequest,
         vault::VaultAssetsResponse,
         vault::VaultMetaResponse,
+        vault::TokenHoldersResponse,
         vault::RedeemQuoteQuery,
         crate::wrap_stablecoin::VaultAssetView,
         crate::wrap_stablecoin::VaultMetaView,
+        crate::wrap_stablecoin::TokenHoldersView,
         crate::wrap_stablecoin::RedeemQuoteView,
         crate::metaplex::MintMetadata,
     )),
@@ -109,6 +112,7 @@ pub fn app(state: Arc<AppState>) -> Router {
     let vault_router: Router<Arc<AppState>> = Router::new()
         .route("/assets", axum::routing::get(vault::vault_assets))
         .route("/meta", axum::routing::get(vault::vault_meta))
+        .route("/token-holders", axum::routing::get(vault::token_holders))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             guard::network_guard,
@@ -133,6 +137,10 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/v1/tx/compose", post(tx::compose_tx))
         .route("/v1/vault/assets", axum::routing::get(vault::vault_assets))
         .route("/v1/vault/meta", axum::routing::get(vault::vault_meta))
+        .route(
+            "/v1/vault/token-holders",
+            axum::routing::get(vault::token_holders),
+        )
         .route("/v1/quote/redeem", axum::routing::get(vault::redeem_quote_handler))
         .split_for_parts();
 

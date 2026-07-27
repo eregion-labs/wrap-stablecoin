@@ -21,7 +21,9 @@ export default function AppHeader() {
 
   const subtitle = pathname.startsWith("/policy")
     ? adminCopy.reserveGovernanceSubtitle
-    : adminCopy.treasuryOperations;
+    : pathname.startsWith("/stats")
+      ? adminCopy.tokenStatsSubtitle
+      : adminCopy.treasuryOperations;
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
@@ -73,6 +75,14 @@ export default function AppHeader() {
               variant={pathname.startsWith("/policy") ? "contained" : "text"}
             >
               {adminCopy.chamber}
+            </Button>
+            <Button
+              component={Link}
+              href="/stats"
+              size="small"
+              variant={pathname.startsWith("/stats") ? "contained" : "text"}
+            >
+              {adminCopy.tokenStats}
             </Button>
           </Stack>
         </Toolbar>

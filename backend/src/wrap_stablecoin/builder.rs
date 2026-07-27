@@ -583,6 +583,36 @@ pub fn fetch_vault_meta(
     })
 }
 
+/// Largest SPL token accounts for the wrapped mint (RPC top-20; addresses are token accounts).
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenHoldersView {
+    pub wrapped_mint: String,
+    pub decimals: u8,
+    /// Token-account address → raw amount (atoms) as a decimal string.
+    pub holders: std::collections::BTreeMap<String, String>,
+}
+
+pub fn fetch_token_holders(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+) -> Result<TokenHoldersView> {
+    let (_, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    let accounts = rpc
+        .get_token_largest_accounts(&vault.wrapped_mint)
+        .with_context(|| format!("getTokenLargestAccounts {}", vault.wrapped_mint))?;
+    let mut holders = std::collections::BTreeMap::new();
+    for account in accounts {
+        holders.insert(account.address, account.amount.amount);
+    }
+    Ok(TokenHoldersView {
+        wrapped_mint: vault.wrapped_mint.to_string(),
+        decimals: vault.wrapped_decimals,
+        holders,
+    })
+}
+
 pub fn parse_asset_status(s: &str) -> Result<AssetStatus> {
     match s.trim().to_lowercase().as_str() {
         "active" => Ok(AssetStatus::Active),

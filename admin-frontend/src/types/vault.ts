@@ -64,6 +64,13 @@ export type VaultMeta = {
   mintMetadata?: MintMetadata | null;
 };
 
+/** Response from GET /v1/vault/token-holders (token-account → amount atoms). */
+export type TokenHolders = {
+  wrappedMint: string;
+  decimals: number;
+  holders: Record<string, string>;
+};
+
 export type RedeemQuote = {
   input: number;
   output: number;

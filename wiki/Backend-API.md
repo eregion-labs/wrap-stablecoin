@@ -13,6 +13,8 @@ One process serves **exactly one** Solana network. Frontends discover public dep
 | `GET` | `/ping` | Health check (`network`, `deploymentId`) |
 | `GET` | `/v1/client-config` | Immutable public bootstrap config (schemaVersion 1) |
 | `GET` | `/v1/vault/assets` | Per-asset vault balances and policy |
+| `GET` | `/v1/vault/meta` | Vault admin, wrapped mint, Metaplex metadata |
+| `GET` | `/v1/vault/token-holders` | Largest FLRN token accounts (RPC top 20; keys are token accounts) |
 | `GET` | `/v1/quote/redeem` | Expected unwrap output and free liquidity |
 | `POST` | `/v1/tx/issue` | Unsigned wrap transaction |
 | `POST` | `/v1/tx/redeem` | Unsigned unwrap transaction |
