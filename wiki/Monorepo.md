@@ -14,6 +14,7 @@ backend/                  # Axum API (unsigned tx builder + public client-config
 frontend/                 # Next.js wallet UI
 admin-frontend/           # Next.js operator console (backend-signed admin txs)
 shared/client-config/     # Shared Zod schema for GET /v1/client-config
+deployments/              # Cluster artifacts (localnet.json from anchor run local)
 wiki/                     # This wiki
 ```
 
@@ -23,11 +24,29 @@ wiki/                     # This wiki
 - Anchor (for `wrap-stablecoin/programs/wrap-stablecoin`)
 - Node 20+ and **pnpm** (`minimumReleaseAge: 1440` preferred for new installs)
 
+## Env ownership (backend SSOT)
+
+```text
+Operator / anchor run local
+        │
+        ▼
+backend/.env  (+ optional SECRET_NAME AWS SM fill-missing)
+        │
+        ▼
+GET /v1/client-config   ← frozen PublicClientConfig
+        │
+        ▼
+frontend / admin  (NEXT_PUBLIC_BACKEND_URL only)
+```
+
+One backend process = one Solana cluster. Frontends do not switch networks.
+
 ## On-chain program
 
 ```bash
 cd wrap-stablecoin
 anchor build
+anchor run local   # also syncs backend + frontend env files
 ```
 
 IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
@@ -36,19 +55,19 @@ IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
 
 ```bash
 cd backend
-cp .env.example .env
-# Set SOLANA_* + PUBLIC_SOLANA_* + PROGRAM_ID + VAULT_AUTHORITY (single network)
+# Prefer env written by `anchor run local`; or `cp .env.example .env`
 cargo run
 ```
 
 - Swagger UI: http://127.0.0.1:8080/doc (default port `8080`, override with `BIND_PORT`).
 - Public bootstrap: `GET /v1/client-config`
+- Boot: `.env` → optional `SECRET_NAME` (AWS CLI) fill-missing-only
 
 ## Frontend / admin
 
 ```bash
 cd frontend   # or admin-frontend
-# .env.local: NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8080
+cp .env.example .env.local   # or rely on anchor run local
 pnpm install
 pnpm run dev
 ```
@@ -64,10 +83,13 @@ pnpm run dev
 | Backend | `DEPLOYMENT_ID` | Required when `APP_ENV` ≠ `local` |
 | Backend | `SOLANA_RPC_URL` | Internal RPC (workers / tx build) |
 | Backend | `SOLANA_NETWORK` | `localnet` / `devnet` / `mainnet` |
-| Backend | `PROGRAM_ID` | `wrap_stablecoin` program id |
+| Backend | `PROGRAM_ID` | `wrap_stablecoin` program id (or `PROGRAM_ID_{NETWORK}`) |
 | Backend | `VAULT_AUTHORITY` | Pubkey that seeds `vault_config` PDA |
-| Backend | `PUBLIC_SOLANA_RPC_URL` | Browser-safe RPC (in client-config) |
-| Backend | `PUBLIC_SOLANA_WS_URL` | Browser-safe WS (in client-config) |
+| Backend | `DEFAULT_ASSET_MINT` | Required; network-scoped override supported |
+| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (alias `PUBLIC_SOLANA_RPC_URL`) |
+| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (alias `PUBLIC_SOLANA_WS_URL`) |
+| Backend | `EXPLORER_BASE_URL` | Explorer base in client-config (default Solscan) |
+| Backend | `SECRET_NAME` | Optional AWS SM flat JSON |
 | Backend | `ADMIN_KEYPAIR_PATH` | Optional admin signer for `/v1/admin/*` |
 | Backend | `ADMIN_DASHBOARD_URL` | Optional link in client-config |
 | Frontend / admin | `NEXT_PUBLIC_BACKEND_URL` | **Only** public deployment env — points at one API |

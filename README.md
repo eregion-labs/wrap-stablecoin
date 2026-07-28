@@ -10,6 +10,28 @@ Monorepo for the Kamino-backed wrap program ([`wrap-stablecoin/`](wrap-stablecoi
 - Anchor (for building [`programs/wrap-stablecoin`](wrap-stablecoin/programs/wrap-stablecoin))
 - Node 20+ and **pnpm**
 
+## Quick start (local)
+
+```bash
+# 1. Persistent localnet + vault seed + auto-write env files
+cd wrap-stablecoin
+cp .env.example .env   # wallet paths / RPC_PORT
+anchor run local
+
+# 2. Backend (backend/.env already written by seed)
+cd ../backend
+cargo run
+
+# 3. Frontend — sole env: NEXT_PUBLIC_BACKEND_URL (also auto-written)
+cd ../frontend
+pnpm install
+pnpm run dev
+```
+
+`anchor run local` merges seed outputs into `backend/.env`, writes `frontend/.env.local` and `admin-frontend/.env.local`, and emits `deployments/localnet.json`.
+
+Stop the validator: `anchor run stop-local`.
+
 ## On-chain program
 
 ```bash
@@ -24,10 +46,11 @@ IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
 
 ```bash
 cd backend
-cp .env.example .env
-# Single network: SOLANA_* + PUBLIC_SOLANA_* + PROGRAM_ID + VAULT_AUTHORITY
+# Prefer: let `anchor run local` write .env; or `cp .env.example .env`
 cargo run
 ```
+
+Boot: `.env` → optional AWS Secrets Manager (`SECRET_NAME`) fill-missing-only (local env always wins).
 
 - **Swagger UI:** [http://127.0.0.1:8080/doc](http://127.0.0.1:8080/doc) (default port `8080`, override with `BIND_PORT`).
 - **Bootstrap:** `GET /v1/client-config` — public deployment config for frontends.
@@ -37,7 +60,7 @@ cargo run
 
 ```bash
 cd frontend
-# .env.local: NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8080
+cp .env.example .env.local   # or rely on anchor run local
 pnpm install
 pnpm run dev
 ```
@@ -52,10 +75,12 @@ Cluster / RPC / program / mint config is **not** set in the Next apps — it is 
 |------|----------|---------|
 | Backend | `SOLANA_RPC_URL` | Internal RPC URL |
 | Backend | `SOLANA_NETWORK` | `localnet` / `devnet` / `mainnet` |
-| Backend | `PROGRAM_ID` | `wrap_stablecoin` program id |
+| Backend | `PROGRAM_ID` | `wrap_stablecoin` program id (or `PROGRAM_ID_{NETWORK}`) |
 | Backend | `VAULT_AUTHORITY` | Seeds `vault_config` PDA |
-| Backend | `PUBLIC_SOLANA_RPC_URL` | Browser-safe RPC (client-config) |
-| Backend | `PUBLIC_SOLANA_WS_URL` | Browser-safe WS (client-config) |
-| Frontend / admin | `NEXT_PUBLIC_BACKEND_URL` | Backend origin (sole public deployment env) |
+| Backend | `DEFAULT_ASSET_MINT` | Required default collateral mint |
+| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (client-config; alias `PUBLIC_SOLANA_RPC_URL`) |
+| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (client-config; alias `PUBLIC_SOLANA_WS_URL`) |
+| Backend | `SECRET_NAME` | Optional AWS SM flat JSON (fill-missing-only) |
+| Frontend / admin | `NEXT_PUBLIC_BACKEND_URL` | Backend origin (**sole** public deployment env) |
 
 Static check: `./scripts/check_frontend_env.sh`

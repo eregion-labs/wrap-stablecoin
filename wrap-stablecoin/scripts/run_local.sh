@@ -76,6 +76,11 @@ ANCHOR_WALLET="$ANCHOR_WALLET_PATH" \
 
 echo ""
 print_deploy_banner
+echo "═══ Phase E: env synced ═══"
+echo "backend/.env + frontend/.env.local + admin-frontend/.env.local written by seed."
+echo "Next: cd ../backend && cargo run"
+echo "Then: cd ../frontend && pnpm run dev   (NEXT_PUBLIC_BACKEND_URL only)"
+echo ""
 echo "Validator still running on $RPC_URL (pid $(cat "$PID_FILE"), background job in this shell)."
 echo "Slot/processed logs continue in this tab while it stays open."
 echo "Stop: anchor run stop-local   or   kill -9 \$(lsof -ti:$RPC_PORT)"

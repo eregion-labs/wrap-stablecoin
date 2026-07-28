@@ -236,34 +236,42 @@ export async function seedLocalnet(): Promise<SeedResult> {
   };
 }
 
-function printEnvBlock(result: SeedResult) {
-  console.log("");
-  console.log("─── Localnet env (copy into backend/.env) ───");
-  console.log("APP_ENV=local");
-  console.log(`SOLANA_RPC_URL=${RPC_URL}`);
-  console.log("SOLANA_NETWORK=localnet");
-  console.log(`PROGRAM_ID=${result.programId}`);
-  console.log(`VAULT_AUTHORITY=${result.vaultAuthority}`);
-  console.log(`DEFAULT_ASSET_MINT=${USDC_MINT.toBase58()}`);
-  console.log(`PUBLIC_SOLANA_RPC_URL=${RPC_URL}`);
-  console.log("PUBLIC_SOLANA_WS_URL=ws://127.0.0.1:8900");
-  console.log(`WRAPPED_MINT=${result.wrappedMint}`);
-  console.log(`VAULT_CONFIG=${result.vaultConfig}`);
-  console.log(`USDC_ASSET_MINT=${USDC_MINT.toBase58()}`);
-  console.log(`CCC_MINT=${CCC_MINT.toBase58()}`);
-  console.log(`TTT_MINT=${TTT_MINT.toBase58()}`);
-  console.log("");
-  console.log("─── Frontend / admin (.env.local) ───");
-  console.log("NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8080");
-  console.log("──────────────────────────────────────────────────────────────────────");
+async function main() {
+  const result = await seedLocalnet();
+
+  // Derive WS from RPC port (local validator: RPC_PORT - 1).
+  let wsUrl = "ws://127.0.0.1:8900";
+  try {
+    const u = new URL(RPC_URL);
+    const port = Number(u.port || 8901);
+    wsUrl = `ws://${u.hostname}:${port - 1}`;
+  } catch {
+    /* keep default */
+  }
+
+  const { syncLocalEnv } = await import("./sync_local_env");
+  syncLocalEnv({
+    cluster: "localnet",
+    rpcUrl: RPC_URL,
+    wsUrl,
+    backendUrl: "http://127.0.0.1:8080",
+    programId: result.programId,
+    vaultAuthority: result.vaultAuthority,
+    defaultAssetMint: USDC_MINT.toBase58(),
+    wrappedMint: result.wrappedMint,
+    vaultConfig: result.vaultConfig,
+    assetConfig: result.assetConfig,
+    klendConfig: result.klendConfig,
+    tokenVault: result.tokenVault,
+    treasuryVault: result.treasuryVault,
+    collateralVault: result.collateralVault,
+    cccMint: CCC_MINT.toBase58(),
+    tttMint: TTT_MINT.toBase58(),
+  });
+
   console.log("");
   console.log(`Validator RPC:  ${RPC_URL}  (pid file: .localnet/validator.pid)`);
   console.log(`Stop validator:   anchor run stop-local`);
-}
-
-async function main() {
-  const result = await seedLocalnet();
-  printEnvBlock(result);
   console.log("✓ seed_localnet complete");
 }
 

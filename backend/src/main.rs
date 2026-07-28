@@ -1,15 +1,16 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use dotenvy::dotenv;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use wrap_stablecoin_api::{app, app_state::AppState};
+use wrap_stablecoin_api::app;
+use wrap_stablecoin_api::app_state::AppState;
+use wrap_stablecoin_api::config::{load_dotenv, merge_optional_secret};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    load_dotenv();
 
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -17,6 +18,8 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or_else(|_| EnvFilter::new("wrap_stablecoin_api=info,tower_http=info")),
         )
         .init();
+
+    merge_optional_secret();
 
     let state = Arc::new(AppState::from_env()?);
     info!(

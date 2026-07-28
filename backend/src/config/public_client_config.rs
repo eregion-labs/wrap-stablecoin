@@ -5,6 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
 use crate::app_state::SolanaNetwork;
+use crate::config::env::{env_opt, env_prefer_required};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -99,6 +100,8 @@ pub struct PublicLinksConfig {
     pub admin_dashboard_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_app_url: Option<String>,
+    /// Browser explorer base (e.g. https://solscan.io). Always present for frontends.
+    pub explorer_base_url: String,
 }
 
 impl PublicClientConfig {
@@ -111,10 +114,12 @@ impl PublicClientConfig {
         let environment = Self::load_environment()?;
         let deployment_id = Self::load_deployment_id(environment)?;
 
-        let public_rpc = env_required("PUBLIC_SOLANA_RPC_URL")?;
-        let public_ws = env_required("PUBLIC_SOLANA_WS_URL")?;
-        validate_url(&public_rpc, "PUBLIC_SOLANA_RPC_URL")?;
-        validate_url(&public_ws, "PUBLIC_SOLANA_WS_URL")?;
+        // Prefer CLIENT_SOLANA_* (Folkmoot naming); accept PUBLIC_SOLANA_* as legacy alias.
+        let public_rpc =
+            env_prefer_required("CLIENT_SOLANA_RPC_URL", "PUBLIC_SOLANA_RPC_URL")?;
+        let public_ws = env_prefer_required("CLIENT_SOLANA_WS_URL", "PUBLIC_SOLANA_WS_URL")?;
+        validate_url(&public_rpc, "CLIENT_SOLANA_RPC_URL")?;
+        validate_url(&public_ws, "CLIENT_SOLANA_WS_URL")?;
 
         let mint = Pubkey::from_str(default_asset_mint)
             .context("DEFAULT_ASSET_MINT is not a valid pubkey")?;
@@ -127,6 +132,9 @@ impl PublicClientConfig {
             }
         });
         let public_app_url = env_opt("PUBLIC_APP_URL");
+        let explorer_base_url = env_opt("EXPLORER_BASE_URL")
+            .unwrap_or_else(|| "https://solscan.io".to_string());
+        validate_url(&explorer_base_url, "EXPLORER_BASE_URL")?;
 
         let jupiter_compose = env_opt("CAPABILITY_JUPITER_COMPOSE")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -159,6 +167,7 @@ impl PublicClientConfig {
             links: PublicLinksConfig {
                 admin_dashboard_url,
                 public_app_url,
+                explorer_base_url,
             },
         })
     }
@@ -185,17 +194,6 @@ impl PublicClientConfig {
         }
         bail!("DEPLOYMENT_ID is required when APP_ENV is not local")
     }
-}
-
-fn env_opt(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-fn env_required(key: &str) -> Result<String> {
-    env_opt(key).with_context(|| format!("{key} is required for public client config"))
 }
 
 fn validate_url(url: &str, key: &str) -> Result<()> {
@@ -228,14 +226,17 @@ mod tests {
         for key in [
             "APP_ENV",
             "DEPLOYMENT_ID",
+            "CLIENT_SOLANA_RPC_URL",
+            "CLIENT_SOLANA_WS_URL",
             "PUBLIC_SOLANA_RPC_URL",
             "PUBLIC_SOLANA_WS_URL",
             "ADMIN_DASHBOARD_URL",
             "PUBLIC_APP_URL",
+            "EXPLORER_BASE_URL",
             "CAPABILITY_JUPITER_COMPOSE",
             "CAPABILITY_ADMIN_DASHBOARD",
         ] {
-            std::env::remove_var(key);
+            unsafe { std::env::remove_var(key) };
         }
         f();
     }
@@ -243,9 +244,11 @@ mod tests {
     #[test]
     fn builds_local_config() {
         with_clean_env(|| {
-            std::env::set_var("APP_ENV", "local");
-            std::env::set_var("PUBLIC_SOLANA_RPC_URL", "http://127.0.0.1:8901");
-            std::env::set_var("PUBLIC_SOLANA_WS_URL", "ws://127.0.0.1:8900");
+            unsafe {
+                std::env::set_var("APP_ENV", "local");
+                std::env::set_var("CLIENT_SOLANA_RPC_URL", "http://127.0.0.1:8901");
+                std::env::set_var("CLIENT_SOLANA_WS_URL", "ws://127.0.0.1:8900");
+            }
             let program = Keypair::new().pubkey();
             let mint = Keypair::new().pubkey();
             let cfg = PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint.to_string())
@@ -260,6 +263,7 @@ mod tests {
                 cfg.links.admin_dashboard_url.as_deref(),
                 Some("http://localhost:3002")
             );
+            assert_eq!(cfg.links.explorer_base_url, "https://solscan.io");
             let json = serde_json::to_string(&cfg).unwrap();
             assert!(!json.contains("ADMIN_KEYPAIR"));
             assert!(!json.contains("keypair"));
@@ -267,11 +271,29 @@ mod tests {
     }
 
     #[test]
+    fn accepts_legacy_public_solana_aliases() {
+        with_clean_env(|| {
+            unsafe {
+                std::env::set_var("APP_ENV", "local");
+                std::env::set_var("PUBLIC_SOLANA_RPC_URL", "http://127.0.0.1:8901");
+                std::env::set_var("PUBLIC_SOLANA_WS_URL", "ws://127.0.0.1:8900");
+            }
+            let program = Keypair::new().pubkey();
+            let mint = Keypair::new().pubkey().to_string();
+            let cfg = PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint)
+                .unwrap();
+            assert_eq!(cfg.solana.rpc_url, "http://127.0.0.1:8901");
+        });
+    }
+
+    #[test]
     fn requires_deployment_id_outside_local() {
         with_clean_env(|| {
-            std::env::set_var("APP_ENV", "development");
-            std::env::set_var("PUBLIC_SOLANA_RPC_URL", "https://api.devnet.solana.com");
-            std::env::set_var("PUBLIC_SOLANA_WS_URL", "wss://api.devnet.solana.com");
+            unsafe {
+                std::env::set_var("APP_ENV", "development");
+                std::env::set_var("CLIENT_SOLANA_RPC_URL", "https://api.devnet.solana.com");
+                std::env::set_var("CLIENT_SOLANA_WS_URL", "wss://api.devnet.solana.com");
+            }
             let program = Keypair::new().pubkey();
             let mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
             let err = PublicClientConfig::from_env(SolanaNetwork::Devnet, &program, mint)
@@ -284,13 +306,15 @@ mod tests {
     #[test]
     fn etag_changes_when_config_changes() {
         with_clean_env(|| {
-            std::env::set_var("APP_ENV", "local");
-            std::env::set_var("PUBLIC_SOLANA_RPC_URL", "http://127.0.0.1:8901");
-            std::env::set_var("PUBLIC_SOLANA_WS_URL", "ws://127.0.0.1:8900");
+            unsafe {
+                std::env::set_var("APP_ENV", "local");
+                std::env::set_var("CLIENT_SOLANA_RPC_URL", "http://127.0.0.1:8901");
+                std::env::set_var("CLIENT_SOLANA_WS_URL", "ws://127.0.0.1:8900");
+            }
             let program = Keypair::new().pubkey();
             let mint = Keypair::new().pubkey().to_string();
             let a = PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint).unwrap();
-            std::env::set_var("DEPLOYMENT_ID", "other");
+            unsafe { std::env::set_var("DEPLOYMENT_ID", "other") };
             let b = PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint).unwrap();
             assert_ne!(a.etag().unwrap(), b.etag().unwrap());
         });

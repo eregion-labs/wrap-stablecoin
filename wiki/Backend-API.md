@@ -42,13 +42,18 @@ OpenAPI / Swagger: `/doc`
   "features": {
     "capabilities": { "jupiterCompose": true, "adminDashboard": true }
   },
-  "links": { "adminDashboardUrl": "http://localhost:3002" }
+  "links": {
+    "adminDashboardUrl": "http://localhost:3002",
+    "explorerBaseUrl": "https://solscan.io"
+  }
 }
 ```
 
 Caching: `Cache-Control: public, max-age=60, stale-while-revalidate=300` + `ETag`.
 
 Never includes secrets (admin keypairs, internal privileged RPC credentials).
+
+Backend builds this from `CLIENT_SOLANA_RPC_URL` / `CLIENT_SOLANA_WS_URL` (legacy aliases `PUBLIC_SOLANA_*` accepted), `PROGRAM_ID`, `DEFAULT_ASSET_MINT`, and optional `EXPLORER_BASE_URL`.
 
 ## Network guard
 
@@ -130,10 +135,13 @@ Jupiter integration lives entirely in the backend (`backend/src/jupiter.rs`). Th
 
 Set in `.env` (see `.env.example`):
 
-- `SOLANA_RPC_URL`, `SOLANA_NETWORK`, `PROGRAM_ID`, `VAULT_AUTHORITY`
-- `PUBLIC_SOLANA_RPC_URL`, `PUBLIC_SOLANA_WS_URL` (required for bootstrap)
-- `APP_ENV`, optional `DEPLOYMENT_ID` / `ADMIN_DASHBOARD_URL`
+- `SOLANA_RPC_URL`, `SOLANA_NETWORK`, `PROGRAM_ID`, `VAULT_AUTHORITY`, `DEFAULT_ASSET_MINT`
+- `CLIENT_SOLANA_RPC_URL`, `CLIENT_SOLANA_WS_URL` (required for bootstrap; aliases `PUBLIC_SOLANA_*`)
+- `APP_ENV`, optional `DEPLOYMENT_ID` / `ADMIN_DASHBOARD_URL` / `EXPLORER_BASE_URL`
+- Optional `SECRET_NAME` (+ `AWS_REGION`) for AWS Secrets Manager fill-missing-only merge
 - `ADMIN_KEYPAIR_PATH` (optional, for `/v1/admin/*`)
 - `BIND_PORT` (optional, default 8080)
+
+Network-scoped overrides: `{VAR}_{LOCALNET|DEVNET|MAINNET}` then `{VAR}`.
 
 PDA derivation and instruction building: `backend/src/wrap_stablecoin/`.

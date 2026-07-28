@@ -2,13 +2,14 @@ use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 
 use crate::admin_wallet::load_keypair_arc;
+use crate::config::env::{env_for_network_required, env_opt, env_required};
 use crate::config::PublicClientConfig;
 
 /// Solana cluster this API deployment serves.
@@ -102,10 +103,9 @@ impl AppState {
             None => SolanaNetwork::infer_from_rpc(&rpc_url),
         };
 
-        let program_id = env_required("PROGRAM_ID")?;
-        let vault_authority = env_required("VAULT_AUTHORITY")?;
-        let default_asset_mint = env_opt("DEFAULT_ASSET_MINT")
-            .unwrap_or_else(|| "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string());
+        let program_id = env_for_network_required("PROGRAM_ID", network)?;
+        let vault_authority = env_for_network_required("VAULT_AUTHORITY", network)?;
+        let default_asset_mint = env_for_network_required("DEFAULT_ASSET_MINT", network)?;
         let admin_keypair_path = env_opt("ADMIN_KEYPAIR_PATH");
 
         let ctx = Self::build_context(
@@ -185,19 +185,5 @@ impl AppState {
             default_asset_mint,
             admin_keypair,
         })
-    }
-}
-
-fn env_opt(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
-
-fn env_required(key: &str) -> Result<String> {
-    match env_opt(key) {
-        Some(v) => Ok(v),
-        None => bail!("{key} is required"),
     }
 }

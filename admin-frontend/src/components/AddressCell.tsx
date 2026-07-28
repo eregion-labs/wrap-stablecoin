@@ -20,7 +20,12 @@ export default function AddressCell({ address, type = "account" }: Props) {
   const { enqueueSnackbar } = useSnackbar();
   const config = useClientConfig();
   const network = config.solana.network;
-  const href = createExplorerUrl({ address, network, type });
+  const href = createExplorerUrl({
+    address,
+    network,
+    type,
+    explorerBaseUrl: config.links.explorerBaseUrl,
+  });
   const label = truncateAddrStandard(address);
 
   const onCopy = async () => {

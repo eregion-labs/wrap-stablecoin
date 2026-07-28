@@ -24,6 +24,7 @@ export const ClientConfigSchema = z.object({
   links: z.object({
     adminDashboardUrl: z.string().url().nullable().optional(),
     publicAppUrl: z.string().url().nullable().optional(),
+    explorerBaseUrl: z.string().url(),
   }),
 });
 

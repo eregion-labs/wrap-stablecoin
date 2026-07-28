@@ -16,22 +16,23 @@ type CreateExplorerUrlOpts = {
   address: string;
   network: "localnet" | "devnet" | "mainnet";
   type?: ExplorerAccountType;
+  /** From client-config `links.explorerBaseUrl` (default Solscan). */
+  explorerBaseUrl?: string;
 };
 
 /**
- * Solscan (or NEXT_PUBLIC_SOLANA_EXPLORER_URL) account/tx URL.
+ * Explorer account/tx URL from client-config base.
  * localnet returns null (no public explorer).
  */
 export function createExplorerUrl({
   address,
   network,
   type = "account",
+  explorerBaseUrl = "https://solscan.io",
 }: CreateExplorerUrlOpts): string | null {
   if (network === "localnet") return null;
 
-  const base = (
-    process.env.NEXT_PUBLIC_SOLANA_EXPLORER_URL || "https://solscan.io"
-  ).replace(/\/$/, "");
+  const base = explorerBaseUrl.replace(/\/$/, "");
 
   const path =
     type === "tx" ? `/tx/${address}` : type === "token" ? `/token/${address}` : `/account/${address}`;

@@ -59,13 +59,13 @@ API client: `frontend/src/lib/api.ts` (uses bootstrap services).
 
 ## Configuration
 
-`.env.local` (both apps):
+`.env.local` (both apps) — see `.env.example`:
 
 | Variable | Purpose |
 |----------|---------|
 | `NEXT_PUBLIC_BACKEND_URL` | Backend origin (trailing slash normalized once) |
 
-All other deployment public config comes from `/v1/client-config`.
+That is the **entire** product deployment surface. All other deployment public config comes from `/v1/client-config` (network, RPC, WS, program ids, default mint, explorer base URL, feature flags, links).
 
 Static enforcement: `./scripts/check_frontend_env.sh`
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Fail if retired frontend env vars (or forbidden process.env reads) reappear.
 set -euo pipefail
 
@@ -13,25 +12,13 @@ if ! command -v rg >/dev/null 2>&1; then
 fi
 
 # Retired product env vars (RPC/network/mints) — must come from /v1/client-config.
-if rg -n 'NEXT_PUBLIC_(DEFAULT_NETWORK|LOCALNET_RPC|DEVNET_RPC|DEFAULT_ASSET_MINT|SOLANA_NETWORK)' \
+if rg -n 'NEXT_PUBLIC_(DEFAULT_NETWORK|LOCALNET_RPC|DEVNET_RPC|DEFAULT_ASSET_MINT|SOLANA_NETWORK|API_BASE|SOLANA_EXPLORER_URL)' \
   frontend admin-frontend \
   --glob '!**/node_modules/**' \
   --glob '!**/.next/**' \
   --glob '!**/pnpm-lock.yaml' \
   --glob '!**/package-lock.json'; then
   echo "error: retired NEXT_PUBLIC_* env vars found (use NEXT_PUBLIC_BACKEND_URL + /v1/client-config)" >&2
-  FAILED=1
-fi
-
-# NEXT_PUBLIC_API_BASE is a one-release legacy alias — only allowed in backendUrl.ts
-if rg -n 'NEXT_PUBLIC_API_BASE' \
-  frontend admin-frontend \
-  --glob '!**/node_modules/**' \
-  --glob '!**/.next/**' \
-  --glob '!**/pnpm-lock.yaml' \
-  --glob '!**/package-lock.json' \
-  --glob '!**/lib/bootstrap/backendUrl.ts'; then
-  echo "error: NEXT_PUBLIC_API_BASE only allowed in lib/bootstrap/backendUrl.ts (prefer NEXT_PUBLIC_BACKEND_URL)" >&2
   FAILED=1
 fi
 
