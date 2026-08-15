@@ -28,11 +28,11 @@ Canonical token name/symbol/decimals for runtime display come from on-chain Meta
 
 ### 1. Composability over isolation
 
-The on-chain program is intentionally thin. KLend handles lending; the backend (off-chain) routes non-backing inputs through Jupiter and bundles them with `wrap` / `unwrap` into a single user-signed transaction. The on-chain program never CPIs into Jupiter.
+The on-chain program is intentionally thin. KLend handles lending. Users wrap and unwrap **registered collateral** directly (USDC, USDT, and other USD stables the admin has `add_asset`'d). Each pool has its own vault and liability.
 
 ### 2. Multi-asset collateral, single Florin (FLRN) mint
 
-Each registered asset has its own vaults and optional KLend wiring. Off-chain swap aggregation lets users enter/exit via tokens other than the backing asset while on-chain accounting stays per-asset.
+Each registered asset has its own vaults and optional KLend wiring. Users enter/exit via a registered collateral mint while on-chain accounting stays per-asset.
 
 ### 3. Authority-centric configuration with rotatable admin
 
@@ -149,7 +149,6 @@ Single allowlist per vault, capped at 64 entries. `check_access` re-derives the 
 | --- | --- |
 | **KLend** | Lending via CPI |
 | **SPL Token / Token-22** | Mint, transfer_checked, burn |
-| **Jupiter** *(backend)* | Off-chain swap aggregation via `/v1/tx/compose` |
 
 ---
 
@@ -183,5 +182,5 @@ Olympus Complex is a **multi-asset collateral wrapper** that:
 1. Mints Florin (FLRN) 1:1 against registered assets and supplies principal to KLend when enabled.
 2. Routes lending yield to per-asset treasury vaults; Florin (FLRN) supply stays at par.
 3. Separates immutable `authority` from rotatable `admin`.
-4. Defers swap aggregation to the backend Jupiter bundler.
+4. Accepts multiple registered USD collaterals via per-pool `wrap` / `unwrap`.
 5. Ships without flash mint (see [Flash-mint.md](../wiki/Flash-mint.md) for experimental re-enable path).
