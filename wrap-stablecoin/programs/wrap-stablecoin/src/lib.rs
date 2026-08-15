@@ -162,6 +162,9 @@ pub mod wrap_stablecoin {
     }
 
     pub fn add_asset(ctx: Context<AddAsset>, args: AddAssetArgs) -> Result<()> {
+        crate::utils::assert_plain_collateral_mint(
+            &ctx.accounts.underlying_mint.to_account_info(),
+        )?;
         let vault_config = &mut ctx.accounts.vault_config;
         let asset_config = &mut ctx.accounts.asset_config;
         let mint = ctx.accounts.underlying_mint.key();
@@ -196,6 +199,21 @@ pub mod wrap_stablecoin {
     }
 
     pub fn enable_klend(ctx: Context<EnableKlend>) -> Result<()> {
+        let (reserve_market, reserve_mint) = {
+            let data = ctx.accounts.reserve.try_borrow_data()?;
+            crate::klend::parse_reserve_market_and_mint(&data)?
+        };
+        require_keys_eq!(
+            reserve_market,
+            ctx.accounts.lending_market.key(),
+            ErrorCode::KlendReserveMarketMismatch
+        );
+        require_keys_eq!(
+            reserve_mint,
+            ctx.accounts.asset_config.token_mint,
+            ErrorCode::KlendReserveMintMismatch
+        );
+
         let klend_config = &mut ctx.accounts.klend_config;
         let asset_config = &ctx.accounts.asset_config;
 
@@ -288,6 +306,8 @@ pub mod wrap_stablecoin {
     ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
 
+        crate::utils::assert_plain_collateral_mint(&ctx.accounts.token_mint.to_account_info())?;
+
         check_access(
             ctx.accounts.vault_config.wrap_public,
             &ctx.accounts.vault_config.admin,
@@ -317,7 +337,7 @@ pub mod wrap_stablecoin {
 
         transfer_checked(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.collateral_token_program.to_account_info(),
                 TransferChecked {
                     from: ctx.accounts.user_token.to_account_info(),
                     mint: ctx.accounts.token_mint.to_account_info(),
@@ -346,7 +366,7 @@ pub mod wrap_stablecoin {
 
         mint_to(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.florin_token_program.to_account_info(),
                 MintTo {
                     mint: ctx.accounts.wrapped_mint.to_account_info(),
                     to: ctx.accounts.user_wrapped.to_account_info(),
@@ -387,6 +407,8 @@ pub mod wrap_stablecoin {
     ) -> Result<()> {
         require!(args.amount > 0, ErrorCode::InvalidAmount);
 
+        crate::utils::assert_plain_collateral_mint(&ctx.accounts.token_mint.to_account_info())?;
+
         check_access(
             ctx.accounts.vault_config.unwrap_public,
             &ctx.accounts.vault_config.admin,
@@ -426,7 +448,7 @@ pub mod wrap_stablecoin {
 
         burn(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.florin_token_program.to_account_info(),
                 Burn {
                     mint: ctx.accounts.wrapped_mint.to_account_info(),
                     from: ctx.accounts.user_wrapped.to_account_info(),
@@ -450,7 +472,7 @@ pub mod wrap_stablecoin {
 
         transfer_checked(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.collateral_token_program.to_account_info(),
                 TransferChecked {
                     from: ctx.accounts.token_vault.to_account_info(),
                     mint: ctx.accounts.token_mint.to_account_info(),
@@ -600,7 +622,7 @@ pub mod wrap_stablecoin {
         let asset_config = &ctx.accounts.asset_config;
         let klend_config = &mut ctx.accounts.klend_config;
 
-        let vault_balance = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+        let vault_balance = ctx.accounts.token_vault.amount;
         let remaining = vault_balance
             .checked_sub(args.amount)
             .ok_or(ErrorCode::InsufficientBalance)?;
@@ -652,14 +674,20 @@ pub mod wrap_stablecoin {
             &[authority_seeds],
         )?;
 
+        ctx.accounts.token_vault.reload()?;
+        let actual = vault_balance
+            .checked_sub(ctx.accounts.token_vault.amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(actual > 0, ErrorCode::ZeroLiquidityDeposited);
+
         klend_config.total_liquidity_in_klend = klend_config
             .total_liquidity_in_klend
-            .checked_add(args.amount)
+            .checked_add(actual)
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
             "Deposited {} of {} to KLend",
-            args.amount,
+            actual,
             asset_config.token_mint
         );
         Ok(())
@@ -667,7 +695,7 @@ pub mod wrap_stablecoin {
 
     pub fn deposit_all_to_klend(ctx: Context<DepositAllToKlend>) -> Result<()> {
         let asset_config = &ctx.accounts.asset_config;
-        let vault_balance = get_token_balance(&ctx.accounts.token_vault.to_account_info())?;
+        let vault_balance = ctx.accounts.token_vault.amount;
         let amount = vault_balance.saturating_sub(asset_config.min_liquidity_target);
         require!(amount > 0, ErrorCode::InvalidAmount);
 
@@ -716,14 +744,20 @@ pub mod wrap_stablecoin {
             &[authority_seeds],
         )?;
 
+        ctx.accounts.token_vault.reload()?;
+        let actual = vault_balance
+            .checked_sub(ctx.accounts.token_vault.amount)
+            .ok_or(ErrorCode::MathOverflow)?;
+        require!(actual > 0, ErrorCode::ZeroLiquidityDeposited);
+
         klend_config.total_liquidity_in_klend = klend_config
             .total_liquidity_in_klend
-            .checked_add(amount)
+            .checked_add(actual)
             .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
             "Deposited all {} ({} reserve) of {} to KLend",
-            amount,
+            actual,
             asset_config.min_liquidity_target,
             asset_config.token_mint
         );

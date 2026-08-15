@@ -620,6 +620,7 @@ fn wrapped_wrap_ix(
             AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
             AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,
     }
@@ -669,6 +670,7 @@ fn wrapped_unwrap_ix(
             AccountMeta::new_readonly(*token_mint, false),
             AccountMeta::new(*token_vault, false),
             AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data,

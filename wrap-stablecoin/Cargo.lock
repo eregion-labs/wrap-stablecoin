@@ -7107,6 +7107,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "anyhow",
+ "base64 0.22.1",
  "borsh 0.10.4",
  "mpl-token-metadata",
  "sha2 0.10.9",

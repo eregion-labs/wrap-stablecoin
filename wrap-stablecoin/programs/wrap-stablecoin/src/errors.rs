@@ -151,4 +151,19 @@ pub enum ErrorCode {
 
     #[msg("Remaining asset config accounts do not match registered assets")]
     InvalidAssetConfigAccounts,
+
+    #[msg("KLend Reserve account layout, discriminator, or version is invalid")]
+    InvalidKlendReserve,
+
+    #[msg("KLend Reserve lending_market does not match the supplied market")]
+    KlendReserveMarketMismatch,
+
+    #[msg("KLend Reserve liquidity mint does not match the registered asset")]
+    KlendReserveMintMismatch,
+
+    #[msg("Kamino deposit moved no liquidity from the vault")]
+    ZeroLiquidityDeposited,
+
+    #[msg("Collateral mint must be classic SPL Token or Token-2022 with no extensions")]
+    UnsupportedTokenExtension,
 }

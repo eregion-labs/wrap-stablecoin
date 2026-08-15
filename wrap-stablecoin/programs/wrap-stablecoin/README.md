@@ -66,7 +66,7 @@ flowchart TB
 | `wrapped_mint` | `Pubkey` | Florin (FLRN) mint |
 | `wrapped_mint_bump`, `vault_authority_bump`, `bump` | `u8` | PDA bumps |
 | `total_stable_deposited` | `u64` | Aggregate user Florin (FLRN) liability |
-| `paused` | `bool` | Hard gate on wrap / unwrap / admin KLend ops |
+| `paused` | `bool` | Blocks wrap, unwrap, Kamino deposit, and harvest. Recall, sweep, and treasury still work |
 | `wrap_public`, `unwrap_public` | `bool` | If false, require admin or allowlist |
 | `flash_mint_*` (4 fields) | various | **Reserved** — unused in shipped build; see Flash-mint.md |
 

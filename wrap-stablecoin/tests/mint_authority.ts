@@ -197,7 +197,8 @@ describe("mint authority extraction", () => {
         wrappedMint,
         tokenVault,
         allowlist: null,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        florinTokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
   });
@@ -317,7 +318,8 @@ describe("mint authority extraction", () => {
           wrappedMint,
           tokenVault,
           allowlist: null,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          florinTokenProgram: TOKEN_PROGRAM_ID,
         } as any)
         .rpc();
     } catch (err: any) {
@@ -341,7 +343,8 @@ describe("mint authority extraction", () => {
         wrappedMint,
         tokenVault,
         allowlist: null,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        florinTokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
 

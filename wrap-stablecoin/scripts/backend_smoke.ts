@@ -18,7 +18,8 @@
  *   5. POST /v1/tx/issue — signs returned VersionedTransaction with the
  *      throwaway keypair, submits, confirms, asserts Florin (FLRN) balance.
  *      Asserts wrap ix account order: allowlist slot (index 9) is the
- *      program-id sentinel, token_program is index 10.
+ *      program-id sentinel, collateral_token_program is index 10, and
+ *      florin_token_program (TOKEN_PROGRAM_ID) is index 11.
  *   6. POST /v1/tx/redeem — same flow, asserts USDC balance returned.
  *
  * This specifically validates the allowlist-slot sentinel fix in
@@ -204,27 +205,34 @@ async function main() {
   if (!wrapIx) {
     throw new Error("wrap instruction missing from issue tx");
   }
-  if (wrapIx.accountKeyIndexes.length !== 11) {
+  if (wrapIx.accountKeyIndexes.length !== 12) {
     throw new Error(
-      `wrap ix expected 11 accounts, got ${wrapIx.accountKeyIndexes.length}`,
+      `wrap ix expected 12 accounts, got ${wrapIx.accountKeyIndexes.length}`,
     );
   }
   const allowlistSlot =
     issueTx.message.staticAccountKeys[wrapIx.accountKeyIndexes[9]];
-  const tokenProgramSlot =
+  const collateralProgramSlot =
     issueTx.message.staticAccountKeys[wrapIx.accountKeyIndexes[10]];
+  const florinProgramSlot =
+    issueTx.message.staticAccountKeys[wrapIx.accountKeyIndexes[11]];
   if (!allowlistSlot.equals(programId)) {
     throw new Error(
       `allowlist slot expected program-id sentinel, got ${allowlistSlot.toBase58()}`,
     );
   }
-  if (!tokenProgramSlot.equals(TOKEN_PROGRAM_ID)) {
+  if (!collateralProgramSlot.equals(TOKEN_PROGRAM_ID)) {
     throw new Error(
-      `token_program slot mismatch: ${tokenProgramSlot.toBase58()}`,
+      `collateral_token_program slot mismatch: ${collateralProgramSlot.toBase58()}`,
+    );
+  }
+  if (!florinProgramSlot.equals(TOKEN_PROGRAM_ID)) {
+    throw new Error(
+      `florin_token_program slot mismatch: ${florinProgramSlot.toBase58()}`,
     );
   }
   console.log(
-    `[issue] wrap ix account order ok (allowlist sentinel, token_program last)`,
+    `[issue] wrap ix account order ok (allowlist sentinel, collateral + florin programs)`,
   );
   console.log(
     `[issue] got tx with ${issueTx.message.staticAccountKeys.length} accounts, signing…`,

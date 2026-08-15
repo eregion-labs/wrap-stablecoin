@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenInterface};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::Mint;
 
 use crate::errors::ErrorCode;
 use crate::state::VaultConfig;
@@ -64,5 +65,5 @@ pub struct AcceptMintAuthority<'info> {
     )]
     pub vault_authority: AccountInfo<'info>,
 
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
 }

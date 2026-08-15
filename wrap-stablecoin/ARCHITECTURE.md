@@ -43,7 +43,7 @@ Each vault is keyed by an immutable **authority** (the PDA-seed creator). A sepa
 - **CPI-as-oracle harvest** — `harvest_yield` derives the kToken→collateral rate from the redeem CPI itself; KLend's downward rounding makes the residual-backing check strictly conservative.
 - **Pinned KLend accounts** — reserve and market accounts bound at `enable_klend` and pinned by `address` constraints on every later CPI.
 - **Allowlist PDA validation** — `check_access` re-derives the allowlist address from `(vault_config, bump)`, blocking foreign allowlists.
-- **Pause** — emergency stop covers wrap, unwrap, deposit/withdraw KLend, and harvest.
+- **Pause** — emergency stop covers wrap, unwrap, Kamino deposit, and harvest. Recall, sweep, and treasury withdrawal remain available.
 
 ### 5. Yield to treasury, not to wrapped supply
 
@@ -148,7 +148,7 @@ Single allowlist per vault, capped at 64 entries. `check_access` re-derives the 
 | Dependency | Role |
 | --- | --- |
 | **KLend** | Lending via CPI |
-| **SPL Token / Token-22** | Mint, transfer_checked, burn |
+| **SPL Token / Token-22** | Florin mint/burn is classic SPL; collateral transfer may be SPL or Token-2022 with no extensions |
 
 ---
 
