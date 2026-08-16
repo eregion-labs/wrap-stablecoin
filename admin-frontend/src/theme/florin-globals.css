@@ -1,3 +1,12 @@
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/eb-garamond/latin-400.css";
+@import "@fontsource/eb-garamond/latin-500.css";
+@import "@fontsource/eb-garamond/latin-600.css";
+@import "@fontsource/eb-garamond/latin-400-italic.css";
+@import "@fontsource/dm-mono/latin-400.css";
+@import "@fontsource/dm-mono/latin-500.css";
+
 :root {
   --florin-paper: #FFFFFF;
   --florin-offwhite: #F7F6F4;
@@ -11,6 +20,9 @@
   --florin-border: #DEDEDE;
   --background: var(--florin-paper);
   --foreground: var(--florin-ink);
+  --font-inter: "Inter", system-ui, sans-serif;
+  --font-eb-garamond: "EB Garamond", Georgia, serif;
+  --font-dm-mono: "DM Mono", ui-monospace, monospace;
 }
 
 @theme inline {

@@ -1,5 +1,3 @@
-import { Connection, Keypair, VersionedTransaction } from "@solana/web3.js";
-
 export function decodeB64(b64: string): Uint8Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
@@ -34,6 +32,7 @@ export async function signAndSendUnsignedTx(opts: {
   rpcUrl: string;
   expectedSigner: string;
 }): Promise<string> {
+  const { Connection, Keypair, VersionedTransaction } = await import("@solana/web3.js");
   const keypair = Keypair.fromSecretKey(opts.secretKey);
   const signer = keypair.publicKey.toBase58();
   if (signer !== opts.expectedSigner) {
