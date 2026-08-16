@@ -14,13 +14,21 @@
  *   1. Initializes the vault (idempotent — skips if already there).
  *   2. Generates a fresh throwaway signer keypair.
  *   3. Airdrops SOL and transfers USDC from the fixture wallet to the signer.
- *   4. POST /v1/tx/issue — signs returned VersionedTransaction with the
+ *   4. GET /v1/quote/issue — asserts output and accessAllowed for a public vault.
+ *   5. POST /v1/tx/issue — signs returned VersionedTransaction with the
  *      throwaway keypair, submits, confirms, asserts Florin (FLRN) balance.
- *   5. POST /v1/tx/redeem — same flow, asserts USDC balance returned.
+ *      Asserts wrap ix account order: allowlist slot (index 9) is the
+ *      program-id sentinel, collateral_token_program is index 10, and
+ *      florin_token_program (TOKEN_PROGRAM_ID) is index 11.
+ *   6. POST /v1/tx/redeem — same flow, asserts USDC balance returned.
  *
  * This specifically validates the allowlist-slot sentinel fix in
  * backend/src/wrap_stablecoin/builder.rs — the Anchor program rejects
  * the wrap ix if the optional allowlist account slot is missing.
+ *
+ * Private wrap (not executed here): set wrapPublic=false after init-allowlist.
+ * Non-members get 400 "not on allowlist". Members get the allowlist PDA at
+ * account index 9 instead of the program-id sentinel. See wiki/Operations.md.
  */
 
 import * as anchor from "@coral-xyz/anchor";
@@ -49,12 +57,19 @@ const SIGNER_OUT = process.env.SIGNER_OUT || "/tmp/smoke-signer.json";
 
 const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
+async function getJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${BACKEND_BASE}${path}`);
+  if (!res.ok) {
+    throw new Error(`GET ${path} → ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as T;
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BACKEND_BASE}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-solana-network": "localnet",
     },
     body: JSON.stringify(body),
   });
@@ -140,15 +155,84 @@ async function main() {
   const signerUsdcBefore = await getAccount(connection, signerUsdcAta);
   console.log(`[fund] signer USDC balance: ${signerUsdcBefore.amount}`);
 
-  // ─── Step 4: POST /v1/tx/issue, sign, submit ─────────────────────────────
-  console.log("\n[issue] POST /v1/tx/issue…");
+  // ─── Step 4: GET /v1/quote/issue ──────────────────────────────────────────
   const WRAP_AMOUNT = 50_000_000; // 50 USDC
+  console.log("\n[quote] GET /v1/quote/issue…");
+  const issueQuote = await getJson<{
+    input: number;
+    output: number;
+    haircutBps: number;
+    canMint: boolean;
+    accessAllowed: boolean | null;
+  }>(
+    `/v1/quote/issue?amount=${WRAP_AMOUNT}&user=${signer.publicKey.toBase58()}`,
+  );
+  if (issueQuote.input !== WRAP_AMOUNT) {
+    throw new Error(
+      `issue quote input mismatch: got ${issueQuote.input}, expected ${WRAP_AMOUNT}`,
+    );
+  }
+  if (issueQuote.accessAllowed !== true) {
+    throw new Error(
+      `issue quote accessAllowed expected true (public wrap), got ${issueQuote.accessAllowed}`,
+    );
+  }
+  if (!issueQuote.canMint) {
+    throw new Error("issue quote canMint is false");
+  }
+  console.log(
+    `[quote] issue ${issueQuote.input} → ${issueQuote.output} (haircut ${issueQuote.haircutBps} bps)`,
+  );
+
+  // ─── Step 5: POST /v1/tx/issue, sign, submit ─────────────────────────────
+  console.log("\n[issue] POST /v1/tx/issue…");
   const issueRes = await postJson<{ transactionB64: string }>("/v1/tx/issue", {
     user: signer.publicKey.toBase58(),
     amount: WRAP_AMOUNT,
   });
   const issueTx = VersionedTransaction.deserialize(
     Buffer.from(issueRes.transactionB64, "base64"),
+  );
+  const wrapIx = (() => {
+    const msg = issueTx.message;
+    if (!("compiledInstructions" in msg)) {
+      throw new Error("expected v0 issue transaction");
+    }
+    return msg.compiledInstructions.find((ix) =>
+      msg.staticAccountKeys[ix.programIdIndex].equals(programId),
+    );
+  })();
+  if (!wrapIx) {
+    throw new Error("wrap instruction missing from issue tx");
+  }
+  if (wrapIx.accountKeyIndexes.length !== 12) {
+    throw new Error(
+      `wrap ix expected 12 accounts, got ${wrapIx.accountKeyIndexes.length}`,
+    );
+  }
+  const allowlistSlot =
+    issueTx.message.staticAccountKeys[wrapIx.accountKeyIndexes[9]];
+  const collateralProgramSlot =
+    issueTx.message.staticAccountKeys[wrapIx.accountKeyIndexes[10]];
+  const florinProgramSlot =
+    issueTx.message.staticAccountKeys[wrapIx.accountKeyIndexes[11]];
+  if (!allowlistSlot.equals(programId)) {
+    throw new Error(
+      `allowlist slot expected program-id sentinel, got ${allowlistSlot.toBase58()}`,
+    );
+  }
+  if (!collateralProgramSlot.equals(TOKEN_PROGRAM_ID)) {
+    throw new Error(
+      `collateral_token_program slot mismatch: ${collateralProgramSlot.toBase58()}`,
+    );
+  }
+  if (!florinProgramSlot.equals(TOKEN_PROGRAM_ID)) {
+    throw new Error(
+      `florin_token_program slot mismatch: ${florinProgramSlot.toBase58()}`,
+    );
+  }
+  console.log(
+    `[issue] wrap ix account order ok (allowlist sentinel, collateral + florin programs)`,
   );
   console.log(
     `[issue] got tx with ${issueTx.message.staticAccountKeys.length} accounts, signing…`,
@@ -170,7 +254,7 @@ async function main() {
     );
   }
 
-  // ─── Step 5: POST /v1/tx/redeem, sign, submit ────────────────────────────
+  // ─── Step 6: POST /v1/tx/redeem, sign, submit ────────────────────────────
   console.log("\n[redeem] POST /v1/tx/redeem…");
   const REDEEM_AMOUNT = 20_000_000; // 20 Florin (FLRN)
   const redeemRes = await postJson<{ transactionB64: string }>(

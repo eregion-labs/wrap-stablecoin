@@ -19,8 +19,7 @@ pub struct WithdrawFromKlend<'info> {
     #[account(
         seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
-        has_one = admin @ ErrorCode::Unauthorized,
-        constraint = !vault_config.paused @ ErrorCode::VaultPaused
+        has_one = admin @ ErrorCode::Unauthorized
     )]
     pub vault_config: Box<Account<'info, VaultConfig>>,
 

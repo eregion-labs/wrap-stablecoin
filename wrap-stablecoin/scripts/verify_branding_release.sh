@@ -15,7 +15,7 @@ npm run cli -- metadata verify || {
 
 echo "== grep audit (user-facing product names) =="
 if rg -n 'wStable' "$MONO/frontend/src" "$MONO/admin-frontend/src" "$MONO/backend/src" \
-  --glob '!**/theme/**' --glob '!**/networkStore.ts'; then
+  --glob '!**/theme/**'; then
   echo "FAIL: wStable still present in app source"
   exit 1
 fi

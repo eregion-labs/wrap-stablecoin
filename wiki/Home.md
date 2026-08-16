@@ -9,7 +9,7 @@ Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrap
 | [Architecture](Architecture) | System design, flows, accounts, security model |
 | [Monorepo](Monorepo) | Repo layout, build commands, environment variables |
 | [On-chain program](On-chain-program) | Instructions, program ID, account types |
-| [Backend API](Backend-API) | Transaction builder endpoints and Jupiter composition |
+| [Backend API](Backend-API) | Transaction builder and admin endpoints |
 | [Frontend](Frontend) | Next.js app and wallet integration |
 
 ## Quick reference
@@ -18,9 +18,8 @@ Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrap
 |------|-------|
 | Program name | `wrap_stablecoin` |
 | Program ID | `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT` |
-| Base collateral | USDC (1:1 Florin (FLRN) mint/burn) |
+| Base collateral | Registered USD stables (USDC at launch; 1:1 Florin (FLRN) mint/burn) |
 | Yield venue | Kamino KLend |
-| Off-chain swaps | Jupiter (backend only) |
 
 ## Source docs in repo
 

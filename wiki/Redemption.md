@@ -18,7 +18,7 @@ If `token_vault` does not hold enough free collateral, the instruction fails wit
 
 ## Off-chain quote
 
-Clients should call `GET /v1/quote/redeem?assetMint=&amount=` for the expected `output` (same formula as on-chain) and `freeLiquidity` (current `token_vault` balance). Show a warning when `output > freeLiquidity`.
+Clients should call `GET /v1/quote/redeem?assetMint=&amount=&user=` for the expected `output` (same formula as on-chain), `haircutBps`, `freeLiquidity`, and optional `accessAllowed`. Show a warning when `output > freeLiquidity`. Display the haircut as a percent (`haircutBps / 100`). Mint quotes are `GET /v1/quote/issue`.
 
 ## Admin vs user paths
 

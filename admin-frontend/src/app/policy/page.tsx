@@ -6,9 +6,11 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AssetPolicyTable from "@/components/AssetPolicyTable";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
+import VaultControlsPanel from "@/components/VaultControlsPanel";
 import { wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useVaultStore } from "@/stores/vaultStore";
+import { adminCopy } from "@/theme/copy";
 
 export default function PolicyPage() {
   const status = useVaultStore((s) => s.status);
@@ -33,11 +35,12 @@ export default function PolicyPage() {
           </Typography>
         </Box>
       )}
+      <VaultControlsPanel />
       <AssetPolicyTable />
       {summary && summary.assets.length > 0 && (
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, pb: 5 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Pool accounting
+            {adminCopy.accounts}
           </Typography>
           <VaultAccountingPanel
             assets={summary.assets}

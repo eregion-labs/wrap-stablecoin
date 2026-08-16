@@ -4,7 +4,7 @@ import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import SwapHorizOutlinedIcon from "@mui/icons-material/SwapHorizOutlined";
-import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
+import VpnKeyOutlinedIcon from "@mui/icons-material/VpnKeyOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -18,6 +18,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useCallback, useState } from "react";
 import { useSnackbar } from "notistack";
+import { publicCopy } from "@/theme/copy";
 
 function truncateAddress(addr: string): string {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
@@ -57,7 +58,7 @@ export default function WalletNavButton() {
         variant="outlined"
         disabled
         startIcon={<CircularProgress size={16} color="inherit" />}
-        sx={{ minWidth: 148, borderColor: "divider" }}
+        sx={{ minWidth: 148 }}
       >
         Connecting…
       </Button>
@@ -70,10 +71,10 @@ export default function WalletNavButton() {
         variant="contained"
         color="primary"
         onClick={openWalletModal}
-        startIcon={<AccountBalanceWalletOutlinedIcon />}
+        startIcon={<VpnKeyOutlinedIcon />}
         sx={{ minWidth: 148, px: 2.5, py: 1 }}
       >
-        Connect wallet
+        {publicCopy.connectAccount}
       </Button>
     );
   }
@@ -88,9 +89,8 @@ export default function WalletNavButton() {
         endIcon={<ExpandMoreIcon />}
         sx={{
           minWidth: 148,
-          borderColor: "divider",
-          bgcolor: "action.hover",
-          "&:hover": { bgcolor: "action.selected", borderColor: "primary.main" },
+          bgcolor: "background.default",
+          "&:hover": { bgcolor: "action.hover", borderColor: "primary.main" },
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, overflow: "hidden" }}>
@@ -98,7 +98,7 @@ export default function WalletNavButton() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={wallet.adapter.icon} alt="" width={20} height={20} style={{ borderRadius: 4 }} />
           )}
-          <Typography component="span" variant="body2" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
+          <Typography component="span" variant="body2" sx={{ fontWeight: 600, fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
             {truncateAddress(address)}
           </Typography>
         </Box>
@@ -112,24 +112,21 @@ export default function WalletNavButton() {
         anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
         slotProps={{
           paper: {
-            elevation: 8,
+            elevation: 2,
             sx: {
               mt: 1,
               minWidth: 240,
-              border: "1px solid",
-              borderColor: "divider",
-              bgcolor: "background.paper",
             },
           },
         }}
       >
         <Box sx={{ px: 2, py: 1.5, maxWidth: 280 }}>
           <Typography variant="caption" color="text.secondary" display="block">
-            Connected wallet
+            {publicCopy.merchantAccount}
           </Typography>
           <Typography
             variant="body2"
-            sx={{ fontFamily: "monospace", wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
+            sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
           >
             {address}
           </Typography>
@@ -144,20 +141,20 @@ export default function WalletNavButton() {
           <ListItemIcon>
             <ContentCopyOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Copy address</ListItemText>
+          <ListItemText>{publicCopy.copyAddress}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleChangeWallet}>
           <ListItemIcon>
             <SwapHorizOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Change wallet</ListItemText>
+          <ListItemText>{publicCopy.changeAccount}</ListItemText>
         </MenuItem>
         <Divider />
-        <MenuItem onClick={handleDisconnect} sx={{ color: "error.light" }}>
-          <ListItemIcon sx={{ color: "error.light" }}>
+        <MenuItem onClick={handleDisconnect} sx={{ color: "error.main" }}>
+          <ListItemIcon sx={{ color: "error.main" }}>
             <LogoutOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Disconnect</ListItemText>
+          <ListItemText>{publicCopy.disconnect}</ListItemText>
         </MenuItem>
       </Menu>
     </>

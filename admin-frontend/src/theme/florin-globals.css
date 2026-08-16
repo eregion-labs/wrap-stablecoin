@@ -1,0 +1,40 @@
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/eb-garamond/latin-400.css";
+@import "@fontsource/eb-garamond/latin-500.css";
+@import "@fontsource/eb-garamond/latin-600.css";
+@import "@fontsource/eb-garamond/latin-400-italic.css";
+@import "@fontsource/dm-mono/latin-400.css";
+@import "@fontsource/dm-mono/latin-500.css";
+
+:root {
+  --florin-paper: #FFFFFF;
+  --florin-offwhite: #F7F6F4;
+  --florin-muted: #F0EFED;
+  --florin-hairline: #DEDEDE;
+  --florin-red: #C2192B;
+  --florin-blue: #4A90B8;
+  --florin-brown: #8A5E3A;
+  --florin-ink: #0E0E0E;
+  --florin-text-muted: #6B6B6B;
+  --florin-border: #DEDEDE;
+  --background: var(--florin-paper);
+  --foreground: var(--florin-ink);
+  --font-inter: "Inter", system-ui, sans-serif;
+  --font-eb-garamond: "EB Garamond", Georgia, serif;
+  --font-dm-mono: "DM Mono", ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-eb-garamond);
+  --font-mono: var(--font-dm-mono);
+}
+
+body {
+  background: var(--florin-paper);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}

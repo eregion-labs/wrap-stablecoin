@@ -7,10 +7,12 @@ use serde::Serialize;
 use crate::app_state::AppState;
 
 #[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PingResponse {
     pub ok: bool,
-    /// Clusters configured on this API instance (`x-solana-network` values).
-    pub networks: Vec<String>,
+    /// Primary Solana cluster for this deployment.
+    pub network: String,
+    pub deployment_id: String,
 }
 
 /// Liveness check.
@@ -22,10 +24,7 @@ pub struct PingResponse {
 pub async fn ping_handler(State(state): State<Arc<AppState>>) -> Json<PingResponse> {
     Json(PingResponse {
         ok: true,
-        networks: state
-            .configured_networks()
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
+        network: state.primary_solana_network.as_header().to_string(),
+        deployment_id: state.public_client_config.deployment_id.clone(),
     })
 }

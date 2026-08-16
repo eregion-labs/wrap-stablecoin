@@ -31,7 +31,26 @@ pub fn get_token_balance(token_account: &AccountInfo) -> Result<u64> {
     Ok(amount)
 }
 
-/// Reject zero or out-of-range mint precisions.
+/// Classic SPL / Token-2022 mint size with no TLV extensions.
+const PLAIN_MINT_SIZE: usize = 82;
+
+/// Collateral may be classic SPL Token or Token-2022 with an empty extension set.
+/// Unknown future Token-2022 extensions increase mint account size and fail closed.
+pub fn assert_plain_collateral_mint(mint: &AccountInfo) -> Result<()> {
+    let owner = mint.owner;
+    if *owner == SPL_TOKEN_ID {
+        return Ok(());
+    }
+    require!(
+        *owner == token_2022::ID,
+        ErrorCode::UnsupportedTokenExtension
+    );
+    require!(
+        mint.data_len() == PLAIN_MINT_SIZE,
+        ErrorCode::UnsupportedTokenExtension
+    );
+    Ok(())
+}
 pub fn validate_token_decimals(decimals: u8) -> Result<()> {
     require!(
         decimals >= MIN_TOKEN_DECIMALS && decimals <= MAX_TOKEN_DECIMALS,
@@ -267,5 +286,10 @@ mod tests {
     #[test]
     fn convert_overflow_on_scale_up() {
         assert!(convert_amount(u64::MAX, 0, 1).is_err());
+    }
+
+    #[test]
+    fn plain_mint_size_is_82() {
+        assert_eq!(PLAIN_MINT_SIZE, 82);
     }
 }

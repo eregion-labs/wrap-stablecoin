@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::errors::ErrorCode;
@@ -33,6 +34,7 @@ pub struct Unwrap<'info> {
         mut,
         constraint = user_wrapped.mint == vault_config.wrapped_mint @ ErrorCode::InvalidTokenAccount,
         constraint = user_wrapped.owner == user.key() @ ErrorCode::InvalidTokenAccount,
+        token::token_program = florin_token_program,
     )]
     pub user_wrapped: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -47,7 +49,8 @@ pub struct Unwrap<'info> {
     #[account(
         mut,
         address = vault_config.wrapped_mint,
-        constraint = wrapped_mint.decimals == vault_config.wrapped_decimals @ ErrorCode::InvalidDecimals
+        constraint = wrapped_mint.decimals == vault_config.wrapped_decimals @ ErrorCode::InvalidDecimals,
+        token::token_program = florin_token_program,
     )]
     pub wrapped_mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -73,5 +76,7 @@ pub struct Unwrap<'info> {
     /// Required when unwrap_public is false. PDA seeds: [crate::pda_seeds::ALLOWLIST_SEED, vault_config.key()]
     pub allowlist: Option<Account<'info, Allowlist>>,
 
-    pub token_program: Interface<'info, TokenInterface>,
+    pub collateral_token_program: Interface<'info, TokenInterface>,
+    /// Classic SPL Token. Florin mint/burn never uses Token-2022.
+    pub florin_token_program: Program<'info, Token>,
 }

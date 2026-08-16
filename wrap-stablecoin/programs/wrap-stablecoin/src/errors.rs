@@ -139,4 +139,31 @@ pub enum ErrorCode {
 
     #[msg("Token decimals must be between 1 and 18")]
     InvalidDecimals,
+
+    #[msg("Mint authority has been transferred; wrapping is permanently disabled")]
+    MintAuthorityTransferred,
+
+    #[msg("No pending mint authority transfer")]
+    NoPendingMintAuthorityTransfer,
+
+    #[msg("Mint authority transfer already completed")]
+    MintAuthorityAlreadyTransferred,
+
+    #[msg("Remaining asset config accounts do not match registered assets")]
+    InvalidAssetConfigAccounts,
+
+    #[msg("KLend Reserve account layout, discriminator, or version is invalid")]
+    InvalidKlendReserve,
+
+    #[msg("KLend Reserve lending_market does not match the supplied market")]
+    KlendReserveMarketMismatch,
+
+    #[msg("KLend Reserve liquidity mint does not match the registered asset")]
+    KlendReserveMintMismatch,
+
+    #[msg("Kamino deposit moved no liquidity from the vault")]
+    ZeroLiquidityDeposited,
+
+    #[msg("Collateral mint must be classic SPL Token or Token-2022 with no extensions")]
+    UnsupportedTokenExtension,
 }

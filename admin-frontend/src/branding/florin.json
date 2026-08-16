@@ -1,0 +1,12 @@
+{
+  "name": "Florin",
+  "symbol": "FLRN",
+  "decimals": 6,
+  "primaryColor": "#C2192B",
+  "icon": "/florentine-lily.png",
+  "website": "",
+  "explorer": "",
+  "description": "The digital reserve currency of a modern merchant republic.",
+  "coingeckoId": null,
+  "metadataUri": "https://florin.example/metadata.json"
+}

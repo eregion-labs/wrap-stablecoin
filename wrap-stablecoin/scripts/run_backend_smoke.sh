@@ -58,10 +58,15 @@ local_env_wait_for_rpc 90
 
 echo "[3/5] starting backend (log: $BACKEND_LOG)…"
 cd "$BACKEND_DIR"
+# Inject all required public-config keys so smoke does not depend on a stale backend/.env.
+APP_ENV="local" \
 SOLANA_RPC_URL="$RPC_URL" \
 SOLANA_NETWORK="localnet" \
 PROGRAM_ID="$PROGRAM_ID" \
 VAULT_AUTHORITY="$FIXTURE_WALLET_PUBKEY" \
+DEFAULT_ASSET_MINT="${DEFAULT_ASSET_MINT:-EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v}" \
+CLIENT_SOLANA_RPC_URL="$RPC_URL" \
+CLIENT_SOLANA_WS_URL="ws://127.0.0.1:$((RPC_PORT - 1))" \
 BIND_HOST="127.0.0.1" \
 BIND_PORT="8080" \
   cargo run --quiet >"$BACKEND_LOG" 2>&1 &

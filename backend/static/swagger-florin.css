@@ -1,0 +1,163 @@
+/* Florence editorial theme for Swagger UI at /doc */
+
+html {
+  background: #ffffff;
+}
+
+body {
+  background: #ffffff !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  color: #0e0e0e;
+}
+
+.swagger-ui {
+  font-family: Inter, system-ui, sans-serif !important;
+  color: #0e0e0e;
+}
+
+.swagger-ui .topbar {
+  background: #ffffff !important;
+  border-bottom: 1px solid #dedede;
+  padding: 10px 0;
+}
+
+.swagger-ui .topbar .download-url-wrapper .select-label,
+.swagger-ui .topbar a {
+  color: #0e0e0e !important;
+}
+
+.swagger-ui .topbar .download-url-wrapper input[type="text"] {
+  border: 1px solid #dedede !important;
+  border-radius: 1px !important;
+}
+
+.swagger-ui .topbar .download-url-wrapper .download-url-button {
+  background: #4a90b8 !important;
+  color: #ffffff !important;
+  border-radius: 1px !important;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.swagger-ui .info .title {
+  font-family: "EB Garamond", Georgia, serif !important;
+  font-weight: 400 !important;
+  color: #0e0e0e !important;
+}
+
+.swagger-ui .info .title small {
+  background: #c2192b !important;
+  border-radius: 1px !important;
+}
+
+.swagger-ui .info p,
+.swagger-ui .info li {
+  color: #6b6b6b;
+}
+
+.swagger-ui .scheme-container {
+  background: #f7f6f4 !important;
+  box-shadow: none !important;
+  border: 1px solid #dedede;
+  border-radius: 1px;
+}
+
+.swagger-ui .opblock {
+  border-radius: 1px !important;
+  box-shadow: none !important;
+  border: 1px solid #dedede !important;
+}
+
+.swagger-ui .opblock .opblock-summary-method {
+  border-radius: 1px !important;
+  font-family: "DM Mono", ui-monospace, monospace !important;
+  font-weight: 500 !important;
+}
+
+.swagger-ui .opblock.opblock-post {
+  background: rgba(74, 144, 184, 0.06) !important;
+  border-color: #4a90b8 !important;
+}
+
+.swagger-ui .opblock.opblock-post .opblock-summary-method {
+  background: #4a90b8 !important;
+}
+
+.swagger-ui .opblock.opblock-get {
+  background: rgba(46, 158, 91, 0.06) !important;
+  border-color: #2e9e5b !important;
+}
+
+.swagger-ui .opblock.opblock-get .opblock-summary-method {
+  background: #2e9e5b !important;
+}
+
+.swagger-ui .opblock.opblock-put,
+.swagger-ui .opblock.opblock-patch {
+  background: rgba(138, 94, 58, 0.06) !important;
+  border-color: #8a5e3a !important;
+}
+
+.swagger-ui .opblock.opblock-delete {
+  background: rgba(194, 25, 43, 0.06) !important;
+  border-color: #c2192b !important;
+}
+
+.swagger-ui .opblock.opblock-delete .opblock-summary-method {
+  background: #c2192b !important;
+}
+
+.swagger-ui .btn {
+  border-radius: 1px !important;
+  box-shadow: none !important;
+  font-family: Inter, system-ui, sans-serif !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.swagger-ui .btn.execute {
+  background: #4a90b8 !important;
+  border-color: #4a90b8 !important;
+  color: #ffffff !important;
+}
+
+.swagger-ui .btn.cancel {
+  border-color: #0e0e0e !important;
+  color: #0e0e0e !important;
+}
+
+.swagger-ui input[type="text"],
+.swagger-ui textarea,
+.swagger-ui select {
+  border-radius: 1px !important;
+  border-color: #dedede !important;
+  font-family: "DM Mono", ui-monospace, monospace !important;
+}
+
+.swagger-ui table {
+  border-color: #dedede !important;
+}
+
+.swagger-ui .model-box,
+.swagger-ui .model-container {
+  background: #f7f6f4 !important;
+  border-radius: 1px !important;
+}
+
+.swagger-ui section.models {
+  border: 1px solid #dedede !important;
+  border-radius: 1px !important;
+}
+
+.swagger-ui .opblock-tag {
+  font-family: "EB Garamond", Georgia, serif !important;
+  font-weight: 400 !important;
+  border-bottom: 1px solid #c2192b !important;
+}
+
+.swagger-ui .response-col_status {
+  font-family: "DM Mono", ui-monospace, monospace !important;
+}

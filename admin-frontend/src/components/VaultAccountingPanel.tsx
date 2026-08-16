@@ -13,6 +13,7 @@ import Typography from "@mui/material/Typography";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { BRANDING } from "@/branding";
+import { adminCopy } from "@/theme/copy";
 import type { VaultAsset } from "@/types/vault";
 
 type Props = {
@@ -23,7 +24,7 @@ type Props = {
 
 function AmountCell({ amount, decimals }: { amount: number; decimals: number }) {
   return (
-    <TableCell align="right" sx={{ fontFamily: "monospace", whiteSpace: "nowrap" }}>
+    <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', whiteSpace: "nowrap" }}>
       {formatTokenAmount(amount, decimals)}
     </TableCell>
   );
@@ -48,15 +49,17 @@ function AssetRow({
         </Stack>
       </TableCell>
       <AmountCell amount={asset.freeLiquidity} decimals={d} />
+      <AmountCell amount={asset.cushion} decimals={d} />
       <AmountCell amount={asset.deployedToKamino} decimals={d} />
+      <AmountCell amount={asset.backing} decimals={d} />
       <AmountCell amount={asset.treasuryBalance} decimals={d} />
       <AmountCell amount={asset.kaminoSurplus} decimals={d} />
-      <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+      <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
         {formatTokenAmount(asset.liability, wrappedDecimals)}
       </TableCell>
       <AmountCell amount={asset.liabilityUnderlying} decimals={d} />
       <AmountCell amount={asset.homeSurplus} decimals={d} />
-      <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+      <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
         {formatTokenAmount(asset.maxRedeemable, wrappedDecimals)}
       </TableCell>
     </TableRow>
@@ -75,18 +78,19 @@ export default function VaultAccountingPanel({
   return (
     <Box sx={cardSx}>
       <Typography variant="subtitle2" gutterBottom>
-        Pool accounting
+        {adminCopy.accounts}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
-        Home vault = free liquidity for unwrap. Treasury = harvested / swept yield sitting in
-        treasury vault. Kamino surplus requires live reserve mark (shown as 0 until exposed).
+        {adminCopy.accountsCaption}
       </Typography>
       <Table size="small" sx={{ minWidth: 720 }}>
         <TableHead>
           <TableRow>
             <TableCell>Asset</TableCell>
             <TableCell align="right">Home vault</TableCell>
+            <TableCell align="right">Cushion</TableCell>
             <TableCell align="right">In Kamino</TableCell>
+            <TableCell align="right">Backing</TableCell>
             <TableCell align="right">Treasury</TableCell>
             <TableCell align="right">Kamino surplus</TableCell>
             <TableCell align="right">Liability ({wrappedSymbol})</TableCell>

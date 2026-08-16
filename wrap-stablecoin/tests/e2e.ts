@@ -362,7 +362,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         wrappedMint,
         tokenVault,
         allowlist: null,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        florinTokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .preInstructions([ataIx])
       .rpc();
@@ -407,9 +408,12 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
     console.log(`deposit_to_klend tx: ${txSig}`);
 
     const cfg = await program.account.kLendConfig.fetch(klendConfig);
-    expect(cfg.totalLiquidityInKlend.toString()).to.equal("50000000");
-
     const vaultBal = await getAccount(connection, tokenVault);
+    // Principal is the observed vault delta, not the requested amount.
+    // KLend may leave 1 atom of dust (cToken rounding).
+    const deposited = 100_000_000 - Number(vaultBal.amount);
+    expect(Number(cfg.totalLiquidityInKlend)).to.equal(deposited);
+    expect(deposited).to.be.closeTo(50_000_000, 1);
     expect(Number(vaultBal.amount)).to.be.closeTo(50_000_000, 1);
     const collateralBal = await getAccount(connection, collateralVault);
     expect(Number(collateralBal.amount)).to.be.greaterThan(0);
@@ -476,7 +480,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
           tokenMint: USDC_MINT,
           tokenVault,
           allowlist: null,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          florinTokenProgram: TOKEN_PROGRAM_ID,
         } as any)
         .rpc();
     } catch (err: any) {
@@ -539,7 +544,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         tokenMint: USDC_MINT,
         tokenVault,
         allowlist: null,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        florinTokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
     console.log(`unwrap (vault-only) tx: ${unwrapSig}`);
@@ -608,7 +614,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
           tokenMint: USDC_MINT,
           tokenVault,
           allowlist: null,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          florinTokenProgram: TOKEN_PROGRAM_ID,
         } as any)
         .rpc();
     } catch (err: any) {
@@ -671,7 +678,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         wrappedMint,
         tokenVault,
         allowlist: null,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        florinTokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
 
@@ -692,7 +700,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
         tokenMint: USDC_MINT,
         tokenVault,
         allowlist: null,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        collateralTokenProgram: TOKEN_PROGRAM_ID,
+        florinTokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .rpc();
     console.log(`unwrap (home vault only) tx: ${txSig}`);
@@ -730,7 +739,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
             wrappedMint,
             tokenVault,
             allowlist: null,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            collateralTokenProgram: TOKEN_PROGRAM_ID,
+            florinTokenProgram: TOKEN_PROGRAM_ID,
           } as any)
           .rpc();
       } catch (err: any) {
@@ -921,7 +931,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
           wrappedMint,
           tokenVault,
           allowlist,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          florinTokenProgram: TOKEN_PROGRAM_ID,
         } as any)
         .rpc();
 
@@ -1029,7 +1040,8 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
             tokenVault,
             usdcMint: USDC_MINT,
             allowlist: atkAllowlist, // foreign allowlist — must be rejected
-            tokenProgram: TOKEN_PROGRAM_ID,
+            collateralTokenProgram: TOKEN_PROGRAM_ID,
+            florinTokenProgram: TOKEN_PROGRAM_ID,
           } as any)
           .preInstructions([atkUsdcAtaIx, atkWrappedAtaIx])
           .signers([attacker])

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::TokenInterface;
+use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
 use crate::constants::LENDING_MARKET_AUTH_SEED;
 use crate::errors::ErrorCode;
@@ -41,9 +41,13 @@ pub struct DepositAllToKlend<'info> {
     )]
     pub klend_config: Box<Account<'info, KLendConfig>>,
 
-    /// CHECK: Token vault
-    #[account(mut, address = asset_config.token_vault)]
-    pub token_vault: AccountInfo<'info>,
+    #[account(
+        mut,
+        address = asset_config.token_vault,
+        constraint = token_vault.mint == asset_config.token_mint @ ErrorCode::InvalidTokenAccount,
+        constraint = token_vault.owner == vault_authority.key() @ ErrorCode::InvalidTokenAccount,
+    )]
+    pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: Underlying mint
     #[account(address = asset_config.token_mint)]

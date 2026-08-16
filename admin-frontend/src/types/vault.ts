@@ -1,5 +1,12 @@
 import { BRANDING } from "@/branding";
 
+export type AssetStatus =
+  | "active"
+  | "paused"
+  | "mint_only"
+  | "redeem_only"
+  | "deprecated";
+
 export type MintMetadata = {
   name: string;
   symbol: string;
@@ -32,11 +39,22 @@ export type VaultAsset = {
   exposureCap: number;
   minLiquidityTarget: number;
   netLiability: number;
-  assetStatus: string;
+  assetStatus: AssetStatus;
   klendEnabled: boolean;
 };
 
-export type VaultSummary = {
+/** Vault-level governance fields on GET /v1/vault/meta and /v1/vault/assets. */
+export type VaultGovernance = {
+  wrapPublic: boolean;
+  unwrapPublic: boolean;
+  pendingAdmin: string | null;
+  pendingMintAuthority: string | null;
+  mintAuthorityTransferred: boolean;
+  /** Allowlist members, or null if the PDA has not been initialized. */
+  allowlist: string[] | null;
+};
+
+export type VaultSummary = VaultGovernance & {
   admin: string;
   paused: boolean;
   programId: string;
@@ -47,7 +65,7 @@ export type VaultSummary = {
   assets: VaultAsset[];
 };
 
-export type VaultMeta = {
+export type VaultMeta = VaultGovernance & {
   admin: string;
   paused: boolean;
   programId: string;
@@ -55,6 +73,27 @@ export type VaultMeta = {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+};
+
+/** Response from GET /v1/vault/token-holders (token-account → amount atoms). */
+export type TokenHolders = {
+  wrappedMint: string;
+  decimals: number;
+  holders: Record<string, string>;
+};
+
+export type RedeemQuote = {
+  input: number;
+  output: number;
+  haircutBps: number;
+  assetMint: string;
+  freeLiquidity: number;
+  liability: number;
+  redeemAllowed: boolean;
+  canRedeem: boolean;
+  liquidityShortfall: number;
+  liabilityShortfall: number;
+  maxRedeemable: number;
 };
 
 export function wrappedTokenSymbol(

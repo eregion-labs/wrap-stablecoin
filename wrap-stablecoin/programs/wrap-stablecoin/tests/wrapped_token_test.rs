@@ -377,7 +377,6 @@ fn wrapped_token_wrap_ix(
     user_wrapped: &Pubkey,
     wrapped_mint: &Pubkey,
     token_vault: &Pubkey,
-    usdc_mint: &Pubkey,
     allowlist: Option<&Pubkey>,
     amount: u64,
 ) -> Result<Instruction> {
@@ -394,8 +393,8 @@ fn wrapped_token_wrap_ix(
         AccountMeta::new(*user_wrapped, false),
         AccountMeta::new(*wrapped_mint, false),
         AccountMeta::new(*token_vault, false),
-        AccountMeta::new_readonly(*usdc_mint, false),
         AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
+        AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
@@ -419,8 +418,8 @@ fn wrapped_token_unwrap_ix(
     user_wrapped: &Pubkey,
     user_base_token: &Pubkey,
     wrapped_mint: &Pubkey,
-    usdc_mint: &Pubkey,
     base_token_config: &Pubkey,
+    token_mint: &Pubkey,
     base_token_vault: &Pubkey,
     allowlist: Option<&Pubkey>,
     amount: u64,
@@ -435,10 +434,11 @@ fn wrapped_token_unwrap_ix(
         AccountMeta::new(*user_wrapped, false),
         AccountMeta::new(*user_base_token, false),
         AccountMeta::new(*wrapped_mint, false),
-        AccountMeta::new_readonly(*usdc_mint, false),
         AccountMeta::new(*base_token_config, false),
+        AccountMeta::new_readonly(*token_mint, false),
         AccountMeta::new(*base_token_vault, false),
         AccountMeta::new_readonly(*allowlist.unwrap_or(&program_id), false),
+        AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
@@ -823,7 +823,6 @@ fn test_04_wrap_usdc() -> Result<()> {
         &user_wrapped,
         &wrapped_mint,
         &token_vault,
-        &usdc_mint,
         None,
         wrap_amount,
     )?;
@@ -880,8 +879,8 @@ fn test_05_unwrap_wstable() -> Result<()> {
         &user_wrapped,
         &user_usdc,
         &wrapped_mint,
-        &usdc_mint,
         &token_config,
+        &usdc_mint,
         &token_vault,
         None,
         unwrap_amount,

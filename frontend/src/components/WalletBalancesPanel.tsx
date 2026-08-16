@@ -10,6 +10,7 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
+import { publicCopy } from "@/theme/copy";
 import { wrappedTokenSymbol, type VaultSummary } from "@/types/vault";
 
 type Props = {
@@ -41,20 +42,20 @@ export default function WalletBalancesPanel({ summary, walletBalances, connected
   return (
     <Box sx={{ ...cardSx, overflowX: "visible" }}>
       <Typography variant="subtitle2" gutterBottom>
-        Your wallet
+        {publicCopy.holdings}
       </Typography>
-      <Table size="small" sx={{ "& td, & th": { border: 0, py: 0.75, px: 0 } }}>
+      <Table size="small" sx={{ "& td, & th": { py: 0.75, px: 0 } }}>
         <TableHead>
           <TableRow>
             <TableCell>Token</TableCell>
-            <TableCell align="right">Balance</TableCell>
+            <TableCell align="right">{publicCopy.holdingsColumn}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row.key}>
               <TableCell>{row.label}</TableCell>
-              <TableCell align="right" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+              <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', color: "text.secondary" }}>
                 {row.amount === null
                   ? "—"
                   : formatTokenAmount(row.amount, row.decimals)}

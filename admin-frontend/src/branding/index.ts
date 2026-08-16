@@ -1,4 +1,4 @@
-import branding from "../../../branding/florin.json";
+import branding from "./florin.json";
 
 export type BrandingConfig = {
   name: string;

@@ -39,6 +39,12 @@ export type VaultAsset = {
 export type VaultSummary = {
   admin: string;
   paused: boolean;
+  wrapPublic: boolean;
+  unwrapPublic: boolean;
+  pendingAdmin: string | null;
+  pendingMintAuthority: string | null;
+  mintAuthorityTransferred: boolean;
+  allowlist: string[] | null;
   programId: string;
   vaultConfig: string;
   wrappedMint: string;
@@ -50,6 +56,12 @@ export type VaultSummary = {
 export type VaultMeta = {
   admin: string;
   paused: boolean;
+  wrapPublic: boolean;
+  unwrapPublic: boolean;
+  pendingAdmin: string | null;
+  pendingMintAuthority: string | null;
+  mintAuthorityTransferred: boolean;
+  allowlist: string[] | null;
   programId: string;
   vaultConfig: string;
   wrappedMint: string;
@@ -76,6 +88,20 @@ export type RedeemQuote = {
   liquidityShortfall: number;
   liabilityShortfall: number;
   maxRedeemable: number;
+  accessAllowed: boolean | null;
+};
+
+export type IssueQuote = {
+  input: number;
+  output: number;
+  haircutBps: number;
+  assetMint: string;
+  mintEnabled: boolean;
+  mintAllowed: boolean;
+  canMint: boolean;
+  mintCap: number;
+  mintCapRemaining: number | null;
+  accessAllowed: boolean | null;
 };
 
 export function wrappedTokenSymbol(

@@ -1,15 +1,16 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use dotenvy::dotenv;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use wrap_stablecoin_api::{app, app_state::AppState};
+use wrap_stablecoin_api::app;
+use wrap_stablecoin_api::app_state::AppState;
+use wrap_stablecoin_api::config::{load_dotenv, merge_optional_secret};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    load_dotenv();
 
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -18,10 +19,14 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
+    merge_optional_secret();
+
     let state = Arc::new(AppState::from_env()?);
     info!(
-        networks = ?state.configured_networks(),
-        "Florin API listening (multi-network; cluster chosen via x-solana-network)"
+        network = %state.primary_solana_network,
+        deployment_id = %state.public_client_config.deployment_id,
+        environment = %state.public_client_config.environment,
+        "Florin API ready (single-network deployment; public config at /v1/client-config)"
     );
     let app = app(state);
 

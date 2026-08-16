@@ -8,3 +8,18 @@ export function formatTokenAmount(amount: number, decimals: number): string {
     maximumFractionDigits: maxFrac,
   });
 }
+
+/** Parse a human decimal string into token atoms. */
+export function parseTokenAmount(raw: string, decimals: number): number | null {
+  const trimmed = raw.trim().replace(/,/g, "");
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const atoms = Math.round(n * 10 ** decimals);
+  if (!Number.isFinite(atoms) || atoms <= 0) return null;
+  return atoms;
+}
+
+export function haircutPercent(bps: number): string {
+  return `${(bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+}

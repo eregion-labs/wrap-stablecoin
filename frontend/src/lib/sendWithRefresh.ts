@@ -1,7 +1,6 @@
 import { Connection, VersionedTransaction } from "@solana/web3.js";
-import type { WalletAdapterProps } from "@solana/wallet-adapter-base";
 
-type SignTransaction = NonNullable<WalletAdapterProps["signTransaction"]>;
+type SignTransaction = (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
 
 /**
  * Matches the error shapes both `sendTransaction` and RPC `sendRawTransaction`

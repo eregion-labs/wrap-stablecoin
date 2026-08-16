@@ -5,65 +5,119 @@ import { usePathname } from "next/navigation";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import NetworkSwitch from "@/components/NetworkSwitch";
 import { BRANDING } from "@/branding";
-import { appNetworkLabel, useNetworkStore } from "@/stores/networkStore";
-import { solPurple } from "@/theme/tokens";
+import { useClientConfig } from "@/providers/ClientConfigProvider";
+import { adminCopy } from "@/theme/copy";
+import { ledgerInk, textMuted } from "@/theme/tokens";
+
+const navSx = (active: boolean) => ({
+  color: active ? ledgerInk : textMuted,
+  minWidth: 0,
+  px: 1,
+});
 
 export default function AppHeader() {
   const pathname = usePathname();
-  const network = useNetworkStore((s) => s.network);
+  const config = useClientConfig();
+
+  const subtitle = pathname.startsWith("/policy")
+    ? adminCopy.reserveGovernanceSubtitle
+    : pathname.startsWith("/stats")
+      ? adminCopy.tokenStatsSubtitle
+      : pathname.startsWith("/klend")
+        ? adminCopy.klendSubtitle
+        : adminCopy.treasuryOperations;
 
   return (
-    <AppBar position="sticky" color="transparent">
+    <AppBar position="sticky" color="transparent" elevation={0}>
       <Container maxWidth="lg" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
-        <Toolbar disableGutters sx={{ minHeight: 64, gap: 2 }}>
+        <Toolbar disableGutters sx={{ minHeight: 60, gap: 2 }}>
           <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography
-              variant="h6"
+            <Box
               component={Link}
               href="/"
               sx={{
-                fontWeight: 700,
-                letterSpacing: "-0.03em",
-                fontSize: "1.125rem",
-                color: solPurple,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
                 textDecoration: "none",
+                color: ledgerInk,
               }}
             >
-              {BRANDING.name} Admin
-            </Typography>
+              <Box
+                component="img"
+                src="/florentine-lily.png"
+                alt=""
+                sx={{ height: 28, width: "auto" }}
+              />
+              <Typography
+                variant="h6"
+                component="span"
+                sx={{
+                  fontFamily: 'var(--font-eb-garamond), "EB Garamond", Georgia, serif',
+                  fontWeight: 400,
+                  letterSpacing: "0.18em",
+                  fontSize: "1.35rem",
+                  color: ledgerInk,
+                }}
+              >
+                {BRANDING.name.toUpperCase()}
+              </Typography>
+            </Box>
             <Typography
               variant="body2"
               color="text.secondary"
-              sx={{ display: { xs: "none", sm: "block" } }}
+              sx={{
+                display: { xs: "none", sm: "block" },
+                fontSize: "11px",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
             >
-              {pathname.startsWith("/policy")
-                ? "Collateral policy"
-                : `Mint operations · ${appNetworkLabel(network)}`}
+              {subtitle}
             </Typography>
           </Box>
-          <NetworkSwitch />
-          <Stack direction="row" spacing={1}>
-            <Button
-              component={Link}
-              href="/"
-              size="small"
-              variant={pathname === "/" ? "contained" : "text"}
-            >
-              Mint
+          <Chip
+            size="small"
+            label={`${config.solana.network} · ${config.deploymentId}`}
+            variant="outlined"
+            sx={{ display: { xs: "none", md: "flex" }, borderRadius: "1px" }}
+          />
+          <Stack direction="row" spacing={0.5}>
+            <Button component={Link} href="/" size="small" variant="text" sx={navSx(pathname === "/")}>
+              {adminCopy.treasury}
             </Button>
             <Button
               component={Link}
               href="/policy"
               size="small"
-              variant={pathname.startsWith("/policy") ? "contained" : "text"}
+              variant="text"
+              sx={navSx(pathname.startsWith("/policy"))}
             >
-              Policy
+              {adminCopy.chamber}
+            </Button>
+            <Button
+              component={Link}
+              href="/klend"
+              size="small"
+              variant="text"
+              sx={navSx(pathname.startsWith("/klend"))}
+            >
+              {adminCopy.klendNav}
+            </Button>
+            <Button
+              component={Link}
+              href="/stats"
+              size="small"
+              variant="text"
+              sx={navSx(pathname.startsWith("/stats"))}
+            >
+              {adminCopy.tokenStats}
             </Button>
           </Stack>
         </Toolbar>

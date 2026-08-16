@@ -2,8 +2,6 @@
 
 import { create } from "zustand";
 import { apiGet } from "@/lib/api";
-import type { AppNetwork } from "@/stores/networkStore";
-import { useNetworkStore } from "@/stores/networkStore";
 import type { VaultMeta, VaultSummary } from "@/types/vault";
 import type { LoadStatus } from "./types";
 
@@ -12,8 +10,6 @@ type VaultState = {
   summary: VaultSummary | null;
   status: LoadStatus;
   error: string | null;
-  /** Cluster the cached payload belongs to — stale if it diverges from networkStore. */
-  network: AppNetwork | null;
   /** Coalesces overlapping hydrate() calls. */
   inflight: Promise<void> | null;
 
@@ -27,7 +23,6 @@ const initialVaultState = {
   summary: null,
   status: "idle" as LoadStatus,
   error: null,
-  network: null,
   inflight: null,
 };
 
@@ -48,9 +43,8 @@ export const useVaultStore = create<VaultState>()((set, get) => ({
     const existing = get().inflight;
     if (existing) return existing;
 
-    const network = useNetworkStore.getState().network;
     const run = (async () => {
-      set({ status: "loading", error: null, network });
+      set({ status: "loading", error: null });
       try {
         const { meta, summary } = await fetchVault();
         set({
@@ -58,7 +52,6 @@ export const useVaultStore = create<VaultState>()((set, get) => ({
           summary,
           status: "ready",
           error: null,
-          network,
           inflight: null,
         });
       } catch (e) {
@@ -67,7 +60,6 @@ export const useVaultStore = create<VaultState>()((set, get) => ({
           summary: null,
           status: "error",
           error: (e as Error).message,
-          network,
           inflight: null,
         });
       }

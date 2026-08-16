@@ -8,9 +8,9 @@ Operator console for vault mint operations and collateral policy. **No wallet co
 pnpm install
 ```
 
-Set `NEXT_PUBLIC_API_BASE` in `.env.local` (default `http://127.0.0.1:8080`).
+Set **only** `NEXT_PUBLIC_BACKEND_URL` in `.env.local` (e.g. `http://127.0.0.1:8080`). Deployment config (cluster, program id, links) is fetched from `GET /v1/client-config`.
 
-The API must have `{NETWORK}_ADMIN_KEYPAIR_PATH` set (see `backend/.env`).
+The API must have `ADMIN_KEYPAIR_PATH` set (see `backend/.env.example`).
 
 ## Dev
 

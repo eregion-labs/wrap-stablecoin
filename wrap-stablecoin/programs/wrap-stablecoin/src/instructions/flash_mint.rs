@@ -25,6 +25,7 @@ pub struct FlashMintStart<'info> {
         seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         constraint = !vault_config.paused @ ErrorCode::VaultPaused,
+        constraint = !vault_config.mint_authority_transferred @ ErrorCode::MintAuthorityTransferred,
         constraint = vault_config.flash_mint_enabled || borrower.key() == vault_config.admin @ ErrorCode::FlashMintDisabled
     )]
     pub vault_config: Account<'info, VaultConfig>,

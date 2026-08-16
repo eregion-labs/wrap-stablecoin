@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenInterface};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::Mint;
 
 use crate::errors::ErrorCode;
 use crate::state::VaultConfig;
@@ -44,6 +45,7 @@ pub struct Initialize<'info> {
     )]
     pub vault_authority: AccountInfo<'info>,
 
-    pub token_program: Interface<'info, TokenInterface>,
+    /// Classic SPL Token. Florin mint is never Token-2022.
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }

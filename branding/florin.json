@@ -2,11 +2,11 @@
   "name": "Florin",
   "symbol": "FLRN",
   "decimals": 6,
-  "primaryColor": "#9945FF",
-  "icon": "/branding/florin-icon.svg",
-  "website": "https://florin.example",
-  "explorer": "https://explorer.solana.com",
-  "description": "Collateral-backed wrapped stablecoin",
+  "primaryColor": "#C6A44A",
+  "icon": "",
+  "website": "",
+  "explorer": "",
+  "description": "The digital reserve currency of a modern merchant republic.",
   "coingeckoId": null,
   "metadataUri": "https://florin.example/metadata.json"
 }

@@ -1,62 +1,76 @@
-import type { SxProps, Theme } from "@mui/material/styles";
+/** Florin design language — Florence editorial (live florence-app). */
 
-/** Design language — single source of truth for colors and surfaces. */
+export const paper = "#FFFFFF";
+export const offWhite = "#F7F6F4";
+export const mutedWash = "#F0EFED";
+export const hairline = "#DEDEDE";
 
-export const bgPrimary = "#070A12";
-export const bgSecondary = "#120A1F";
-export const surfaceCard = "#111827";
-export const surfaceElevated = "#1A2233";
+export const florentineRed = "#C2192B";
+export const civicBlue = "#4A90B8";
+export const accentBrown = "#8A5E3A";
 
-export const solPurple = "#9945FF";
-export const solGreen = "#14F195";
-export const solBlue = "#00C2FF";
+export const ledgerInk = "#0E0E0E";
+export const textMuted = "#6B6B6B";
+export const textDisabled = "#AFAFAF";
 
-export const textPrimary = "#F8FAFC";
-export const textMuted = "#94A3B8";
-export const textDisabled = "#64748B";
+export const colorSuccess = "#2E9E5B";
+export const colorWarning = accentBrown;
+export const colorError = florentineRed;
+export const colorInfo = civicBlue;
 
-export const border = "rgba(255, 255, 255, 0.10)";
-export const borderStrong = "rgba(255, 255, 255, 0.12)";
+export const border = `1px solid ${hairline}`;
+export const borderSubtle = `1px solid ${hairline}`;
 
-export const colorSuccess = "#14F195";
-export const colorWarning = "#FACC15";
-export const colorError = "#FB7185";
+export const cardShadow = "none";
+export const focusRing = `0 0 0 2px ${florentineRed}33`;
 
-export const gradientBgGlow = `
-  radial-gradient(circle at 20% 20%, rgba(153, 69, 255, 0.22), transparent 32%),
-  radial-gradient(circle at 80% 10%, rgba(20, 241, 149, 0.16), transparent 28%),
-  ${bgPrimary}
-`;
+export const gradientBg = paper;
 
-export const focusRing = "0 0 0 3px rgba(20, 241, 149, 0.35)";
-
-export const glassCardBackground = "rgba(17, 24, 39, 0.82)";
-export const glassCardShadow = "0 24px 80px rgba(0, 0, 0, 0.32)";
-
-/** Memo card spec — glass surface for panels (layout props unchanged). */
-export const cardSx: SxProps<Theme> = {
+/** Hairline paper card — no shadow, 1px corners. */
+export const cardSx = {
   p: 2,
   mb: 3,
-  borderRadius: "24px",
-  bgcolor: glassCardBackground,
-  border: `1px solid ${border}`,
-  boxShadow: glassCardShadow,
-  backdropFilter: "blur(20px)",
+  borderRadius: "1px",
+  bgcolor: paper,
+  border,
+  boxShadow: "none",
   overflowX: "auto",
 };
 
-/** CSS custom properties mirrored in globals.css */
+/** Mint / redeem action card — 3px Florentine red top bar. */
+export const actionCardSx = {
+  ...cardSx,
+  borderTop: `3px solid ${florentineRed}`,
+};
+
+export const sectionLabelSx = {
+  fontFamily: 'var(--font-inter), system-ui, sans-serif',
+  fontSize: "10px",
+  letterSpacing: "0.22em",
+  color: florentineRed,
+  textTransform: "uppercase" as const,
+  mb: "10px",
+};
+
+export const redRuleSx = {
+  height: "1px",
+  bgcolor: florentineRed,
+  width: "100%",
+  mb: 2,
+};
+
+/** CSS custom properties mirrored in florin-globals.css */
 export const cssVars = {
-  "--wstable-bg": bgPrimary,
-  "--wstable-bg-secondary": bgSecondary,
-  "--wstable-surface-card": surfaceCard,
-  "--wstable-surface-elevated": surfaceElevated,
-  "--wstable-purple": solPurple,
-  "--wstable-green": solGreen,
-  "--wstable-blue": solBlue,
-  "--wstable-text": textPrimary,
-  "--wstable-text-muted": textMuted,
-  "--wstable-border": border,
-  "--background": bgPrimary,
-  "--foreground": textPrimary,
+  "--florin-paper": paper,
+  "--florin-offwhite": offWhite,
+  "--florin-muted": mutedWash,
+  "--florin-hairline": hairline,
+  "--florin-red": florentineRed,
+  "--florin-blue": civicBlue,
+  "--florin-brown": accentBrown,
+  "--florin-ink": ledgerInk,
+  "--florin-text-muted": textMuted,
+  "--florin-border": hairline,
+  "--background": paper,
+  "--foreground": ledgerInk,
 } as const;

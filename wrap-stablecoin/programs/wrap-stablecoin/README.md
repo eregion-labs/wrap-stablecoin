@@ -27,6 +27,8 @@ flowchart TB
         set_unwrap_public
         transfer_authority
         accept_authority
+        propose_mint_authority
+        accept_mint_authority
         init_allowlist
         add_to_allowlist
         remove_from_allowlist
@@ -59,10 +61,12 @@ flowchart TB
 | `authority` | `Pubkey` | Immutable; PDA seed root |
 | `admin` | `Pubkey` | Operational admin; `has_one` gate on privileged ix |
 | `pending_admin` | `Pubkey` | Set by `transfer_authority`; cleared on `accept_authority` |
+| `pending_mint_authority` | `Pubkey` | Set by `propose_mint_authority`; cleared on `accept_mint_authority` |
+| `mint_authority_transferred` | `bool` | When true, `wrap` is permanently disabled |
 | `wrapped_mint` | `Pubkey` | Florin (FLRN) mint |
 | `wrapped_mint_bump`, `vault_authority_bump`, `bump` | `u8` | PDA bumps |
 | `total_stable_deposited` | `u64` | Aggregate user Florin (FLRN) liability |
-| `paused` | `bool` | Hard gate on wrap / unwrap / admin KLend ops |
+| `paused` | `bool` | Blocks wrap, unwrap, Kamino deposit, and harvest. Recall, sweep, and treasury still work |
 | `wrap_public`, `unwrap_public` | `bool` | If false, require admin or allowlist |
 | `flash_mint_*` (4 fields) | various | **Reserved** — unused in shipped build; see Flash-mint.md |
 
@@ -98,6 +102,7 @@ flowchart TB
 - `set_paused`, `set_wrap_public`, `set_unwrap_public`
 - `update_asset_policy`, `withdraw_treasury`
 - `transfer_authority` / `accept_authority`
+- `propose_mint_authority` / `cancel_propose_mint_authority` / `accept_mint_authority` — two-step SPL mint authority extraction; see [../../../wiki/Mint-authority-migration.md](../../../wiki/Mint-authority-migration.md)
 - `init_allowlist`, `add_to_allowlist`, `remove_from_allowlist`
 
 Flash-mint instructions exist only with `--features flash-mint`.

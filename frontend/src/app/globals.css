@@ -1,46 +1,13 @@
 @import "tailwindcss";
 
-:root {
-  --wstable-bg: #070A12;
-  --wstable-bg-secondary: #120A1F;
-  --wstable-surface-card: #111827;
-  --wstable-surface-elevated: #1A2233;
-  --wstable-purple: #9945FF;
-  --wstable-green: #14F195;
-  --wstable-blue: #00C2FF;
-  --wstable-text: #F8FAFC;
-  --wstable-text-muted: #94A3B8;
-  --wstable-border: rgba(255, 255, 255, 0.10);
-  --background: #070A12;
-  --foreground: #F8FAFC;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-body {
-  background:
-    radial-gradient(circle at 20% 20%, rgba(153, 69, 255, 0.22), transparent 32%),
-    radial-gradient(circle at 80% 10%, rgba(20, 241, 149, 0.16), transparent 28%),
-    var(--background);
-  background-attachment: fixed;
-  color: var(--foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Wallet adapter modal — above MUI AppBar (1100) and menus (1300) */
+/* Wallet adapter modal — Florence editorial, above MUI AppBar */
 .wallet-adapter-modal-wrapper {
   z-index: 1600 !important;
 }
 
 .wallet-adapter-modal-overlay {
   z-index: 1599 !important;
-  background: rgba(0, 0, 0, 0.65) !important;
-  backdrop-filter: blur(4px);
+  background: rgba(14, 14, 14, 0.45) !important;
 }
 
 .wallet-adapter-modal-container {
@@ -48,35 +15,36 @@ body {
 }
 
 .wallet-adapter-modal-wrapper {
-  background: rgba(17, 24, 39, 0.92) !important;
-  border: 1px solid var(--wstable-border) !important;
-  border-radius: 24px !important;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32) !important;
-  backdrop-filter: blur(20px);
+  background: var(--florin-paper) !important;
+  border: 1px solid var(--florin-hairline) !important;
+  border-radius: 1px !important;
+  box-shadow: none !important;
 }
 
 .wallet-adapter-modal-title {
-  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
-  font-weight: 600 !important;
-  color: var(--wstable-text) !important;
+  font-family: var(--font-eb-garamond), Georgia, serif !important;
+  font-weight: 400 !important;
+  color: var(--florin-ink) !important;
 }
 
 .wallet-adapter-modal-list .wallet-adapter-button {
-  border-radius: 16px !important;
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: var(--wstable-text) !important;
+  border-radius: 1px !important;
+  background: var(--florin-offwhite) !important;
+  color: var(--florin-ink) !important;
+  border: 1px solid var(--florin-hairline) !important;
 }
 
 .wallet-adapter-modal-list .wallet-adapter-button:hover {
-  background: rgba(153, 69, 255, 0.15) !important;
+  background: var(--florin-muted) !important;
+  border-color: var(--florin-ink) !important;
 }
 
 .wallet-adapter-modal-button-close {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-radius: 8px !important;
+  background: var(--florin-offwhite) !important;
+  border-radius: 1px !important;
 }
 
 .wallet-adapter-modal-button-close:focus-visible {
   outline: none !important;
-  box-shadow: 0 0 0 3px rgba(20, 241, 149, 0.35) !important;
+  box-shadow: 0 0 0 2px rgba(194, 25, 43, 0.33) !important;
 }
