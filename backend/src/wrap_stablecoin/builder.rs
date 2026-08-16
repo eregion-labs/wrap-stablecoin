@@ -1,11 +1,8 @@
 use anchor_lang::AccountDeserialize;
 use anchor_lang::AnchorSerialize;
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Context, Result};
-use wrap_stablecoin::state::{AssetConfig, AssetStatus, KLendConfig, VaultConfig};
-use wrap_stablecoin::utils::{
-    home_surplus_amount, liability_to_underlying_amount, wrapped_to_underlying_amount,
-};
-use wrap_stablecoin::{AddAssetArgs, UnwrapArgs, UpdateAssetPolicyArgs, WrapArgs};
 use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::hash::Hash;
@@ -16,13 +13,20 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::VersionedTransaction;
 use spl_associated_token_account::get_associated_token_address;
+use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::id as spl_token_program_id;
 use utoipa::ToSchema;
+use wrap_stablecoin::state::{Allowlist, AssetConfig, AssetStatus, KLendConfig, VaultConfig};
+use wrap_stablecoin::utils::{
+    home_surplus_amount, liability_to_underlying_amount, underlying_to_wrapped_amount,
+    wrapped_to_underlying_amount,
+};
+use wrap_stablecoin::{AddAssetArgs, UnwrapArgs, UpdateAssetPolicyArgs, WrapArgs};
 
 use crate::metaplex::{fetch_mint_metadata, MintMetadata};
 
-use super::{asset_config, vault_authority, vault_config};
+use super::{allowlist, asset_config, vault_authority, vault_config};
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
     let mut hasher = Sha256::new();
@@ -53,6 +57,62 @@ pub fn unwrap_ix_data(amount: u64) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+/// Anchor `Option<Allowlist>` sits before `collateral_token_program` and
+/// `florin_token_program`. Public / admin-bypass
+/// txs must still occupy the slot with the program-id sentinel.
+fn allowlist_slot_meta(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_config_key: &Pubkey,
+    is_public: bool,
+    user_is_admin: bool,
+) -> Result<AccountMeta> {
+    if is_public || user_is_admin {
+        return Ok(AccountMeta::new_readonly(*program_id, false));
+    }
+    let (key, _) = allowlist(program_id, vault_config_key);
+    let acc = rpc.get_account(&key).ok();
+    if acc.as_ref().map(|a| a.data.is_empty()).unwrap_or(true) {
+        return Err(anyhow!("allowlist PDA is not initialized"));
+    }
+    Ok(AccountMeta::new_readonly(key, false))
+}
+
+fn user_has_access(
+    is_public: bool,
+    admin: &Pubkey,
+    user: &Pubkey,
+    members: Option<&[Pubkey]>,
+) -> bool {
+    if is_public || user == admin {
+        return true;
+    }
+    members
+        .map(|m| m.iter().any(|k| k == user))
+        .unwrap_or(false)
+}
+
+fn require_user_access(
+    is_public: bool,
+    admin: &Pubkey,
+    user: &Pubkey,
+    members: Option<&[Pubkey]>,
+    err: &str,
+) -> Result<()> {
+    if user_has_access(is_public, admin, user, members) {
+        Ok(())
+    } else {
+        Err(anyhow!("{err}"))
+    }
+}
+
+fn collateral_token_program(rpc: &RpcClient, mint: &Pubkey) -> Result<Pubkey> {
+    Ok(rpc
+        .get_account(mint)
+        .with_context(|| format!("mint {mint}"))?
+        .owner)
+}
+
 pub fn build_wrap_instruction(
     program_id: &Pubkey,
     user: &Pubkey,
@@ -62,6 +122,8 @@ pub fn build_wrap_instruction(
     asset_cfg: &AssetConfig,
     asset_config_key: &Pubkey,
     amount: u64,
+    allowlist_meta: AccountMeta,
+    collateral_token_program: &Pubkey,
 ) -> Result<Instruction> {
     let data = wrap_ix_data(amount)?;
 
@@ -72,7 +134,11 @@ pub fn build_wrap_instruction(
         AccountMeta::new(*asset_config_key, false),
         AccountMeta::new_readonly(asset_cfg.token_mint, false),
         AccountMeta::new(
-            get_associated_token_address(user, &asset_cfg.token_mint),
+            get_associated_token_address_with_program_id(
+                user,
+                &asset_cfg.token_mint,
+                collateral_token_program,
+            ),
             false,
         ),
         AccountMeta::new(
@@ -81,6 +147,8 @@ pub fn build_wrap_instruction(
         ),
         AccountMeta::new(vault.wrapped_mint, false),
         AccountMeta::new(asset_cfg.token_vault, false),
+        allowlist_meta,
+        AccountMeta::new_readonly(*collateral_token_program, false),
         AccountMeta::new_readonly(spl_token_program_id(), false),
     ];
 
@@ -100,6 +168,8 @@ pub fn build_unwrap_instruction(
     asset_cfg: &AssetConfig,
     asset_config_key: &Pubkey,
     amount: u64,
+    allowlist_meta: AccountMeta,
+    collateral_token_program: &Pubkey,
 ) -> Result<Instruction> {
     let data = unwrap_ix_data(amount)?;
 
@@ -112,13 +182,19 @@ pub fn build_unwrap_instruction(
             false,
         ),
         AccountMeta::new(
-            get_associated_token_address(user, &asset_cfg.token_mint),
+            get_associated_token_address_with_program_id(
+                user,
+                &asset_cfg.token_mint,
+                collateral_token_program,
+            ),
             false,
         ),
         AccountMeta::new(vault.wrapped_mint, false),
         AccountMeta::new(*asset_config_key, false),
         AccountMeta::new_readonly(asset_cfg.token_mint, false),
         AccountMeta::new(asset_cfg.token_vault, false),
+        allowlist_meta,
+        AccountMeta::new_readonly(*collateral_token_program, false),
         AccountMeta::new_readonly(spl_token_program_id(), false),
     ];
 
@@ -129,7 +205,7 @@ pub fn build_unwrap_instruction(
     })
 }
 
-fn fetch_vault_config(
+pub(crate) fn fetch_vault_config(
     rpc: &RpcClient,
     program_id: &Pubkey,
     authority: &Pubkey,
@@ -144,7 +220,7 @@ fn fetch_vault_config(
     Ok((addr, v))
 }
 
-fn fetch_asset_config(
+pub(crate) fn fetch_asset_config(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_config_key: &Pubkey,
@@ -201,15 +277,35 @@ pub fn unsigned_wrap_tx_bytes(
     if vault.paused {
         return Err(anyhow!("vault is paused"));
     }
+    if vault.mint_authority_transferred {
+        return Err(anyhow!("mint authority transferred"));
+    }
     if !vault.has_asset(asset_mint) {
         return Err(anyhow!("asset not registered: {asset_mint}"));
     }
+    let members = fetch_allowlist_keys(rpc, program_id, &vault_config_key);
+    require_user_access(
+        vault.wrap_public,
+        &vault.admin,
+        user,
+        members.as_deref(),
+        "not on allowlist",
+    )?;
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, asset_cfg) =
         fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
     if !asset_cfg.mint_allowed() {
         return Err(anyhow!("mint disabled for asset"));
     }
+    let allowlist_meta = allowlist_slot_meta(
+        rpc,
+        program_id,
+        &vault_config_key,
+        vault.wrap_public,
+        user == &vault.admin,
+    )?;
+
+    let collateral_program = collateral_token_program(rpc, asset_mint)?;
 
     let create_user_wrapped_ata = create_associated_token_account_idempotent(
         user,
@@ -218,12 +314,8 @@ pub fn unsigned_wrap_tx_bytes(
         &spl_token_program_id(),
     );
 
-    let create_user_asset_ata = create_associated_token_account_idempotent(
-        user,
-        user,
-        asset_mint,
-        &spl_token_program_id(),
-    );
+    let create_user_asset_ata =
+        create_associated_token_account_idempotent(user, user, asset_mint, &collateral_program);
 
     let wrap_ix = build_wrap_instruction(
         program_id,
@@ -234,6 +326,8 @@ pub fn unsigned_wrap_tx_bytes(
         &asset_cfg,
         &asset_config_key,
         amount,
+        allowlist_meta,
+        &collateral_program,
     )?;
 
     let tx = build_versioned_tx(
@@ -332,19 +426,32 @@ pub fn unsigned_unwrap_tx_bytes(
     if !vault.has_asset(asset_mint) {
         return Err(anyhow!("asset not registered: {asset_mint}"));
     }
+    let members = fetch_allowlist_keys(rpc, program_id, &vault_config_key);
+    require_user_access(
+        vault.unwrap_public,
+        &vault.admin,
+        user,
+        members.as_deref(),
+        "not on allowlist",
+    )?;
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, asset_cfg) =
         fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+    let allowlist_meta = allowlist_slot_meta(
+        rpc,
+        program_id,
+        &vault_config_key,
+        vault.unwrap_public,
+        user == &vault.admin,
+    )?;
 
     let free_liquidity = get_token_account_amount(rpc, &asset_cfg.token_vault).unwrap_or(0);
     validate_unwrap_amount(&asset_cfg, &vault, free_liquidity, amount)?;
 
-    let create_user_asset_ata = create_associated_token_account_idempotent(
-        user,
-        user,
-        asset_mint,
-        &spl_token_program_id(),
-    );
+    let collateral_program = collateral_token_program(rpc, asset_mint)?;
+
+    let create_user_asset_ata =
+        create_associated_token_account_idempotent(user, user, asset_mint, &collateral_program);
 
     let unwrap_ix = build_unwrap_instruction(
         program_id,
@@ -355,6 +462,8 @@ pub fn unsigned_unwrap_tx_bytes(
         &asset_cfg,
         &asset_config_key,
         amount,
+        allowlist_meta,
+        &collateral_program,
     )?;
 
     let tx = build_versioned_tx(rpc, user, vec![create_user_asset_ata, unwrap_ix], None)?;
@@ -390,11 +499,50 @@ pub struct VaultAssetView {
     pub klend_enabled: bool,
 }
 
+fn optional_pubkey(pk: &Pubkey) -> Option<String> {
+    if *pk == Pubkey::default() {
+        None
+    } else {
+        Some(pk.to_string())
+    }
+}
+
+fn fetch_allowlist_keys(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_config_key: &Pubkey,
+) -> Option<Vec<Pubkey>> {
+    let (key, _) = allowlist(program_id, vault_config_key);
+    let acc = rpc.get_account(&key).ok()?;
+    if acc.data.is_empty() {
+        return None;
+    }
+    let mut data: &[u8] = &acc.data;
+    let list = Allowlist::try_deserialize(&mut data).ok()?;
+    Some(list.allowed)
+}
+
+fn fetch_allowlist_optional(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_config_key: &Pubkey,
+) -> Option<Vec<String>> {
+    fetch_allowlist_keys(rpc, program_id, vault_config_key)
+        .map(|keys| keys.iter().map(|pk| pk.to_string()).collect())
+}
+
 #[derive(Debug, serde::Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultSummaryView {
     pub admin: String,
     pub paused: bool,
+    pub wrap_public: bool,
+    pub unwrap_public: bool,
+    pub pending_admin: Option<String>,
+    pub pending_mint_authority: Option<String>,
+    pub mint_authority_transferred: bool,
+    /// Allowlist members, or `null` if the Allowlist PDA has not been initialized.
+    pub allowlist: Option<Vec<String>>,
     pub program_id: String,
     pub vault_config: String,
     pub wrapped_mint: String,
@@ -408,6 +556,13 @@ pub struct VaultSummaryView {
 pub struct VaultMetaView {
     pub admin: String,
     pub paused: bool,
+    pub wrap_public: bool,
+    pub unwrap_public: bool,
+    pub pending_admin: Option<String>,
+    pub pending_mint_authority: Option<String>,
+    pub mint_authority_transferred: bool,
+    /// Allowlist members, or `null` if the Allowlist PDA has not been initialized.
+    pub allowlist: Option<Vec<String>>,
     pub program_id: String,
     pub vault_config: String,
     pub wrapped_mint: String,
@@ -431,6 +586,25 @@ pub struct RedeemQuoteView {
     pub liquidity_shortfall: u64,
     pub liability_shortfall: u64,
     pub max_redeemable: u64,
+    /// `true` when wrap/unwrap is public, the user is admin, or the user is on the allowlist.
+    /// `null` when `user` was not supplied.
+    pub access_allowed: Option<bool>,
+}
+
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueQuoteView {
+    pub input: u64,
+    pub output: u64,
+    pub haircut_bps: u16,
+    pub asset_mint: String,
+    pub mint_enabled: bool,
+    pub mint_allowed: bool,
+    pub can_mint: bool,
+    pub mint_cap: u64,
+    /// Remaining mint capacity in wrapped atoms. `null` when `mintCap` is 0 (unlimited).
+    pub mint_cap_remaining: Option<u64>,
+    pub access_allowed: Option<bool>,
 }
 
 pub fn redeem_quote(
@@ -439,6 +613,7 @@ pub fn redeem_quote(
     vault_authority_seed: &Pubkey,
     asset_mint: &Pubkey,
     amount: u64,
+    user: Option<&Pubkey>,
 ) -> Result<RedeemQuoteView> {
     if amount == 0 {
         return Err(anyhow!("amount must be positive"));
@@ -447,7 +622,8 @@ pub fn redeem_quote(
     if !vault.has_asset(asset_mint) {
         return Err(anyhow!("asset not registered: {asset_mint}"));
     }
-    let (asset_config_key, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+    let (asset_config_key, cfg) =
+        fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
     let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
     let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
     let deployed = klend
@@ -466,7 +642,11 @@ pub fn redeem_quote(
     let redeem_allowed = cfg.redeem_allowed();
     let liquidity_shortfall = output.saturating_sub(free_liquidity);
     let liability_shortfall = amount.saturating_sub(liability);
-    let can_redeem = redeem_allowed && liquidity_shortfall == 0 && liability_shortfall == 0;
+    let can_redeem =
+        redeem_allowed && !vault.paused && liquidity_shortfall == 0 && liability_shortfall == 0;
+    let members = fetch_allowlist_keys(rpc, program_id, &vault_config_key);
+    let access_allowed =
+        user.map(|u| user_has_access(vault.unwrap_public, &vault.admin, u, members.as_deref()));
     Ok(RedeemQuoteView {
         input: amount,
         output,
@@ -481,6 +661,57 @@ pub fn redeem_quote(
         liquidity_shortfall,
         liability_shortfall,
         max_redeemable,
+        access_allowed,
+    })
+}
+
+pub fn issue_quote(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    asset_mint: &Pubkey,
+    amount: u64,
+    user: Option<&Pubkey>,
+) -> Result<IssueQuoteView> {
+    if amount == 0 {
+        return Err(anyhow!("amount must be positive"));
+    }
+    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    if !vault.has_asset(asset_mint) {
+        return Err(anyhow!("asset not registered: {asset_mint}"));
+    }
+    let (_, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+    let output = underlying_to_wrapped_amount(
+        amount,
+        cfg.token_decimals,
+        vault.wrapped_decimals,
+        cfg.mint_haircut_bps,
+    )
+    .map_err(|e| anyhow!("quote conversion: {e}"))?;
+    let liability = cfg.net_liability_saturating();
+    let mint_cap_remaining = if cfg.mint_cap == 0 {
+        None
+    } else {
+        Some(cfg.mint_cap.saturating_sub(liability))
+    };
+    let cap_ok = mint_cap_remaining.map(|rem| output <= rem).unwrap_or(true);
+    let mint_allowed = cfg.mint_allowed();
+    let can_mint =
+        mint_allowed && !vault.paused && !vault.mint_authority_transferred && output > 0 && cap_ok;
+    let members = fetch_allowlist_keys(rpc, program_id, &vault_config_key);
+    let access_allowed =
+        user.map(|u| user_has_access(vault.wrap_public, &vault.admin, u, members.as_deref()));
+    Ok(IssueQuoteView {
+        input: amount,
+        output,
+        haircut_bps: cfg.mint_haircut_bps,
+        asset_mint: asset_mint.to_string(),
+        mint_enabled: cfg.mint_enabled,
+        mint_allowed,
+        can_mint,
+        mint_cap: cfg.mint_cap,
+        mint_cap_remaining,
+        access_allowed,
     })
 }
 
@@ -496,11 +727,8 @@ pub fn fetch_vault_assets(
             continue;
         }
         let (_, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, mint)?;
-        let (asset_config_key, _) = crate::wrap_stablecoin::pda::asset_config(
-            program_id,
-            &vault_config_key,
-            mint,
-        );
+        let (asset_config_key, _) =
+            crate::wrap_stablecoin::pda::asset_config(program_id, &vault_config_key, mint);
         let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
         let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
         let treasury_balance = get_token_account_amount(rpc, &cfg.treasury_vault).unwrap_or(0);
@@ -509,12 +737,9 @@ pub fn fetch_vault_assets(
             .map(|k| k.total_liquidity_in_klend)
             .unwrap_or(0);
         let liability = cfg.net_liability_saturating();
-        let liability_underlying = liability_to_underlying_amount(
-            liability,
-            cfg.token_decimals,
-            vault.wrapped_decimals,
-        )
-        .unwrap_or(0);
+        let liability_underlying =
+            liability_to_underlying_amount(liability, cfg.token_decimals, vault.wrapped_decimals)
+                .unwrap_or(0);
         let cushion = cfg.min_liquidity_target;
         // Live Kamino mark requires CPI; on-chain harvest_yield enforces kamino surplus.
         let kamino_surplus = 0u64;
@@ -557,11 +782,19 @@ pub fn fetch_vault_assets(
     Ok(VaultSummaryView {
         admin: vault.admin.to_string(),
         paused: vault.paused,
+        wrap_public: vault.wrap_public,
+        unwrap_public: vault.unwrap_public,
+        pending_admin: optional_pubkey(&vault.pending_admin),
+        pending_mint_authority: optional_pubkey(&vault.pending_mint_authority),
+        mint_authority_transferred: vault.mint_authority_transferred,
+        allowlist: fetch_allowlist_optional(rpc, program_id, &vault_config_key),
         program_id: program_id.to_string(),
         vault_config: vault_config_key.to_string(),
         wrapped_mint: vault.wrapped_mint.to_string(),
         wrapped_decimals: vault.wrapped_decimals,
-        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals).ok().flatten(),
+        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)
+            .ok()
+            .flatten(),
         assets: out,
     })
 }
@@ -575,11 +808,19 @@ pub fn fetch_vault_meta(
     Ok(VaultMetaView {
         admin: vault.admin.to_string(),
         paused: vault.paused,
+        wrap_public: vault.wrap_public,
+        unwrap_public: vault.unwrap_public,
+        pending_admin: optional_pubkey(&vault.pending_admin),
+        pending_mint_authority: optional_pubkey(&vault.pending_mint_authority),
+        mint_authority_transferred: vault.mint_authority_transferred,
+        allowlist: fetch_allowlist_optional(rpc, program_id, &vault_config_key),
         program_id: program_id.to_string(),
         vault_config: vault_config_key.to_string(),
         wrapped_mint: vault.wrapped_mint.to_string(),
         wrapped_decimals: vault.wrapped_decimals,
-        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals).ok().flatten(),
+        mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)
+            .ok()
+            .flatten(),
     })
 }
 
@@ -655,6 +896,7 @@ pub fn build_add_asset_instruction(
     asset_config_key: &Pubkey,
     token_vault_key: &Pubkey,
     treasury_vault_key: &Pubkey,
+    collateral_token_program: &Pubkey,
     mint_enabled: bool,
     redeem_enabled: bool,
 ) -> Result<Instruction> {
@@ -669,7 +911,7 @@ pub fn build_add_asset_instruction(
             AccountMeta::new(*asset_config_key, false),
             AccountMeta::new(*token_vault_key, false),
             AccountMeta::new(*treasury_vault_key, false),
-            AccountMeta::new_readonly(spl_token_program_id(), false),
+            AccountMeta::new_readonly(*collateral_token_program, false),
             AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
         ],
         data,
@@ -713,9 +955,11 @@ pub fn unsigned_add_asset_tx_bytes(
     }
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, _) = asset_config(program_id, &vault_config_key, underlying_mint);
-    let (token_vault_key, _) = crate::wrap_stablecoin::pda::token_vault(program_id, &asset_config_key);
+    let (token_vault_key, _) =
+        crate::wrap_stablecoin::pda::token_vault(program_id, &asset_config_key);
     let (treasury_vault_key, _) =
         crate::wrap_stablecoin::pda::treasury_vault(program_id, &asset_config_key);
+    let collateral_program = collateral_token_program(rpc, underlying_mint)?;
 
     let ix = build_add_asset_instruction(
         program_id,
@@ -726,6 +970,7 @@ pub fn unsigned_add_asset_tx_bytes(
         &asset_config_key,
         &token_vault_key,
         &treasury_vault_key,
+        &collateral_program,
         mint_enabled,
         redeem_enabled,
     )?;
@@ -758,6 +1003,303 @@ pub fn unsigned_update_asset_policy_tx_bytes(
         args,
     )?;
     let tx = build_versioned_tx(rpc, admin, vec![ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+fn require_admin_asset(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    pause_blocks: bool,
+) -> Result<(Pubkey, VaultConfig, Pubkey, Pubkey, AssetConfig)> {
+    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
+    if vault.admin != *admin {
+        return Err(anyhow!("signer is not vault admin"));
+    }
+    if pause_blocks && vault.paused {
+        return Err(anyhow!("vault is paused"));
+    }
+    if !vault.has_asset(underlying_mint) {
+        return Err(anyhow!("asset not registered: {underlying_mint}"));
+    }
+    let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
+    let (asset_config_key, asset_cfg) =
+        fetch_asset_config(rpc, program_id, &vault_config_key, underlying_mint)?;
+    Ok((
+        vault_config_key,
+        vault,
+        vault_authority_key,
+        asset_config_key,
+        asset_cfg,
+    ))
+}
+
+fn klend_cpi_with_refresh(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    asset_config_key: &Pubkey,
+    asset_cfg: &AssetConfig,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<(super::klend::KlendCpiAccounts, Instruction)> {
+    let cpi =
+        super::klend::resolve_klend_cpi_accounts(rpc, program_id, asset_config_key, asset_cfg)?;
+    let oracle = super::klend::scope_prices_for_reserve(scope_prices, &cpi.klend.reserve)?;
+    let refresh = super::klend::build_refresh_reserve_ix(
+        &cpi.klend.reserve,
+        &cpi.klend.lending_market,
+        &oracle,
+    );
+    Ok((cpi, refresh))
+}
+
+pub fn unsigned_deposit_to_klend_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    amount: u64,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            true,
+        )?;
+    let (cpi, refresh) =
+        klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
+    let ix = super::klend::build_deposit_to_klend_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        &cpi,
+        amount,
+    )?;
+    let tx = build_versioned_tx(rpc, admin, vec![refresh, ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_deposit_all_to_klend_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            true,
+        )?;
+    let (cpi, refresh) =
+        klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
+    let ix = super::klend::build_deposit_all_to_klend_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        &cpi,
+    );
+    let tx = build_versioned_tx(rpc, admin, vec![refresh, ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_withdraw_from_klend_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    collateral_amount: u64,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            false,
+        )?;
+    let (cpi, refresh) =
+        klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
+    let ix = super::klend::build_withdraw_from_klend_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        &cpi,
+        collateral_amount,
+    )?;
+    let tx = build_versioned_tx(rpc, admin, vec![refresh, ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_withdraw_all_from_klend_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            false,
+        )?;
+    let (cpi, refresh) =
+        klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
+    let ix = super::klend::build_withdraw_all_from_klend_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        &cpi,
+    );
+    let tx = build_versioned_tx(rpc, admin, vec![refresh, ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_harvest_yield_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    collateral_amount: u64,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            true,
+        )?;
+    let (cpi, refresh) =
+        klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
+    let ix = super::klend::build_harvest_yield_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        &cpi,
+        collateral_amount,
+    )?;
+    let tx = build_versioned_tx(rpc, admin, vec![refresh, ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_sweep_home_surplus_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    amount: u64,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            false,
+        )?;
+    let token_program = rpc
+        .get_account(&asset_cfg.token_mint)
+        .map(|a| a.owner)
+        .unwrap_or_else(|_| spl_token_program_id());
+    let ix = super::klend::build_sweep_home_surplus_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        amount,
+        &token_program,
+    )?;
+    let tx = build_versioned_tx(rpc, admin, vec![ix], None)?;
+    bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
+}
+
+pub fn unsigned_withdraw_treasury_tx_bytes(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_authority_seed: &Pubkey,
+    admin: &Pubkey,
+    underlying_mint: &Pubkey,
+    amount: u64,
+    destination_owner: &Pubkey,
+) -> Result<Vec<u8>> {
+    let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
+        require_admin_asset(
+            rpc,
+            program_id,
+            vault_authority_seed,
+            admin,
+            underlying_mint,
+            false,
+        )?;
+    let token_program = rpc
+        .get_account(&asset_cfg.token_mint)
+        .map(|a| a.owner)
+        .unwrap_or_else(|_| spl_token_program_id());
+    let destination = spl_associated_token_account::get_associated_token_address_with_program_id(
+        destination_owner,
+        &asset_cfg.token_mint,
+        &token_program,
+    );
+    let create_ata = create_associated_token_account_idempotent(
+        admin,
+        destination_owner,
+        &asset_cfg.token_mint,
+        &token_program,
+    );
+    let ix = super::klend::build_withdraw_treasury_instruction(
+        program_id,
+        admin,
+        &vault_config_key,
+        &vault_authority_key,
+        &asset_config_key,
+        &asset_cfg,
+        &destination,
+        amount,
+        &token_program,
+    )?;
+    let tx = build_versioned_tx(rpc, admin, vec![create_ata, ix], None)?;
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
@@ -902,5 +1444,120 @@ fn is_writable_legacy(m: &LegacyMessage, idx: usize) -> bool {
     } else {
         let u_start = num_signers + num_ro_signers;
         idx < u_start + num_writable_unsigned
+    }
+}
+
+#[cfg(test)]
+mod allowlist_slot_tests {
+    use super::*;
+
+    fn dummy_vault(wrapped_mint: Pubkey) -> VaultConfig {
+        VaultConfig {
+            bump: 1,
+            authority: Pubkey::new_unique(),
+            admin: Pubkey::new_unique(),
+            pending_admin: Pubkey::default(),
+            wrapped_mint,
+            wrapped_mint_bump: 1,
+            wrapped_decimals: 6,
+            vault_authority_bump: 1,
+            asset_count: 1,
+            registered_assets: [Pubkey::default(); 8],
+            total_stable_deposited: 0,
+            paused: false,
+            wrap_public: true,
+            unwrap_public: true,
+            flash_mint_enabled: false,
+            flash_mint_fee_bps: 0,
+            flash_mint_max_amount: 0,
+            flash_mint_fee_receiver: Pubkey::default(),
+            pending_mint_authority: Pubkey::default(),
+            mint_authority_transferred: false,
+        }
+    }
+
+    fn dummy_asset(token_mint: Pubkey, token_vault: Pubkey) -> AssetConfig {
+        AssetConfig {
+            bump: 1,
+            vault_config: Pubkey::new_unique(),
+            token_mint,
+            token_decimals: 6,
+            treasury_vault: Pubkey::new_unique(),
+            treasury_vault_bump: 1,
+            token_vault,
+            token_vault_bump: 1,
+            total_deposits: 0,
+            total_wrapped_minted: 0,
+            total_redemptions: 0,
+            mint_enabled: true,
+            redeem_enabled: true,
+            mint_haircut_bps: 0,
+            redemption_haircut_bps: 0,
+            mint_cap: 0,
+            exposure_cap: 0,
+            min_liquidity_target: 0,
+            asset_status: AssetStatus::Active,
+        }
+    }
+
+    #[test]
+    fn wrap_ix_allowlist_slot_before_token_programs() {
+        let program_id = Pubkey::new_unique();
+        let user = Pubkey::new_unique();
+        let wrapped_mint = Pubkey::new_unique();
+        let token_mint = Pubkey::new_unique();
+        let token_vault = Pubkey::new_unique();
+        let vault = dummy_vault(wrapped_mint);
+        let asset = dummy_asset(token_mint, token_vault);
+        let sentinel = AccountMeta::new_readonly(program_id, false);
+        let collateral = Pubkey::new_unique();
+        let ix = build_wrap_instruction(
+            &program_id,
+            &user,
+            &vault,
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &asset,
+            &Pubkey::new_unique(),
+            1,
+            sentinel.clone(),
+            &collateral,
+        )
+        .unwrap();
+        assert_eq!(ix.accounts.len(), 12);
+        assert_eq!(ix.accounts[9], sentinel);
+        assert_eq!(ix.accounts[10].pubkey, collateral);
+        assert_eq!(ix.accounts[11].pubkey, spl_token_program_id());
+    }
+
+    #[test]
+    fn unwrap_ix_allowlist_slot_before_token_programs() {
+        let program_id = Pubkey::new_unique();
+        let user = Pubkey::new_unique();
+        let wrapped_mint = Pubkey::new_unique();
+        let token_mint = Pubkey::new_unique();
+        let token_vault = Pubkey::new_unique();
+        let vault = dummy_vault(wrapped_mint);
+        let asset = dummy_asset(token_mint, token_vault);
+        let pda = Pubkey::new_unique();
+        let real = AccountMeta::new_readonly(pda, false);
+        let collateral = Pubkey::new_unique();
+        let ix = build_unwrap_instruction(
+            &program_id,
+            &user,
+            &vault,
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &asset,
+            &Pubkey::new_unique(),
+            1,
+            real.clone(),
+            &collateral,
+        )
+        .unwrap();
+        assert_eq!(ix.accounts.len(), 12);
+        assert_eq!(ix.accounts[9], real);
+        assert_eq!(ix.accounts[10].pubkey, collateral);
+        assert_eq!(ix.accounts[11].pubkey, spl_token_program_id());
     }
 }

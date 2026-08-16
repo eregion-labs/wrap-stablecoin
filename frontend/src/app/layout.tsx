@@ -1,24 +1,26 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
+import { DM_Mono, EB_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 import "@/theme/florin-globals.css";
 import Providers from "@/providers/providers";
 import { BRANDING } from "@/branding";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmMono = DM_Mono({
+  variable: "--font-dm-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
-const cormorant = Cormorant_Garamond({
-  variable: "--font-cormorant",
+const ebGaramond = EB_Garamond({
+  variable: "--font-eb-garamond",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -34,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
+      className={`${inter.variable} ${dmMono.variable} ${ebGaramond.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full antialiased">

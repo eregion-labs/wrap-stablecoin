@@ -43,7 +43,18 @@ export type VaultAsset = {
   klendEnabled: boolean;
 };
 
-export type VaultSummary = {
+/** Vault-level governance fields on GET /v1/vault/meta and /v1/vault/assets. */
+export type VaultGovernance = {
+  wrapPublic: boolean;
+  unwrapPublic: boolean;
+  pendingAdmin: string | null;
+  pendingMintAuthority: string | null;
+  mintAuthorityTransferred: boolean;
+  /** Allowlist members, or null if the PDA has not been initialized. */
+  allowlist: string[] | null;
+};
+
+export type VaultSummary = VaultGovernance & {
   admin: string;
   paused: boolean;
   programId: string;
@@ -54,7 +65,7 @@ export type VaultSummary = {
   assets: VaultAsset[];
 };
 
-export type VaultMeta = {
+export type VaultMeta = VaultGovernance & {
   admin: string;
   paused: boolean;
   programId: string;

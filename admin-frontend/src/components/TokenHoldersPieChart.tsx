@@ -6,16 +6,16 @@ import Typography from "@mui/material/Typography";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { truncateAddrShort } from "@/lib/address";
 import { formatTokenAmount } from "@/lib/tokenAmount";
-import { cardSx, florinGold, florentineRed, merchantCopper, republicBronze, venetianGreen, deepIndigo } from "@/theme/tokens";
+import { cardSx, civicBlue, colorSuccess, florentineRed, accentBrown, ledgerInk, textMuted } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
 
 const PIE_COLORS = [
-  florinGold,
-  venetianGreen,
-  republicBronze,
-  merchantCopper,
-  deepIndigo,
   florentineRed,
+  civicBlue,
+  accentBrown,
+  ledgerInk,
+  textMuted,
+  colorSuccess,
 ];
 
 type HolderSlice = {
@@ -106,7 +106,7 @@ function HoldersTooltip({
       <Typography variant="caption" display="block">
         {addrLabel}
       </Typography>
-      <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+      <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
         {formatTokenAmount(slice.value, decimals)} {symbol} ({slice.pct}%)
       </Typography>
     </Box>

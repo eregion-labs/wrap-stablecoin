@@ -1,111 +1,120 @@
 import { createTheme } from "@mui/material/styles";
 import {
-  cardShadow,
+  accentBrown,
+  civicBlue,
   colorError,
   colorInfo,
   colorSuccess,
   colorWarning,
-  deepIndigo,
-  florinGold,
+  florentineRed,
   focusRing,
-  ivory,
+  hairline,
   ledgerInk,
-  marble,
-  parchment,
-  republicBronze,
-  stone,
+  mutedWash,
+  offWhite,
+  paper,
   textDisabled,
   textMuted,
-  venetianGreen,
 } from "./tokens";
 
-const serifStack = 'var(--font-cormorant), "Cormorant Garamond", Georgia, serif';
-const sansStack = "var(--font-geist-sans), system-ui, sans-serif";
+const serifStack = 'var(--font-eb-garamond), "EB Garamond", Georgia, serif';
+const sansStack = "var(--font-inter), system-ui, sans-serif";
+const monoStack = 'var(--font-dm-mono), "DM Mono", ui-monospace, monospace';
 
 export const theme = createTheme({
   palette: {
     mode: "light",
     primary: {
-      main: florinGold,
-      light: "#D4B86A",
-      dark: "#A88A3A",
-      contrastText: ledgerInk,
+      main: civicBlue,
+      light: "#6AA8C8",
+      dark: "#3A7FA8",
+      contrastText: paper,
     },
     secondary: {
-      main: republicBronze,
-      light: "#A08058",
-      dark: "#6B5235",
-      contrastText: ivory,
+      main: florentineRed,
+      light: "#E85F6B",
+      dark: "#9A1422",
+      contrastText: paper,
     },
     info: {
-      main: deepIndigo,
-      contrastText: ivory,
+      main: colorInfo,
+      contrastText: paper,
     },
     background: {
-      default: ivory,
-      paper: marble,
+      default: paper,
+      paper: offWhite,
     },
-    divider: stone,
+    divider: hairline,
     text: {
       primary: ledgerInk,
       secondary: textMuted,
       disabled: textDisabled,
     },
-    success: { main: colorSuccess, contrastText: ivory },
-    warning: { main: colorWarning, contrastText: ledgerInk },
-    error: { main: colorError, contrastText: ivory },
+    success: { main: colorSuccess, contrastText: paper },
+    warning: { main: colorWarning, contrastText: paper },
+    error: { main: colorError, contrastText: paper },
     action: {
-      hover: "rgba(138, 103, 66, 0.08)",
-      selected: "rgba(198, 164, 74, 0.15)",
+      hover: "rgba(14, 14, 14, 0.04)",
+      selected: "rgba(194, 25, 43, 0.08)",
       disabled: textDisabled,
-      disabledBackground: parchment,
+      disabledBackground: mutedWash,
     },
   },
   typography: {
     fontFamily: sansStack,
-    h4: { fontFamily: serifStack, fontWeight: 600, letterSpacing: "-0.01em" },
+    h4: { fontFamily: serifStack, fontWeight: 400, letterSpacing: "-0.01em" },
     h5: {
       fontFamily: serifStack,
-      fontWeight: 600,
+      fontWeight: 400,
       letterSpacing: "-0.02em",
       fontSize: "1.75rem",
-      lineHeight: 1.29,
+      lineHeight: 1.2,
       color: ledgerInk,
     },
     h6: {
       fontFamily: serifStack,
-      fontWeight: 600,
+      fontWeight: 400,
       letterSpacing: "-0.01em",
       color: ledgerInk,
     },
     body1: { fontSize: "1rem", lineHeight: 1.5, fontVariantNumeric: "tabular-nums" },
     body2: { fontSize: "0.875rem", lineHeight: 1.43, fontVariantNumeric: "tabular-nums" },
-    subtitle1: { fontWeight: 600 },
+    subtitle1: { fontWeight: 500 },
     subtitle2: {
-      fontFamily: serifStack,
-      fontWeight: 600,
-      letterSpacing: "0.06em",
+      fontFamily: sansStack,
+      fontWeight: 500,
+      letterSpacing: "0.14em",
       textTransform: "uppercase",
-      fontSize: "0.75rem",
+      fontSize: "0.625rem",
       lineHeight: 1.33,
-      color: republicBronze,
+      color: florentineRed,
     },
     caption: { fontWeight: 500, fontSize: "0.75rem", lineHeight: 1.33 },
+    button: {
+      fontFamily: sansStack,
+      fontWeight: 500,
+      letterSpacing: "0.14em",
+      textTransform: "uppercase",
+      fontSize: "0.6875rem",
+    },
   },
-  shape: { borderRadius: 10 },
+  shape: { borderRadius: 1 },
   components: {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
           fontVariantNumeric: "tabular-nums",
         },
+        "code, kbd, pre": {
+          fontFamily: monoStack,
+        },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: parchment,
-          borderBottom: `1px solid ${republicBronze}`,
+          backgroundColor: paper,
+          borderBottom: `1px solid ${hairline}`,
           boxShadow: "none",
         },
       },
@@ -113,55 +122,57 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          textTransform: "none",
-          fontWeight: 600,
-          borderRadius: 10,
+          textTransform: "uppercase",
+          fontWeight: 500,
+          letterSpacing: "0.14em",
+          fontSize: "0.6875rem",
+          borderRadius: "1px",
           "&:focus-visible": {
             outline: "none",
             boxShadow: focusRing,
           },
           "&:active": {
-            transform: "translateY(1px)",
+            transform: "scale(0.98)",
           },
         },
         containedPrimary: {
-          backgroundColor: florinGold,
-          color: ledgerInk,
-          border: `1px solid ${republicBronze}`,
+          backgroundColor: civicBlue,
+          color: paper,
           boxShadow: "none",
           "&:hover": {
-            backgroundColor: "#B89440",
+            backgroundColor: "#3A7FA8",
             boxShadow: "none",
           },
           "&.Mui-disabled": {
-            backgroundColor: parchment,
+            backgroundColor: mutedWash,
             color: textDisabled,
-            borderColor: stone,
           },
         },
         containedSecondary: {
-          background: parchment,
-          border: `1px solid ${republicBronze}`,
-          color: ledgerInk,
+          backgroundColor: florentineRed,
+          color: paper,
           boxShadow: "none",
           "&:hover": {
-            background: marble,
+            backgroundColor: "#9A1422",
             boxShadow: "none",
           },
         },
         outlined: {
-          background: ivory,
-          borderColor: republicBronze,
+          background: "transparent",
+          borderColor: ledgerInk,
           color: ledgerInk,
           "&:hover": {
-            background: parchment,
-            borderColor: republicBronze,
+            background: ledgerInk,
+            borderColor: ledgerInk,
+            color: paper,
           },
         },
         text: {
           color: textMuted,
+          letterSpacing: "0.1em",
           "&:hover": {
-            background: "rgba(138, 103, 66, 0.06)",
+            background: "transparent",
+            color: ledgerInk,
           },
         },
       },
@@ -170,12 +181,12 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          backgroundColor: marble,
-          borderRadius: 10,
-          boxShadow: cardShadow,
+          backgroundColor: paper,
+          borderRadius: "1px",
+          boxShadow: "none",
         },
         outlined: {
-          border: `1px solid ${republicBronze}`,
+          border: `1px solid ${hairline}`,
         },
       },
     },
@@ -183,16 +194,17 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           "& .MuiOutlinedInput-root": {
-            borderRadius: 10,
-            backgroundColor: parchment,
+            borderRadius: "1px",
+            backgroundColor: offWhite,
+            fontFamily: monoStack,
             "& fieldset": {
-              borderColor: stone,
+              borderColor: hairline,
             },
             "&:hover fieldset": {
-              borderColor: republicBronze,
+              borderColor: ledgerInk,
             },
             "&.Mui-focused fieldset": {
-              borderColor: florinGold,
+              borderColor: florentineRed,
             },
             "&.Mui-focused": {
               boxShadow: focusRing,
@@ -204,9 +216,9 @@ export const theme = createTheme({
     MuiToggleButtonGroup: {
       styleOverrides: {
         root: {
-          background: parchment,
-          border: `1px solid ${stone}`,
-          borderRadius: 10,
+          background: offWhite,
+          border: `1px solid ${hairline}`,
+          borderRadius: "1px",
         },
       },
     },
@@ -215,16 +227,16 @@ export const theme = createTheme({
         root: {
           border: "none",
           color: textMuted,
+          borderRadius: "1px",
           "&.Mui-selected": {
-            background: "rgba(198, 164, 74, 0.2)",
-            color: ledgerInk,
-            border: `1px solid ${republicBronze}`,
+            background: ledgerInk,
+            color: paper,
             "&:hover": {
-              background: "rgba(198, 164, 74, 0.28)",
+              background: ledgerInk,
             },
           },
           "&:hover": {
-            background: "rgba(138, 103, 66, 0.06)",
+            background: mutedWash,
           },
         },
       },
@@ -232,56 +244,66 @@ export const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
+          borderRadius: "1px",
           fontWeight: 500,
+          letterSpacing: "0.06em",
         },
         outlined: {
-          borderColor: stone,
+          borderColor: hairline,
           color: textMuted,
         },
       },
     },
     MuiAlert: {
       styleOverrides: {
+        root: {
+          borderRadius: "1px",
+        },
         standardSuccess: {
-          backgroundColor: "rgba(33, 89, 77, 0.1)",
-          color: venetianGreen,
-          border: `1px solid rgba(33, 89, 77, 0.25)`,
+          backgroundColor: "rgba(46, 158, 91, 0.1)",
+          color: colorSuccess,
+          border: `1px solid rgba(46, 158, 91, 0.25)`,
         },
         standardWarning: {
-          backgroundColor: "rgba(168, 107, 61, 0.1)",
-          color: colorWarning,
-          border: `1px solid rgba(168, 107, 61, 0.25)`,
+          backgroundColor: "rgba(138, 94, 58, 0.1)",
+          color: accentBrown,
+          border: `1px solid rgba(138, 94, 58, 0.25)`,
         },
         standardError: {
-          backgroundColor: "rgba(135, 58, 53, 0.1)",
+          backgroundColor: "rgba(194, 25, 43, 0.08)",
           color: colorError,
-          border: `1px solid rgba(135, 58, 53, 0.25)`,
+          border: `1px solid rgba(194, 25, 43, 0.25)`,
         },
         standardInfo: {
-          backgroundColor: "rgba(41, 52, 75, 0.08)",
+          backgroundColor: "rgba(74, 144, 184, 0.1)",
           color: colorInfo,
-          border: `1px solid rgba(41, 52, 75, 0.2)`,
+          border: `1px solid rgba(74, 144, 184, 0.25)`,
         },
       },
     },
     MuiMenu: {
       styleOverrides: {
         paper: {
-          backgroundColor: marble,
-          border: `1px solid ${republicBronze}`,
+          backgroundColor: paper,
+          border: `1px solid ${hairline}`,
+          borderRadius: "1px",
+          boxShadow: "none",
         },
       },
     },
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderColor: stone,
+          borderColor: hairline,
           fontVariantNumeric: "tabular-nums",
         },
         head: {
-          fontWeight: 600,
-          color: republicBronze,
+          fontFamily: sansStack,
+          fontWeight: 500,
+          fontSize: "0.625rem",
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: textMuted,
         },
       },
     },
@@ -289,7 +311,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           "&:nth-of-type(even)": {
-            backgroundColor: "rgba(239, 230, 210, 0.45)",
+            backgroundColor: offWhite,
           },
         },
       },
@@ -297,15 +319,18 @@ export const theme = createTheme({
     MuiTab: {
       styleOverrides: {
         root: {
-          fontFamily: serifStack,
-          fontWeight: 600,
+          fontFamily: sansStack,
+          fontWeight: 500,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          fontSize: "0.6875rem",
         },
       },
     },
     MuiTabs: {
       styleOverrides: {
         indicator: {
-          backgroundColor: florinGold,
+          backgroundColor: florentineRed,
           height: 2,
         },
       },

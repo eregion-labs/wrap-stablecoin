@@ -55,7 +55,7 @@ export default function WalletBalancesPanel({ summary, walletBalances, connected
           {rows.map((row) => (
             <TableRow key={row.key}>
               <TableCell>{row.label}</TableCell>
-              <TableCell align="right" sx={{ fontFamily: "monospace", color: "text.secondary" }}>
+              <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', color: "text.secondary" }}>
                 {row.amount === null
                   ? "—"
                   : formatTokenAmount(row.amount, row.decimals)}

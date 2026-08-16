@@ -74,6 +74,7 @@ enable_klend(Stable)       # when a market exists
 ## Invariants
 
 - `reject_reflexive_collateral`: underlying mint cannot equal Florin (FLRN) mint
+- Florin mint is classic SPL Token. Collateral may be SPL or Token-2022 with **no extensions** (`add_asset` / wrap / unwrap fail closed on unknown TLV)
 - Per asset: `net_liability = total_wrapped_minted - total_redemptions` (Florin (FLRN) atoms)
 - Unwrap sources liquidity **only** from `token_vault`; never from `treasury_vault` or Kamino CPIs
 - KLend ops fail with `KlendNotEnabled` when no `KLendConfig` exists

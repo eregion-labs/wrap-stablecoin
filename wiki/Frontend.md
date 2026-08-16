@@ -47,13 +47,15 @@ RPC endpoint comes from frozen client-config (`solana.rpcUrl`), not from fronten
 `WrapRedeemPanel` (`frontend/src/components/WrapRedeemPanel.tsx`):
 
 1. User connects wallet via **AppHeader** → `WalletNavButton` (top right)
-2. Panel loads `GET /v1/vault/assets` (per-pool liability, liquidity, surplus)
-3. Redeem flow polls `GET /v1/quote/redeem` for `canRedeem`, shortfalls, and `maxRedeemable`
-4. User enters wrap (issue) or unwrap (redeem) amount
-5. Frontend calls backend `POST /v1/tx/issue` or `POST /v1/tx/redeem` (no `x-solana-network`)
-6. Issue/redeem buttons disabled when `!mintAllowed` or `!canRedeem`
-7. Deserializes `transactionB64` to `VersionedTransaction`
-8. Signs and sends via wallet; simulate buttons call `/v1/tx/preview` path via local simulation
+2. Panel loads `GET /v1/vault/assets` (per-pool liability, liquidity, surplus, wrap/unwrap public flags, allowlist, haircuts)
+3. Amounts are entered in human units (default `1.0`); submit still posts atoms
+4. Mint polls `GET /v1/quote/issue`; redeem polls `GET /v1/quote/redeem` (both pass `user=` when connected for `accessAllowed`)
+5. Banners cover pause, mint-authority transfer, and allowlist-only wrap/unwrap
+6. Redeem shows a prominent discount line (burn FLRN → receive collateral, haircut as percent)
+7. Frontend calls backend `POST /v1/tx/issue` or `POST /v1/tx/redeem` (no `x-solana-network`)
+8. Mint disabled when paused, mint authority transferred, `!mintAllowed`, `!canMint`, or `accessAllowed === false`; redeem disabled when `!canRedeem` or `!accessAllowed`
+9. Deserializes `transactionB64` to `VersionedTransaction`
+10. Signs and sends via wallet; simulate buttons call `/v1/tx/preview` path via local simulation
 
 API client: `frontend/src/lib/api.ts` (uses bootstrap services).
 
@@ -86,3 +88,7 @@ pnpm run dev
 - `SolanaWalletProviders` (public only) — `ConnectionProvider` + Wallet Standard `WalletProvider`
 - `AppShell` / `AppHeader` — sticky navbar (read-only deployment chip)
 - `providers.tsx` — theme, snackbar, bootstrap
+
+## Design language
+
+Both Next.js apps follow the live **florence-app** editorial look (white paper, Florentine red `#C2192B`, civic blue `#4A90B8`, 1px corners, EB Garamond / Inter / DM Mono). Tokens and MUI theme live in `frontend/src/theme/` and `admin-frontend/src/theme/`. The Florentine lily is served from each app’s `public/florentine-lily.png`. Backend Swagger UI at `/doc` uses the same palette. Appearance is frontend-static — `/v1/client-config` does not carry theme fields.

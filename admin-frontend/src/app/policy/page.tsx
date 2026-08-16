@@ -6,6 +6,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AssetPolicyTable from "@/components/AssetPolicyTable";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
+import VaultControlsPanel from "@/components/VaultControlsPanel";
 import { wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useVaultStore } from "@/stores/vaultStore";
@@ -34,6 +35,7 @@ export default function PolicyPage() {
           </Typography>
         </Box>
       )}
+      <VaultControlsPanel />
       <AssetPolicyTable />
       {summary && summary.assets.length > 0 && (
         <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, pb: 5 }}>

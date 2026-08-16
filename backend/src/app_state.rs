@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -11,6 +12,7 @@ use solana_sdk::signature::Keypair;
 use crate::admin_wallet::load_keypair_arc;
 use crate::config::env::{env_for_network_required, env_opt, env_required};
 use crate::config::PublicClientConfig;
+use crate::wrap_stablecoin::load_klend_scope_prices_from_env;
 
 /// Solana cluster this API deployment serves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -87,12 +89,11 @@ impl NetworkContext {
 
 /// Shared application state. One Solana network per deployment.
 pub struct AppState {
-    pub http: reqwest::Client,
-    pub jupiter_swap_api_base: String,
-    pub jupiter_quote_api_base: String,
     pub primary_solana_network: SolanaNetwork,
     pub network: NetworkContext,
     pub public_client_config: Arc<PublicClientConfig>,
+    /// KLend reserve pubkey → Scope oracle, used for `refresh_reserve`.
+    pub klend_scope_prices: HashMap<Pubkey, Pubkey>,
 }
 
 impl AppState {
@@ -123,23 +124,11 @@ impl AppState {
             &ctx.default_asset_mint,
         )?);
 
-        let jupiter_quote_api_base = std::env::var("JUPITER_QUOTE_API_BASE")
-            .unwrap_or_else(|_| "https://quote-api.jup.ag/v6".to_string());
-        let jupiter_swap_api_base = std::env::var("JUPITER_SWAP_API_BASE")
-            .unwrap_or_else(|_| "https://quote-api.jup.ag/v6".to_string());
-
-        let http = reqwest::Client::builder()
-            .user_agent("wrap-stablecoin-api/0.1")
-            .build()
-            .expect("reqwest client");
-
         Ok(Self {
-            http,
-            jupiter_swap_api_base,
-            jupiter_quote_api_base,
             primary_solana_network: network,
             network: ctx,
             public_client_config,
+            klend_scope_prices: load_klend_scope_prices_from_env(),
         })
     }
 

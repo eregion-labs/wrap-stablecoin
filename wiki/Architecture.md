@@ -14,8 +14,7 @@ flowchart TB
     subgraph API["Backend (Axum)"]
         Issue["/v1/tx/issue"]
         Redeem["/v1/tx/redeem"]
-        Compose["/v1/tx/compose"]
-        Jupiter[Jupiter quotes/swaps]
+        Admin["/v1/admin/*"]
     end
 
     subgraph Chain["On-chain (wrap_stablecoin)"]
@@ -23,17 +22,17 @@ flowchart TB
         KLend[deposit / withdraw / harvest]
     end
 
-    Panel --> Issue & Redeem & Compose
-    Compose --> Jupiter
-    Issue & Redeem & Compose -->|unsigned tx| Wallet
+    Panel --> Issue & Redeem
+    Issue & Redeem -->|unsigned tx| Wallet
     Wallet -->|sign + submit| Chain
+    Admin -->|server-signed| Chain
     Wrap --> KLend
 ```
 
 | Layer | Location | Role |
 |-------|----------|------|
 | **On-chain** | `wrap-stablecoin/programs/wrap-stablecoin/` | Mint/burn Florin (FLRN), hold collateral, CPI into Kamino KLend |
-| **Backend** | `backend/` | Build unsigned Solana txs; optionally bundle Jupiter swaps |
+| **Backend** | `backend/` | Build unsigned wrap/unwrap txs; execute admin vault and KLend ops |
 | **Frontend** | `frontend/` | Wallet connect, call API, sign and send txs |
 
 Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
@@ -54,11 +53,11 @@ Flash mint (same-transaction Florin (FLRN) borrow) is **not compiled into the sh
 
 ### 1. Composability over isolation
 
-The on-chain program is intentionally thin. KLend handles lending; the backend routes non-USDC inputs through Jupiter and bundles them with `wrap` / `unwrap` into a single user-signed transaction. The on-chain program never CPIs into Jupiter.
+The on-chain program is intentionally thin. KLend handles lending. Users wrap and unwrap **registered collateral** directly (USDC, USDT, and other USD stables the admin has `add_asset`'d). Each pool has its own vault and liability.
 
 ### 2. Multi-asset collateral, single Florin (FLRN) mint
 
-Each registered asset has its own `AssetConfig`, vaults, and optional KLend wiring. Florin (FLRN) supply tracks aggregate user liability across assets. Off-chain swap aggregation (Jupiter) lets users enter/exit via tokens other than the backing asset.
+Each registered asset has its own `AssetConfig`, vaults, and optional KLend wiring. Florin (FLRN) supply tracks aggregate user liability across assets. Users pick a collateral pool in the UI and wrap/unwrap that mint 1:1 (subject to haircuts and caps).
 
 ### 3. Authority-centric configuration with rotatable admin
 
@@ -69,7 +68,7 @@ Each vault is keyed by an immutable **authority** (the PDA-seed creator). A sepa
 - **CPI-as-oracle harvest** — `harvest_yield` derives the kToken→collateral rate from the redeem CPI itself.
 - **Pinned KLend accounts** — reserve and market accounts bound at `enable_klend`.
 - **Allowlist PDA validation** — `check_access` re-derives the allowlist address from `(vault_config, bump)`.
-- **Pause** — emergency stop covers wrap, unwrap, KLend ops, and harvest.
+- **Pause** — emergency stop covers wrap, unwrap, Kamino deposit, and harvest. Recall, sweep, and treasury withdrawal remain available.
 
 ### 5. Yield to treasury, not to wrapped supply
 
@@ -112,7 +111,7 @@ flowchart LR
     Program -. updates .-> Totals[total_stable_deposited / asset totals]
 ```
 
-Wrap snapshots vault balance before and after transfer, then mints Florin (FLRN) on the **delta received**.
+Wrap snapshots vault balance before and after transfer, then mints Florin (FLRN) on the **delta received**. Florin is classic SPL Token; collateral may be SPL or Token-2022 with an empty extension set.
 
 ### Unwrap
 
@@ -124,21 +123,6 @@ flowchart LR
 ```
 
 Unwrap requires `token_vault` to hold enough free collateral. If too much sits in KLend, admin calls `withdraw_from_klend` first.
-
-### Off-chain multi-token wrap (backend `/v1/tx/compose`)
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant BE as Backend
-    participant J as Jupiter
-    participant P as Program
-    U->>BE: wrap from non-backing token
-    BE->>J: Quote swap to backing asset
-    BE-->>U: Unsigned tx [Jupiter swap, wrap]
-    U->>P: Sign + submit single tx
-    P-->>U: Collateral swapped, Florin (FLRN) minted
-```
 
 ### Admin liquidity flow
 
@@ -166,7 +150,7 @@ flowchart TB
 
 **User-facing:** `wrap`, `unwrap`
 
-**Admin liquidity:** `deposit_to_klend`, `withdraw_from_klend`, `harvest_yield`, `withdraw_treasury`
+**Admin liquidity:** `deposit_to_klend`, `deposit_all_to_klend`, `withdraw_from_klend`, `withdraw_all_from_klend`, `harvest_yield`, `sweep_home_surplus`, `withdraw_treasury`
 
 **Admin policy:** pause, public wrap/unwrap toggles, allowlist, two-step admin transfer
 
@@ -177,8 +161,7 @@ flowchart TB
 | Dependency | Role |
 |------------|------|
 | **KLend** | Lending via CPI |
-| **SPL Token / Token-22** | Mint, transfer_checked, burn |
-| **Jupiter** *(backend)* | Off-chain swaps via `/v1/tx/compose` |
+| **SPL Token / Token-22** | Florin mint/burn is classic SPL; collateral transfer may be SPL or Token-2022 with no extensions |
 
 ---
 
@@ -214,5 +197,5 @@ Olympus Complex is a **multi-asset collateral wrapper** that:
 1. Mints Florin (FLRN) 1:1 against registered assets and routes principal to KLend when enabled.
 2. Sends lending yield to per-asset treasury vaults; Florin (FLRN) supply stays at par.
 3. Separates immutable `authority` from rotatable `admin`.
-4. Defers swap aggregation to the backend Jupiter bundler.
+4. Accepts multiple registered USD collaterals via per-pool `wrap` / `unwrap`.
 5. Ships without flash mint; experimental flash code remains behind the `flash-mint` Cargo feature.

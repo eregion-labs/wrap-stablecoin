@@ -89,7 +89,6 @@ pub struct PublicFeaturesConfig {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicCapabilities {
-    pub jupiter_compose: bool,
     pub admin_dashboard: bool,
 }
 
@@ -136,9 +135,6 @@ impl PublicClientConfig {
             .unwrap_or_else(|| "https://solscan.io".to_string());
         validate_url(&explorer_base_url, "EXPLORER_BASE_URL")?;
 
-        let jupiter_compose = env_opt("CAPABILITY_JUPITER_COMPOSE")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(true);
         let admin_dashboard = env_opt("CAPABILITY_ADMIN_DASHBOARD")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(true);
@@ -160,7 +156,6 @@ impl PublicClientConfig {
             },
             features: PublicFeaturesConfig {
                 capabilities: PublicCapabilities {
-                    jupiter_compose,
                     admin_dashboard,
                 },
             },
@@ -233,7 +228,6 @@ mod tests {
             "ADMIN_DASHBOARD_URL",
             "PUBLIC_APP_URL",
             "EXPLORER_BASE_URL",
-            "CAPABILITY_JUPITER_COMPOSE",
             "CAPABILITY_ADMIN_DASHBOARD",
         ] {
             unsafe { std::env::remove_var(key) };

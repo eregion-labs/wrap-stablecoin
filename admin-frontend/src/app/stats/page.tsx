@@ -6,7 +6,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
+import PageHeading from "@/components/layout/PageHeading";
 import TokenHoldersPieChart from "@/components/TokenHoldersPieChart";
 import TokenMetadataCard from "@/components/TokenMetadataCard";
 import { selectVaultLoading } from "@/stores/selectors";
@@ -56,14 +56,11 @@ export default function TokenStatsPage() {
           alignItems="flex-start"
           sx={{ mb: 4, gap: 2 }}
         >
-          <Box>
-            <Typography variant="h5" gutterBottom>
-              {adminCopy.tokenStatsPageTitle}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520 }}>
-              {adminCopy.tokenStatsPageDescription(wrappedName, wrappedSymbol)}
-            </Typography>
-          </Box>
+          <PageHeading
+            label={adminCopy.tokenStatsSubtitle}
+            title={adminCopy.tokenStatsPageTitle}
+            description={adminCopy.tokenStatsPageDescription(wrappedName, wrappedSymbol)}
+          />
           <Stack direction="row" spacing={1}>
             <Button
               size="small"

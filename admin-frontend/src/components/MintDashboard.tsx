@@ -12,9 +12,10 @@ import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useSnackbar } from "notistack";
+import PageHeading from "@/components/layout/PageHeading";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
-import { cardSx } from "@/theme/tokens";
+import { actionCardSx } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultAsset, selectVaultLoading } from "@/stores/selectors";
@@ -81,18 +82,17 @@ export default function MintDashboard() {
     <Box sx={{ maxWidth: 960, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4, gap: 2 }}>
         <Box>
-          <Typography variant="h5" gutterBottom>
-            {adminCopy.treasuryPageTitle}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 520 }}>
-            {adminCopy.treasuryPageDescription(wrappedName, wrappedSymbol)}
-          </Typography>
+          <PageHeading
+            label={adminCopy.officeTitle}
+            title={adminCopy.treasuryPageTitle}
+            description={adminCopy.treasuryPageDescription(wrappedName, wrappedSymbol)}
+          />
           {summary?.admin && (
             <Typography
               variant="caption"
               color="text.secondary"
               display="block"
-              sx={{ mt: 1, fontFamily: "monospace" }}
+              sx={{ mt: 1, fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
             >
               {adminCopy.treasurySigner}: {summary.admin}
             </Typography>
@@ -137,15 +137,15 @@ export default function MintDashboard() {
           )}
         </TextField>
 
-        <Box sx={{ ...cardSx, mb: 0 }}>
+        <Box sx={{ ...actionCardSx, mb: 0 }}>
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
             aria-label="Mint or redeem Florin"
             sx={{ mb: 2, minHeight: 40 }}
           >
-            <Tab label={adminCopy.tabMint} sx={{ textTransform: "none", fontWeight: 600 }} />
-            <Tab label={adminCopy.tabRedeem} sx={{ textTransform: "none", fontWeight: 600 }} />
+            <Tab label={adminCopy.tabMint} />
+            <Tab label={adminCopy.tabRedeem} />
           </Tabs>
 
           {tab === 0 && (

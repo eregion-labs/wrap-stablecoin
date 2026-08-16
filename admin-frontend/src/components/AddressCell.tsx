@@ -46,7 +46,7 @@ export default function AddressCell({ address, type = "account" }: Props) {
           rel="noopener noreferrer"
           underline="hover"
           sx={{
-            fontFamily: "monospace",
+            fontFamily: 'var(--font-dm-mono), "DM Mono", monospace',
             fontSize: "0.875rem",
             wordBreak: "break-all",
           }}
@@ -56,7 +56,7 @@ export default function AddressCell({ address, type = "account" }: Props) {
       ) : (
         <Typography
           component="span"
-          sx={{ fontFamily: "monospace", fontSize: "0.875rem", wordBreak: "break-all" }}
+          sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', fontSize: "0.875rem", wordBreak: "break-all" }}
         >
           {label}
         </Typography>

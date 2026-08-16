@@ -54,7 +54,7 @@ Boot: `.env` → optional AWS Secrets Manager (`SECRET_NAME`) fill-missing-only 
 
 - **Swagger UI:** [http://127.0.0.1:8080/doc](http://127.0.0.1:8080/doc) (default port `8080`, override with `BIND_PORT`).
 - **Bootstrap:** `GET /v1/client-config` — public deployment config for frontends.
-- **Endpoints:** `GET /ping`, `POST /v1/tx/issue`, `POST /v1/tx/redeem`, `POST /v1/tx/preview`, `POST /v1/tx/compose` (Jupiter + wrap/unwrap; see OpenAPI).
+- **Endpoints:** `GET /ping`, `POST /v1/tx/issue`, `POST /v1/tx/redeem`, `POST /v1/tx/preview`, `POST /v1/admin/*` (see OpenAPI).
 
 ## Frontend (Next.js 16 + MUI + Solana wallet adapter)
 

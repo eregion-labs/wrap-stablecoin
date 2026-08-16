@@ -1,59 +1,76 @@
-/** Florin design language — Renaissance merchant-republic palette. */
+/** Florin design language — Florence editorial (live florence-app). */
 
-export const ivory = "#F7F3EB";
-export const parchment = "#EFE6D2";
-export const marble = "#E4DED3";
-export const stone = "#B8B1A4";
+export const paper = "#FFFFFF";
+export const offWhite = "#F7F6F4";
+export const mutedWash = "#F0EFED";
+export const hairline = "#DEDEDE";
 
-export const florinGold = "#C6A44A";
-export const republicBronze = "#8A6742";
-export const merchantCopper = "#A86B3D";
+export const florentineRed = "#C2192B";
+export const civicBlue = "#4A90B8";
+export const accentBrown = "#8A5E3A";
 
-export const ledgerInk = "#202020";
-export const textMuted = "#5C574E";
-export const textDisabled = "#9A9488";
+export const ledgerInk = "#0E0E0E";
+export const textMuted = "#6B6B6B";
+export const textDisabled = "#AFAFAF";
 
-export const venetianGreen = "#21594D";
-export const florentineRed = "#873A35";
-export const deepIndigo = "#29344B";
-
-export const border = `1px solid ${republicBronze}`;
-export const borderSubtle = `1px solid ${stone}`;
-
-export const colorSuccess = venetianGreen;
-export const colorWarning = merchantCopper;
+export const colorSuccess = "#2E9E5B";
+export const colorWarning = accentBrown;
 export const colorError = florentineRed;
-export const colorInfo = deepIndigo;
+export const colorInfo = civicBlue;
 
-export const cardShadow = "0 2px 12px rgba(32, 32, 32, 0.08)";
-export const focusRing = `0 0 0 2px ${florinGold}55`;
+export const border = `1px solid ${hairline}`;
+export const borderSubtle = `1px solid ${hairline}`;
 
-export const gradientBg = `
-  linear-gradient(180deg, ${ivory} 0%, ${parchment} 100%)
-`;
+export const cardShadow = "none";
+export const focusRing = `0 0 0 2px ${florentineRed}33`;
 
-/** Marble slab card — no glassmorphism. */
+export const gradientBg = paper;
+
+/** Hairline paper card — no shadow, 1px corners. */
 export const cardSx = {
   p: 2,
   mb: 3,
-  borderRadius: "10px",
-  bgcolor: marble,
-  border: border,
-  boxShadow: cardShadow,
+  borderRadius: "1px",
+  bgcolor: paper,
+  border,
+  boxShadow: "none",
   overflowX: "auto",
+};
+
+/** Mint / redeem action card — 3px Florentine red top bar. */
+export const actionCardSx = {
+  ...cardSx,
+  borderTop: `3px solid ${florentineRed}`,
+};
+
+export const sectionLabelSx = {
+  fontFamily: 'var(--font-inter), system-ui, sans-serif',
+  fontSize: "10px",
+  letterSpacing: "0.22em",
+  color: florentineRed,
+  textTransform: "uppercase" as const,
+  mb: "10px",
+};
+
+export const redRuleSx = {
+  height: "1px",
+  bgcolor: florentineRed,
+  width: "100%",
+  mb: 2,
 };
 
 /** CSS custom properties mirrored in florin-globals.css */
 export const cssVars = {
-  "--florin-ivory": ivory,
-  "--florin-parchment": parchment,
-  "--florin-marble": marble,
-  "--florin-stone": stone,
-  "--florin-gold": florinGold,
-  "--florin-bronze": republicBronze,
+  "--florin-paper": paper,
+  "--florin-offwhite": offWhite,
+  "--florin-muted": mutedWash,
+  "--florin-hairline": hairline,
+  "--florin-red": florentineRed,
+  "--florin-blue": civicBlue,
+  "--florin-brown": accentBrown,
   "--florin-ink": ledgerInk,
   "--florin-text-muted": textMuted,
-  "--florin-border": republicBronze,
-  "--background": ivory,
+  "--florin-border": hairline,
+  "--background": paper,
   "--foreground": ledgerInk,
 } as const;

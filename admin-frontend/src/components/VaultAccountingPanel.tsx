@@ -24,7 +24,7 @@ type Props = {
 
 function AmountCell({ amount, decimals }: { amount: number; decimals: number }) {
   return (
-    <TableCell align="right" sx={{ fontFamily: "monospace", whiteSpace: "nowrap" }}>
+    <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', whiteSpace: "nowrap" }}>
       {formatTokenAmount(amount, decimals)}
     </TableCell>
   );
@@ -49,15 +49,17 @@ function AssetRow({
         </Stack>
       </TableCell>
       <AmountCell amount={asset.freeLiquidity} decimals={d} />
+      <AmountCell amount={asset.cushion} decimals={d} />
       <AmountCell amount={asset.deployedToKamino} decimals={d} />
+      <AmountCell amount={asset.backing} decimals={d} />
       <AmountCell amount={asset.treasuryBalance} decimals={d} />
       <AmountCell amount={asset.kaminoSurplus} decimals={d} />
-      <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+      <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
         {formatTokenAmount(asset.liability, wrappedDecimals)}
       </TableCell>
       <AmountCell amount={asset.liabilityUnderlying} decimals={d} />
       <AmountCell amount={asset.homeSurplus} decimals={d} />
-      <TableCell align="right" sx={{ fontFamily: "monospace" }}>
+      <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
         {formatTokenAmount(asset.maxRedeemable, wrappedDecimals)}
       </TableCell>
     </TableRow>
@@ -86,7 +88,9 @@ export default function VaultAccountingPanel({
           <TableRow>
             <TableCell>Asset</TableCell>
             <TableCell align="right">Home vault</TableCell>
+            <TableCell align="right">Cushion</TableCell>
             <TableCell align="right">In Kamino</TableCell>
+            <TableCell align="right">Backing</TableCell>
             <TableCell align="right">Treasury</TableCell>
             <TableCell align="right">Kamino surplus</TableCell>
             <TableCell align="right">Liability ({wrappedSymbol})</TableCell>

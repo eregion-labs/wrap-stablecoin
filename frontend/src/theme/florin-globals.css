@@ -1,29 +1,28 @@
 :root {
-  --florin-ivory: #F7F3EB;
-  --florin-parchment: #EFE6D2;
-  --florin-marble: #E4DED3;
-  --florin-stone: #B8B1A4;
-  --florin-gold: #C6A44A;
-  --florin-bronze: #8A6742;
-  --florin-ink: #202020;
-  --florin-text-muted: #5C574E;
-  --florin-border: #8A6742;
-  --background: var(--florin-ivory);
+  --florin-paper: #FFFFFF;
+  --florin-offwhite: #F7F6F4;
+  --florin-muted: #F0EFED;
+  --florin-hairline: #DEDEDE;
+  --florin-red: #C2192B;
+  --florin-blue: #4A90B8;
+  --florin-brown: #8A5E3A;
+  --florin-ink: #0E0E0E;
+  --florin-text-muted: #6B6B6B;
+  --florin-border: #DEDEDE;
+  --background: var(--florin-paper);
   --foreground: var(--florin-ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-serif: var(--font-cormorant);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-eb-garamond);
+  --font-mono: var(--font-dm-mono);
 }
 
 body {
-  background:
-    linear-gradient(180deg, var(--florin-ivory) 0%, var(--florin-parchment) 100%);
-  background-attachment: fixed;
+  background: var(--florin-paper);
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }

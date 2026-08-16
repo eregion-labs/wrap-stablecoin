@@ -98,7 +98,7 @@ export default function WalletNavButton() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={wallet.adapter.icon} alt="" width={20} height={20} style={{ borderRadius: 4 }} />
           )}
-          <Typography component="span" variant="body2" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
+          <Typography component="span" variant="body2" sx={{ fontWeight: 600, fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
             {truncateAddress(address)}
           </Typography>
         </Box>
@@ -126,7 +126,7 @@ export default function WalletNavButton() {
           </Typography>
           <Typography
             variant="body2"
-            sx={{ fontFamily: "monospace", wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
+            sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
           >
             {address}
           </Typography>

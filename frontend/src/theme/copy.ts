@@ -2,7 +2,7 @@
 export const publicCopy = {
   pageTitle: "Mint & redeem",
   pageDescription:
-    "Issue Florin against registered reserve collateral or redeem Florin for underlying. Amounts are in smallest on-chain units.",
+    "Issue Florin against registered reserve collateral or redeem Florin for underlying.",
   tabMint: "Mint Florin",
   tabRedeem: "Redeem Florin",
   holdings: "Holdings",
@@ -15,10 +15,20 @@ export const publicCopy = {
   disconnect: "Disconnect",
   reserveCollateral: "Reserve collateral",
   refreshLedger: "Refresh ledger",
-  collateralAmount: "Collateral amount (base units)",
+  collateralAmount: "Collateral amount",
+  humanAmountHint: "Enter a human amount (e.g. 1.0), not base units.",
   redeemAmount: (symbol: string) => `${symbol} amount to redeem`,
   signAndSend: "Sign & send",
   simulate: "Simulate",
   signing: "Signing…",
   headerTagline: "Mint & redeem",
+  pausedAlert: "Vault is paused. Mint and redeem are blocked until an operator clears pause.",
+  mintAuthorityTransferredAlert:
+    "Mint authority has been transferred. Wrap is permanently disabled; redeem still follows pool policy.",
+  wrapPrivateAlert: "Mint is allowlist-only. Your connected wallet is not on the list.",
+  unwrapPrivateAlert: "Redeem is allowlist-only. Your connected wallet is not on the list.",
+  wrapPrivateListed: "Mint is allowlist-only. Your wallet is listed.",
+  unwrapPrivateListed: "Redeem is allowlist-only. Your wallet is listed.",
+  wrapPrivateDisconnected: "Mint is allowlist-only. Connect a listed wallet to mint.",
+  unwrapPrivateDisconnected: "Redeem is allowlist-only. Connect a listed wallet to redeem.",
 } as const;

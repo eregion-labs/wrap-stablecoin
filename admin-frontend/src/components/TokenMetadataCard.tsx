@@ -67,7 +67,7 @@ export default function TokenMetadataCard({
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
                 {adminCopy.decimals}
               </Typography>
-              <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+              <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
                 {wrappedDecimals}
               </Typography>
             </Stack>

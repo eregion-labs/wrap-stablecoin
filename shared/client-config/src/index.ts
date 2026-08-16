@@ -17,7 +17,6 @@ export const ClientConfigSchema = z.object({
   }),
   features: z.object({
     capabilities: z.object({
-      jupiterCompose: z.boolean(),
       adminDashboard: z.boolean(),
     }),
   }),
