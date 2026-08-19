@@ -166,4 +166,12 @@ pub enum ErrorCode {
 
     #[msg("Collateral mint must be classic SPL Token or Token-2022 with no extensions")]
     UnsupportedTokenExtension,
+
+    // Append new variants here only. Anchor assigns codes by declaration order, so
+    // inserting mid-enum renumbers every later variant and breaks deployed clients.
+    #[msg("KLend Reserve liquidity supply vault does not match the supplied account")]
+    KlendReserveSupplyMismatch,
+
+    #[msg("KLend Reserve collateral mint does not match the supplied account")]
+    KlendReserveCollateralMintMismatch,
 }

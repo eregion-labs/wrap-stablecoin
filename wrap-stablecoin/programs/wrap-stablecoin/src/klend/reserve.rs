@@ -15,11 +15,39 @@ pub const RESERVE_VERSION: u64 = 1;
 
 const VERSION_OFFSET: usize = 8;
 const LENDING_MARKET_OFFSET: usize = 32;
+/// `Reserve.liquidity.mint_pubkey`
 const LIQUIDITY_MINT_OFFSET: usize = 128;
-const MIN_RESERVE_LEN: usize = LIQUIDITY_MINT_OFFSET + 32;
+/// `Reserve.liquidity.supply_vault`
+const LIQUIDITY_SUPPLY_VAULT_OFFSET: usize = 160;
+/// `Reserve.collateral.mint_pubkey` (kToken)
+const COLLATERAL_MINT_OFFSET: usize = 2560;
+const MIN_RESERVE_LEN: usize = COLLATERAL_MINT_OFFSET + 32;
 
-pub fn parse_reserve_market_and_mint(data: &[u8]) -> Result<(Pubkey, Pubkey)> {
-    require!(data.len() >= MIN_RESERVE_LEN, ErrorCode::InvalidKlendReserve);
+/// The `Reserve` fields this program pins at `enable_klend`.
+///
+/// Read from the account rather than re-derived: KLend seeds these sub-accounts on
+/// `(lending_market, liquidity_mint)`, not on the reserve, and a reserve is not
+/// obliged to have been created that way. The stored fields are what KLend itself
+/// enforces on every deposit/redeem, so they are the authoritative source.
+pub struct ReserveView {
+    pub lending_market: Pubkey,
+    pub liquidity_mint: Pubkey,
+    pub liquidity_supply_vault: Pubkey,
+    pub collateral_mint: Pubkey,
+}
+
+fn read_pubkey(data: &[u8], offset: usize) -> Result<Pubkey> {
+    let bytes: [u8; 32] = data[offset..offset + 32]
+        .try_into()
+        .map_err(|_| error!(ErrorCode::InvalidKlendReserve))?;
+    Ok(Pubkey::from(bytes))
+}
+
+pub fn parse_reserve(data: &[u8]) -> Result<ReserveView> {
+    require!(
+        data.len() >= MIN_RESERVE_LEN,
+        ErrorCode::InvalidKlendReserve
+    );
     require!(
         data[..8] == RESERVE_DISCRIMINATOR,
         ErrorCode::InvalidKlendReserve
@@ -30,13 +58,13 @@ pub fn parse_reserve_market_and_mint(data: &[u8]) -> Result<(Pubkey, Pubkey)> {
             .map_err(|_| error!(ErrorCode::InvalidKlendReserve))?,
     );
     require!(version == RESERVE_VERSION, ErrorCode::InvalidKlendReserve);
-    let market_bytes: [u8; 32] = data[LENDING_MARKET_OFFSET..LENDING_MARKET_OFFSET + 32]
-        .try_into()
-        .map_err(|_| error!(ErrorCode::InvalidKlendReserve))?;
-    let mint_bytes: [u8; 32] = data[LIQUIDITY_MINT_OFFSET..LIQUIDITY_MINT_OFFSET + 32]
-        .try_into()
-        .map_err(|_| error!(ErrorCode::InvalidKlendReserve))?;
-    Ok((Pubkey::from(market_bytes), Pubkey::from(mint_bytes)))
+
+    Ok(ReserveView {
+        lending_market: read_pubkey(data, LENDING_MARKET_OFFSET)?,
+        liquidity_mint: read_pubkey(data, LIQUIDITY_MINT_OFFSET)?,
+        liquidity_supply_vault: read_pubkey(data, LIQUIDITY_SUPPLY_VAULT_OFFSET)?,
+        collateral_mint: read_pubkey(data, COLLATERAL_MINT_OFFSET)?,
+    })
 }
 
 #[cfg(test)]
@@ -44,8 +72,7 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    #[test]
-    fn fixture_reserve_market_and_mint() {
+    fn fixture() -> Vec<u8> {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../fixtures/klend/reserve.json"
@@ -56,16 +83,48 @@ mod tests {
             .nth(1)
             .and_then(|s| s.split('"').nth(1))
             .expect("base64 data field");
-        let data = base64_decode(data_b64);
-        let (market, mint) = parse_reserve_market_and_mint(&data).unwrap();
+        base64_decode(data_b64)
+    }
+
+    #[test]
+    fn fixture_reserve_fields() {
+        let view = parse_reserve(&fixture()).unwrap();
         assert_eq!(
-            market,
+            view.lending_market,
             Pubkey::from_str("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF").unwrap()
         );
         assert_eq!(
-            mint,
+            view.liquidity_mint,
             Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap()
         );
+        assert_eq!(
+            view.liquidity_supply_vault,
+            Pubkey::from_str("Bgq7trRgVMeq33yt235zM2onQ4bRDBsY5EWiTetF4qw6").unwrap()
+        );
+        assert_eq!(
+            view.collateral_mint,
+            Pubkey::from_str("B8V6WVjPxW1UGwVDfxH2d2r8SyT4cqn7dQRK6XneVa7D").unwrap()
+        );
+    }
+
+    #[test]
+    fn rejects_truncated_reserve() {
+        let data = fixture();
+        assert!(parse_reserve(&data[..MIN_RESERVE_LEN - 1]).is_err());
+    }
+
+    #[test]
+    fn rejects_wrong_discriminator() {
+        let mut data = fixture();
+        data[0] ^= 0xff;
+        assert!(parse_reserve(&data).is_err());
+    }
+
+    #[test]
+    fn rejects_wrong_version() {
+        let mut data = fixture();
+        data[VERSION_OFFSET] = 9;
+        assert!(parse_reserve(&data).is_err());
     }
 
     fn base64_decode(s: &str) -> Vec<u8> {
