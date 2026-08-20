@@ -30,7 +30,9 @@ async fn main() -> anyhow::Result<()> {
     );
     let app = app(state);
 
-    let host = std::env::var("BIND_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    // Loopback by default: this process holds the vault admin key. Binding every interface is
+    // an explicit choice (containers, LAN testing), made by setting BIND_HOST=0.0.0.0.
+    let host = std::env::var("BIND_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port: u16 = std::env::var("BIND_PORT")
         .ok()
         .and_then(|s| s.parse().ok())

@@ -7,6 +7,7 @@
  * (e.g. ADMIN_KEYPAIR_PATH, SECRET_NAME).
  */
 
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -137,7 +138,16 @@ export function syncLocalEnv(dep: LocalnetDeployment): void {
       ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json",
     );
   }
-  if (!existing.has("BIND_HOST")) existing.set("BIND_HOST", "0.0.0.0");
+  // The backend refuses to boot with an admin signer and no bearer token, so mint a random
+  // one for localnet. Generated per machine and preserved across regenerations; never
+  // reuse a localnet token in a deployed environment.
+  if (!existing.has("ADMIN_API_TOKEN") || !existing.get("ADMIN_API_TOKEN")) {
+    existing.set("ADMIN_API_TOKEN", crypto.randomBytes(32).toString("base64url"));
+  }
+  const adminApiToken = existing.get("ADMIN_API_TOKEN") as string;
+  // Loopback: the local backend holds the localnet admin key. Set BIND_HOST=0.0.0.0 by hand
+  // to reach it from another device.
+  if (!existing.has("BIND_HOST")) existing.set("BIND_HOST", "127.0.0.1");
   if (!existing.has("BIND_PORT")) existing.set("BIND_PORT", "8080");
 
   const backendBody = formatEnvFile(
@@ -153,8 +163,11 @@ export function syncLocalEnv(dep: LocalnetDeployment): void {
     `NEXT_PUBLIC_BACKEND_URL=${dep.backendUrl}\n`;
   fs.mkdirSync(path.dirname(FRONTEND_ENV_LOCAL), { recursive: true });
   fs.writeFileSync(FRONTEND_ENV_LOCAL, frontendBody);
+
+  // The admin console additionally carries the bearer token for /v1/admin/*.
+  const adminBody = frontendBody + `NEXT_PUBLIC_ADMIN_API_TOKEN=${adminApiToken}\n`;
   fs.mkdirSync(path.dirname(ADMIN_ENV_LOCAL), { recursive: true });
-  fs.writeFileSync(ADMIN_ENV_LOCAL, frontendBody);
+  fs.writeFileSync(ADMIN_ENV_LOCAL, adminBody);
 
   console.log("");
   console.log("─── Env files synced ───");

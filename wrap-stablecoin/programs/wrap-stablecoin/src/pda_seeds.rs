@@ -48,16 +48,24 @@ pub const FLASH_LOAN_SEED: &[u8] = b"flash_loan";
 /// Lending market authority. Seeds: `["lma", lending_market]` under KLend program id.
 pub const KLEND_LENDING_MARKET_AUTH_SEED: &[u8] = b"lma";
 
-/// Reserve liquidity supply. Seeds: `["reserve_liq_supply", reserve]`.
+// KLend seeds its reserve sub-accounts on `(lending_market, liquidity_mint)` — NOT on the
+// reserve address. Verified against the pinned mainnet fixture; the seed prefix below is the
+// first element, followed by `lending_market` then `liquidity_mint`.
+//
+// A reserve is not obliged to have been created this way, so `enable_klend` reads the supply
+// vault and collateral mint out of the Reserve account (see `klend::parse_reserve`) instead of
+// re-deriving them. These constants exist for off-chain/test reserve setup only.
+
+/// Reserve liquidity supply. Seeds: `["reserve_liq_supply", lending_market, liquidity_mint]`.
 pub const KLEND_RESERVE_LIQ_SUPPLY_SEED: &[u8] = b"reserve_liq_supply";
 
-/// Reserve fee receiver. Seeds: `["fee_receiver", reserve]`.
+/// Reserve fee receiver. Seeds: `["fee_receiver", lending_market, liquidity_mint]`.
 pub const KLEND_FEE_RECEIVER_SEED: &[u8] = b"fee_receiver";
 
-/// Reserve collateral mint (kToken). Seeds: `["reserve_coll_mint", reserve]`.
+/// Reserve collateral mint (kToken). Seeds: `["reserve_coll_mint", lending_market, liquidity_mint]`.
 pub const KLEND_RESERVE_COLL_MINT_SEED: &[u8] = b"reserve_coll_mint";
 
-/// Reserve collateral supply. Seeds: `["reserve_coll_supply", reserve]`.
+/// Reserve collateral supply. Seeds: `["reserve_coll_supply", lending_market, liquidity_mint]`.
 pub const KLEND_RESERVE_COLL_SUPPLY_SEED: &[u8] = b"reserve_coll_supply";
 
 /// KLend global config. Seeds: `["global_config"]`.

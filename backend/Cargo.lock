@@ -7045,6 +7045,7 @@ dependencies = [
  "solana-sdk",
  "spl-associated-token-account",
  "spl-token",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tower",

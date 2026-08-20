@@ -107,7 +107,10 @@ Mint-authority accept requires typing `DISABLE WRAP` in the UI. Remaining accoun
 | Sweep home surplus | `POST /v1/admin/sweep-home-surplus` |
 | Withdraw treasury | `POST /v1/admin/withdraw-treasury` |
 
-Server-signed routes require `ADMIN_KEYPAIR_PATH` on the backend.
+Server-signed routes require `ADMIN_KEYPAIR_PATH` **and** `ADMIN_API_TOKEN` on the backend, and
+each call must send `Authorization: Bearer <ADMIN_API_TOKEN>` (401 without it). The backend
+refuses to start with a keypair configured but no token. See
+[Backend-API](Backend-API.md) for the full contract.
 
 ## Related
 

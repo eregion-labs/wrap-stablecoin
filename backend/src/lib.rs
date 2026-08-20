@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use axum::http::{header, Method};
 use axum::middleware;
 use axum::routing::post;
 use axum::Router;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
@@ -118,7 +119,14 @@ use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
 struct ApiDoc;
 
 pub fn app(state: Arc<AppState>) -> Router {
-    let cors = CorsLayer::very_permissive();
+    // Exact-origin allowlist, not a wildcard: `/v1/admin/*` signs with the vault admin key,
+    // and a permissive policy would let any page a browser visits drive a backend bound to
+    // localhost or a private network. `Authorization` must be allowed for the admin console's
+    // bearer token to survive preflight.
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::list(state.allowed_origins.clone()))
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
 
     // Guarded routes: optional `x-solana-network` must match primary (or omit header).
     let tx_router: Router<Arc<AppState>> = Router::new()
@@ -126,7 +134,10 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/redeem", post(tx::redeem_tx))
         .route("/preview", post(tx::preview_tx))
         .route("/admin/add-asset", post(admin::add_asset_tx))
-        .route("/admin/update-asset-policy", post(admin::update_asset_policy_tx))
+        .route(
+            "/admin/update-asset-policy",
+            post(admin::update_asset_policy_tx),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             guard::network_guard,
@@ -138,9 +149,15 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/mint", post(admin_ops::admin_mint))
         .route("/redeem", post(admin_ops::admin_redeem))
         .route("/deposit-to-klend", post(admin_ops::deposit_to_klend))
-        .route("/deposit-all-to-klend", post(admin_ops::deposit_all_to_klend))
+        .route(
+            "/deposit-all-to-klend",
+            post(admin_ops::deposit_all_to_klend),
+        )
         .route("/withdraw-from-klend", post(admin_ops::withdraw_from_klend))
-        .route("/withdraw-all-from-klend", post(admin_ops::withdraw_all_from_klend))
+        .route(
+            "/withdraw-all-from-klend",
+            post(admin_ops::withdraw_all_from_klend),
+        )
         .route("/harvest-yield", post(admin_ops::harvest_yield))
         .route("/sweep-home-surplus", post(admin_ops::sweep_home_surplus))
         .route("/withdraw-treasury", post(admin_ops::withdraw_treasury))
@@ -149,19 +166,43 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/set-unwrap-public", post(admin_ops::set_unwrap_public))
         .route("/init-allowlist", post(admin_ops::init_allowlist))
         .route("/add-to-allowlist", post(admin_ops::add_to_allowlist))
-        .route("/remove-from-allowlist", post(admin_ops::remove_from_allowlist))
+        .route(
+            "/remove-from-allowlist",
+            post(admin_ops::remove_from_allowlist),
+        )
         .route("/transfer-authority", post(admin_ops::transfer_authority))
-        .route("/cancel-transfer-authority", post(admin_ops::cancel_transfer_authority))
+        .route(
+            "/cancel-transfer-authority",
+            post(admin_ops::cancel_transfer_authority),
+        )
         .route("/accept-authority/tx", post(admin_ops::accept_authority_tx))
         .route("/accept-authority", post(admin_ops::accept_authority))
         .route("/enable-klend", post(admin_ops::enable_klend))
-        .route("/propose-mint-authority", post(admin_ops::propose_mint_authority))
-        .route("/cancel-propose-mint-authority", post(admin_ops::cancel_propose_mint_authority))
-        .route("/accept-mint-authority/tx", post(admin_ops::accept_mint_authority_tx))
-        .route("/accept-mint-authority", post(admin_ops::accept_mint_authority))
+        .route(
+            "/propose-mint-authority",
+            post(admin_ops::propose_mint_authority),
+        )
+        .route(
+            "/cancel-propose-mint-authority",
+            post(admin_ops::cancel_propose_mint_authority),
+        )
+        .route(
+            "/accept-mint-authority/tx",
+            post(admin_ops::accept_mint_authority_tx),
+        )
+        .route(
+            "/accept-mint-authority",
+            post(admin_ops::accept_mint_authority),
+        )
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             guard::network_guard,
+        ))
+        // Outermost: reject unauthenticated callers before any RPC work happens. Every
+        // route above is signed with the vault admin keypair.
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            guard::admin_auth_guard,
         ));
 
     let vault_router: Router<Arc<AppState>> = Router::new()
@@ -196,8 +237,14 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/v1/vault/token-holders",
             axum::routing::get(vault::token_holders),
         )
-        .route("/v1/quote/redeem", axum::routing::get(vault::redeem_quote_handler))
-        .route("/v1/quote/issue", axum::routing::get(vault::issue_quote_handler))
+        .route(
+            "/v1/quote/redeem",
+            axum::routing::get(vault::redeem_quote_handler),
+        )
+        .route(
+            "/v1/quote/issue",
+            axum::routing::get(vault::issue_quote_handler),
+        )
         .split_for_parts();
 
     Router::new()

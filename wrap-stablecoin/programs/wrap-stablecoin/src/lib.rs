@@ -31,7 +31,11 @@ fn check_access(
     }
     let allowlist = allowlist.ok_or(err)?;
     let expected = Pubkey::create_program_address(
-        &[crate::pda_seeds::ALLOWLIST_SEED, vault_config.as_ref(), &[allowlist.bump]],
+        &[
+            crate::pda_seeds::ALLOWLIST_SEED,
+            vault_config.as_ref(),
+            &[allowlist.bump],
+        ],
         program_id,
     )
     .map_err(|_| err)?;
@@ -111,15 +115,16 @@ fn disable_all_asset_minting<'info>(
 pub mod wrap_stablecoin {
     use super::*;
     use crate::errors::ErrorCode;
-    use crate::klend::{deposit_reserve_liquidity_ix, redeem_collateral, redeem_reserve_collateral_ix};
+    use crate::klend::{
+        deposit_reserve_liquidity_ix, redeem_collateral, redeem_reserve_collateral_ix,
+    };
     use crate::state::AssetStatus;
     use crate::utils::{
         get_token_balance, underlying_to_wrapped_amount, wrapped_to_underlying_amount,
     };
     use anchor_lang::solana_program::program::invoke_signed;
     use anchor_spl::token_interface::{
-        burn, mint_to, set_authority, transfer_checked, Burn, MintTo, SetAuthority,
-        TransferChecked,
+        burn, mint_to, set_authority, transfer_checked, Burn, MintTo, SetAuthority, TransferChecked,
     };
     use spl_token_2022::instruction::AuthorityType;
 
@@ -199,19 +204,31 @@ pub mod wrap_stablecoin {
     }
 
     pub fn enable_klend(ctx: Context<EnableKlend>) -> Result<()> {
-        let (reserve_market, reserve_mint) = {
+        let reserve = {
             let data = ctx.accounts.reserve.try_borrow_data()?;
-            crate::klend::parse_reserve_market_and_mint(&data)?
+            crate::klend::parse_reserve(&data)?
         };
         require_keys_eq!(
-            reserve_market,
+            reserve.lending_market,
             ctx.accounts.lending_market.key(),
             ErrorCode::KlendReserveMarketMismatch
         );
         require_keys_eq!(
-            reserve_mint,
+            reserve.liquidity_mint,
             ctx.accounts.asset_config.token_mint,
             ErrorCode::KlendReserveMintMismatch
+        );
+        // Pinned for the lifetime of the asset with no repair path, so bind them to the
+        // reserve's own fields rather than trusting the caller.
+        require_keys_eq!(
+            reserve.liquidity_supply_vault,
+            ctx.accounts.reserve_liquidity_supply.key(),
+            ErrorCode::KlendReserveSupplyMismatch
+        );
+        require_keys_eq!(
+            reserve.collateral_mint,
+            ctx.accounts.collateral_mint.key(),
+            ErrorCode::KlendReserveCollateralMintMismatch
         );
 
         let klend_config = &mut ctx.accounts.klend_config;
@@ -238,7 +255,10 @@ pub mod wrap_stablecoin {
         args: UpdateAssetPolicyArgs,
     ) -> Result<()> {
         require!(args.mint_haircut_bps <= 10_000, ErrorCode::InvalidHaircut);
-        require!(args.redemption_haircut_bps <= 10_000, ErrorCode::InvalidHaircut);
+        require!(
+            args.redemption_haircut_bps <= 10_000,
+            ErrorCode::InvalidHaircut
+        );
 
         let asset_config = &mut ctx.accounts.asset_config;
         asset_config.mint_enabled = args.mint_enabled;
@@ -519,8 +539,7 @@ pub mod wrap_stablecoin {
             ErrorCode::InsufficientBalance
         );
 
-        let treasury_before =
-            get_token_balance(&ctx.accounts.treasury_vault.to_account_info())?;
+        let treasury_before = get_token_balance(&ctx.accounts.treasury_vault.to_account_info())?;
 
         let authority_seeds: &[&[u8]] = &[
             crate::pda_seeds::VAULT_AUTHORITY_SEED,
@@ -565,8 +584,7 @@ pub mod wrap_stablecoin {
         )?;
 
         let collateral_after = get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
-        let treasury_after =
-            get_token_balance(&ctx.accounts.treasury_vault.to_account_info())?;
+        let treasury_after = get_token_balance(&ctx.accounts.treasury_vault.to_account_info())?;
 
         let ktokens_redeemed = collateral_before
             .checked_sub(collateral_after)
@@ -821,14 +839,15 @@ pub mod wrap_stablecoin {
         require!(args.collateral_amount > 0, ErrorCode::InvalidAmount);
 
         let vault_config = &ctx.accounts.vault_config;
-        let asset_config = &ctx.accounts.asset_config;
-        let klend_config = &mut ctx.accounts.klend_config;
         let vault_config_key = vault_config.key();
         let authority_seeds: &[&[u8]] = &[
             crate::pda_seeds::VAULT_AUTHORITY_SEED,
             vault_config_key.as_ref(),
             &[vault_config.vault_authority_bump],
         ];
+
+        let collateral_before =
+            get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
 
         let liquidity_received = redeem_collateral(
             &ctx.accounts.klend_program.to_account_info(),
@@ -848,23 +867,27 @@ pub mod wrap_stablecoin {
             args.collateral_amount,
         )?;
 
-        klend_config.total_liquidity_in_klend = klend_config
-            .total_liquidity_in_klend
-            .saturating_sub(liquidity_received);
+        let collateral_after = get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
+        let ktokens_redeemed = collateral_before
+            .checked_sub(collateral_after)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        let token_mint = ctx.accounts.asset_config.token_mint;
+        ctx.accounts
+            .klend_config
+            .retire_principal(ktokens_redeemed, collateral_before)?;
 
         msg!(
             "Withdrew {} kTokens ({} liquidity) of {} from KLend",
-            args.collateral_amount,
+            ktokens_redeemed,
             liquidity_received,
-            asset_config.token_mint
+            token_mint
         );
         Ok(())
     }
 
     pub fn withdraw_all_from_klend(ctx: Context<WithdrawAllFromKlend>) -> Result<()> {
         let vault_config = &ctx.accounts.vault_config;
-        let asset_config = &ctx.accounts.asset_config;
-        let klend_config = &mut ctx.accounts.klend_config;
         let vault_config_key = vault_config.key();
         let authority_seeds: &[&[u8]] = &[
             crate::pda_seeds::VAULT_AUTHORITY_SEED,
@@ -894,15 +917,23 @@ pub mod wrap_stablecoin {
             collateral_amount,
         )?;
 
-        klend_config.total_liquidity_in_klend = klend_config
-            .total_liquidity_in_klend
-            .saturating_sub(liquidity_received);
+        // KLend may fill less than requested, so retire principal on the observed kToken
+        // delta rather than assuming the vault was fully drained.
+        let collateral_after = get_token_balance(&ctx.accounts.collateral_vault.to_account_info())?;
+        let ktokens_redeemed = collateral_amount
+            .checked_sub(collateral_after)
+            .ok_or(ErrorCode::MathOverflow)?;
+
+        let token_mint = ctx.accounts.asset_config.token_mint;
+        ctx.accounts
+            .klend_config
+            .retire_principal(ktokens_redeemed, collateral_amount)?;
 
         msg!(
             "Withdrew all {} kTokens ({} liquidity) of {} from KLend",
-            collateral_amount,
+            ktokens_redeemed,
             liquidity_received,
-            asset_config.token_mint
+            token_mint
         );
         Ok(())
     }
@@ -1005,9 +1036,7 @@ pub mod wrap_stablecoin {
         Ok(())
     }
 
-    pub fn cancel_propose_mint_authority(
-        ctx: Context<CancelProposeMintAuthority>,
-    ) -> Result<()> {
+    pub fn cancel_propose_mint_authority(ctx: Context<CancelProposeMintAuthority>) -> Result<()> {
         ctx.accounts.vault_config.pending_mint_authority = Pubkey::default();
         msg!("Mint authority transfer proposal cancelled");
         Ok(())

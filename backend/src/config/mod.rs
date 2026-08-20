@@ -1,4 +1,5 @@
 pub mod bootstrap;
+pub mod cors;
 pub mod env;
 pub mod public_client_config;
 
