@@ -93,6 +93,8 @@ pnpm run dev
 | Backend | `ADMIN_KEYPAIR_PATH` | Optional admin signer for `/v1/admin/*` |
 | Backend | `ADMIN_API_TOKEN` | Bearer token for `/v1/admin/*` (>= 32 chars). Required whenever `ADMIN_KEYPAIR_PATH` is set — startup fails otherwise |
 | Admin console | `NEXT_PUBLIC_ADMIN_API_TOKEN` | Must equal the backend `ADMIN_API_TOKEN`; bundled into the client, so restrict who can load the console |
+| Backend | `BIND_HOST` | Listen address, default `127.0.0.1`. Set `0.0.0.0` only when the process must be reachable off-host (containers) |
+| Backend | `CORS_ALLOWED_ORIGINS` | Extra browser origins, comma-separated. `PUBLIC_APP_URL` and `ADMIN_DASHBOARD_URL` are allowed automatically |
 | Backend | `ADMIN_DASHBOARD_URL` | Optional link in client-config |
 | Frontend / admin | `NEXT_PUBLIC_BACKEND_URL` | **Only** public deployment env — points at one API |
 

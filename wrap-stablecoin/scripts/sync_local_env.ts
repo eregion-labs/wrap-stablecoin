@@ -145,7 +145,9 @@ export function syncLocalEnv(dep: LocalnetDeployment): void {
     existing.set("ADMIN_API_TOKEN", crypto.randomBytes(32).toString("base64url"));
   }
   const adminApiToken = existing.get("ADMIN_API_TOKEN") as string;
-  if (!existing.has("BIND_HOST")) existing.set("BIND_HOST", "0.0.0.0");
+  // Loopback: the local backend holds the localnet admin key. Set BIND_HOST=0.0.0.0 by hand
+  // to reach it from another device.
+  if (!existing.has("BIND_HOST")) existing.set("BIND_HOST", "127.0.0.1");
   if (!existing.has("BIND_PORT")) existing.set("BIND_PORT", "8080");
 
   const backendBody = formatEnvFile(

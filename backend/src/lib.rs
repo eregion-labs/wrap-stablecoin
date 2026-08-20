@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use axum::http::{header, Method};
 use axum::middleware;
 use axum::routing::post;
 use axum::Router;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
@@ -118,7 +119,14 @@ use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
 struct ApiDoc;
 
 pub fn app(state: Arc<AppState>) -> Router {
-    let cors = CorsLayer::very_permissive();
+    // Exact-origin allowlist, not a wildcard: `/v1/admin/*` signs with the vault admin key,
+    // and a permissive policy would let any page a browser visits drive a backend bound to
+    // localhost or a private network. `Authorization` must be allowed for the admin console's
+    // bearer token to survive preflight.
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::list(state.allowed_origins.clone()))
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
 
     // Guarded routes: optional `x-solana-network` must match primary (or omit header).
     let tx_router: Router<Arc<AppState>> = Router::new()

@@ -11,9 +11,12 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use subtle::ConstantTimeEq;
 
+use axum::http::HeaderValue;
+
 use crate::admin_wallet::load_keypair_arc;
+use crate::config::cors::resolve_allowed_origins;
 use crate::config::env::{env_for_network_required, env_opt, env_required};
-use crate::config::PublicClientConfig;
+use crate::config::{AppEnvironment, PublicClientConfig};
 use crate::wrap_stablecoin::load_klend_scope_prices_from_env;
 
 /// Solana cluster this API deployment serves.
@@ -101,6 +104,8 @@ pub struct AppState {
     /// `None` disables those routes entirely (503). Startup refuses to boot with an
     /// admin keypair loaded but no token, so the signer is never reachable unauthenticated.
     pub admin_api_token: Option<Arc<AdminApiToken>>,
+    /// Exact-match CORS origin allowlist. Empty permits same-origin requests only.
+    pub allowed_origins: Vec<HeaderValue>,
 }
 
 /// Minimum entropy for `ADMIN_API_TOKEN`. 32 chars is ~192 bits at base64url.
@@ -178,12 +183,21 @@ impl AppState {
             );
         }
 
+        let environment = AppEnvironment::from_str(&public_client_config.environment)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let allowed_origins = resolve_allowed_origins(
+            environment,
+            public_client_config.links.public_app_url.as_deref(),
+            public_client_config.links.admin_dashboard_url.as_deref(),
+        )?;
+
         Ok(Self {
             primary_solana_network: network,
             network: ctx,
             public_client_config,
             klend_scope_prices: load_klend_scope_prices_from_env(),
             admin_api_token,
+            allowed_origins,
         })
     }
 
