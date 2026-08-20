@@ -4,10 +4,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
+use subtle::ConstantTimeEq;
 
 use crate::admin_wallet::load_keypair_arc;
 use crate::config::env::{env_for_network_required, env_opt, env_required};
@@ -94,6 +96,43 @@ pub struct AppState {
     pub public_client_config: Arc<PublicClientConfig>,
     /// KLend reserve pubkey → Scope oracle, used for `refresh_reserve`.
     pub klend_scope_prices: HashMap<Pubkey, Pubkey>,
+    /// Bearer token guarding the server-signing `/v1/admin/*` routes.
+    ///
+    /// `None` disables those routes entirely (503). Startup refuses to boot with an
+    /// admin keypair loaded but no token, so the signer is never reachable unauthenticated.
+    pub admin_api_token: Option<Arc<AdminApiToken>>,
+}
+
+/// Minimum entropy for `ADMIN_API_TOKEN`. 32 chars is ~192 bits at base64url.
+pub const MIN_ADMIN_API_TOKEN_LEN: usize = 32;
+
+/// SHA-256 digest of the configured admin bearer token.
+///
+/// Only the digest is retained: comparison is constant-time over fixed-size digests, so
+/// neither the token bytes nor its length leak through timing, and the plaintext is not
+/// held in memory for the process lifetime.
+pub struct AdminApiToken {
+    digest: [u8; 32],
+}
+
+impl AdminApiToken {
+    pub fn new(token: &str) -> Result<Self> {
+        if token.len() < MIN_ADMIN_API_TOKEN_LEN {
+            anyhow::bail!(
+                "ADMIN_API_TOKEN must be at least {MIN_ADMIN_API_TOKEN_LEN} characters (got {})",
+                token.len()
+            );
+        }
+        Ok(Self {
+            digest: Sha256::digest(token.as_bytes()).into(),
+        })
+    }
+
+    /// Constant-time equality against a presented token.
+    pub fn matches(&self, presented: &str) -> bool {
+        let presented = Sha256::digest(presented.as_bytes());
+        self.digest.ct_eq(presented.as_slice()).into()
+    }
 }
 
 impl AppState {
@@ -124,11 +163,27 @@ impl AppState {
             &ctx.default_asset_mint,
         )?);
 
+        let admin_api_token = match env_opt("ADMIN_API_TOKEN") {
+            Some(raw) => Some(Arc::new(AdminApiToken::new(raw.trim())?)),
+            None => None,
+        };
+
+        // Fail closed: an admin signer with no bearer token would expose every
+        // server-signed vault operation to unauthenticated callers.
+        if ctx.admin_keypair.is_some() && admin_api_token.is_none() {
+            anyhow::bail!(
+                "ADMIN_KEYPAIR_PATH is set but ADMIN_API_TOKEN is not — refusing to start with \
+                 an unauthenticated admin API. Set ADMIN_API_TOKEN (>= {MIN_ADMIN_API_TOKEN_LEN} \
+                 chars), or unset ADMIN_KEYPAIR_PATH to run a read-only deployment."
+            );
+        }
+
         Ok(Self {
             primary_solana_network: network,
             network: ctx,
             public_client_config,
             klend_scope_prices: load_klend_scope_prices_from_env(),
+            admin_api_token,
         })
     }
 

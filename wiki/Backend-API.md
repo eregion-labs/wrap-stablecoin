@@ -49,7 +49,28 @@ One process serves **exactly one** Solana network. Frontends discover public dep
 
 OpenAPI / Swagger: `/doc`
 
-Server-signed admin routes require `ADMIN_KEYPAIR_PATH` (503 if unset). Unsigned accept `/tx` routes do **not** take a destination secret. KLend CPI routes prepend KLend `refresh_reserve`; configure extra Scope oracles with `KLEND_SCOPE_PRICES_<reserve>=<oracle>` (USDC mainnet/localnet default is built in).
+Server-signed admin routes require **both** `ADMIN_KEYPAIR_PATH` and `ADMIN_API_TOKEN`, and every
+request must carry `Authorization: Bearer <ADMIN_API_TOKEN>`:
+
+| Condition | Response |
+| --- | --- |
+| Missing or non-`Bearer` `Authorization` header | `401` |
+| Token does not match `ADMIN_API_TOKEN` | `401` |
+| `ADMIN_API_TOKEN` unset | `503` (routes disabled) |
+| `ADMIN_KEYPAIR_PATH` unset | `503` |
+
+Reaching one of these routes is equivalent to holding the vault admin key, so the token is a
+production credential: at least 32 characters, unique per deployment, and supplied via
+`SECRET_NAME` (AWS Secrets Manager) rather than a checked-in `.env` wherever possible. The
+backend **refuses to start** when `ADMIN_KEYPAIR_PATH` is set and `ADMIN_API_TOKEN` is not, so a
+deployment can never serve an unauthenticated admin signer.
+
+The token is not a substitute for network controls. Bind to `127.0.0.1` or a private interface,
+scope CORS to the admin console origin, and keep `/v1/admin/*` off the public internet.
+
+`/v1/tx/admin/*` needs **no** token: those routes only build unsigned transactions, which the
+chain rejects unless the real admin signs them. Unsigned accept `/tx` routes do **not** take a
+destination secret. KLend CPI routes prepend KLend `refresh_reserve`; configure extra Scope oracles with `KLEND_SCOPE_PRICES_<reserve>=<oracle>` (USDC mainnet/localnet default is built in).
 
 ## Client config (bootstrap)
 
