@@ -1,0 +1,16 @@
+{
+  "usdcMint": "GFRRf9xyH735NL528Z5PfWx8vTm1tfyxppMGFT2aJDUj",
+  "lendingMarket": "9zRZ631GszxBAqMiHy3rNuKXp85QxhFcQNKCTVhpG1PT",
+  "reserve": "i6gVa1B4dLSj3MiE1yxEEbQkC93aRg4MKmFvMKEUfDB",
+  "reserveLiquiditySupply": "HCfzCSwSGBf8sdb2e5iNLWahXbk6ZYrC6oto94D7Pa3f",
+  "reserveCollateralMint": "3Fuuz1Th6F6aYEkNh1oGK4WkPh4J3R2Z2ippEiAtQUtJ",
+  "vaultConfig": "7o2EpdwH2Erfa3msghJtBSAPTNes7hopgxUxCVJ6TDKE",
+  "vaultAuthority": "HEJcMUf8gbGizKQktyAfd76z7P7RsZ913hh3wWUba9Ej",
+  "wrappedMint": "9Ru5ZX8A1LrgkK2fFQ2n7SnZd9A5e4DAmbUw86fAgFhP",
+  "tokenConfig": "GW7hnqeVQWpu5h2mLguZ8rgCFAgHbHpTxRgWzeNxdwaG",
+  "tokenVault": "Dp6QzNTjvZX579jy4m9xyLzSW7SoQEGLtohtBEg1uATZ",
+  "collateralVault": "J71ZCLS8eTHWz4zjDVBxKbtP1pbKJbd2isX9VvfYnvuz",
+  "treasury": "AQVnvjiEQe945eAm2Qo76Hy4juifCJWzWNPWgnnzTYn7",
+  "borrower": "7WMWPxGNhn6keTcUo3Y9FTXbsWNeXRmSUxvQWhbLCkVM",
+  "obligation": "FB4x1peP5sXaQVBuUb2RUvF5gV58qQSfSr5Qt6hcmj7V"
+}
