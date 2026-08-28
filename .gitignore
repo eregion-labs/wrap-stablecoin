@@ -54,3 +54,7 @@ coverage/
 
 # --- Misc logs ---
 *.log
+
+# --- Local key material (never commit) ---
+.secrets/
+**/scripts/devnet/borrower.json
