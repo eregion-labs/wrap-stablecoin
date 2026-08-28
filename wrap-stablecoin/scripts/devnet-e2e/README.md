@@ -93,6 +93,11 @@ Open `http://localhost:3002` — Treasury / Chamber / Yield / Token Stats. The *
 shows the yield-earned summary (deployed, harvestable now + %, home surplus, harvested,
 total) and drives real server-signed admin ops (deploy/recall/harvest/sweep/withdraw).
 
+Admin ops verified against devnet through the backend (`/v1/admin/*`, server-signed):
+`deposit-to-klend`, `deposit-all-to-klend`, `withdraw-from-klend`, `harvest-yield`, and
+`withdraw-treasury` (yield pulled from the treasury vault to an admin token account). The
+same withdraws are also covered on-chain by `40_flow_test.ts`.
+
 ## Gotchas learned the hard way
 
 - **Public devnet RPC rate-limits (429).** The klend-sdk makes many RPC calls; step 1 may
