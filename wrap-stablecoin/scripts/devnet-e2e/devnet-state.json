@@ -1,0 +1,38 @@
+{
+  "assets": {
+    "A": {
+      "symbol": "tUSDA",
+      "decimals": 6,
+      "mint": "EeqAYGL6ssfa6X2HFXySw9cEynBve8KP5Zxqzye5wgci",
+      "reserve": "HouuqobUJEsHbjZFFoe6LnK3Fk26KUXwwhVGvaji8WuM",
+      "reserveLiquiditySupply": "AFCxfGeDRTr4y7tHQ38t96sp7v3KEXzZo94nrp32yxoz",
+      "reserveCollateralMint": "2BD5QzABfWfuKKjSkfeqtATaqzrtVRJXGhEHsjB2C9Ga",
+      "assetConfig": "ERz5z2c4MDvEqDB99B28UqZ6Ettn6krapoVaW6pxjpbz",
+      "tokenVault": "JEC5uat86RbeHTNmyDLr6Tc1jYLC4qPLw64DGNTm19AL",
+      "treasuryVault": "F4cYFYi9c2vnBN2ihiEsLWTbNV7fRdkpLhGTT33mhbZH",
+      "collateralVault": "FsVPignAodj7e4BK95xmmK3uQCdQhbTJupNqv977P5rT",
+      "klendConfig": "94kjHgLQBMAHjZVi5Xxdp7KgURMkT2rkhqSxvUeLkJXq",
+      "borrower": "FikNj6XqVGF3PpUUR5WjgLxyopQQXQPNcSUtFR6Szi1E",
+      "obligation": "EpD2pv7ZQoRdCWzATpHxX16P3tmxncLbQSYTm285EPoR"
+    },
+    "B": {
+      "symbol": "tUSDB",
+      "decimals": 6,
+      "mint": "GztP9HT346NwALEnsEuqMMZxmBxak2RsoefUir8GLV1v",
+      "reserve": "9SN3sbkKGKRmBcmaBUq5Uj1RQ3nJ58uTGqoBo5U1XaiH",
+      "reserveLiquiditySupply": "6EBpb5aAb4reZqLpdQsEgiGWghirbcbVrgUFsYxrEqv2",
+      "reserveCollateralMint": "GaN4itTQBUpcgfMfhczfUJs37znNsXnEtT9Pkk3RfbzN",
+      "assetConfig": "F1LKB49kcLbUcg8zGLQTCLqSCT1ymQFohX8z2JKpXc3T",
+      "tokenVault": "DrKks8DNW5JQoVXgyin6eXmvnX5dGcZop2rjCiLSAvnk",
+      "treasuryVault": "2rjMBmfg9Mru6uCdmNnzPpfogLqvbFF8mNwbAVsGAUFB",
+      "collateralVault": "CFgMBT5sG73qMHVnhVizWoqYeviUDzVi5cFnzQGFFEf",
+      "klendConfig": "81TPzQxJXv3DWFQYp8TuhMNTShwhennvggnk7eArEuhJ",
+      "borrower": "57Z2UNff7jYbuEJbTJox6mkdHQ3LHXyCbDcPBUSXvoiW",
+      "obligation": "5LoFqhBwFpsviU4sECdvSfk4tTwk5ny8s9uNfQbvVKX4"
+    }
+  },
+  "lendingMarket": "42AN7L6ii3pyHT7eLKScxMunS6XChcpjAab2qqPPTZyy",
+  "vaultConfig": "5RT55a4Mib32poM81bHt1QRhVXsCN2XTekMiMYZUaHPW",
+  "vaultAuthority": "9koPTqyqbFGwS7d48cKyKsMFaWvtSAfRWXHdwexBYDmj",
+  "wrappedMint": "E16uLrkVNLQiB1VvNaamYYtBPEBxwGuWTtyM9Qbowzrj"
+}
