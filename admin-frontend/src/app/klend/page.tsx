@@ -7,6 +7,7 @@ import Stack from "@mui/material/Stack";
 import Alert from "@mui/material/Alert";
 import PageHeading from "@/components/layout/PageHeading";
 import KlendOpsTable from "@/components/KlendOpsTable";
+import YieldEarnedSummary from "@/components/YieldEarnedSummary";
 import { adminCopy } from "@/theme/copy";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useVaultStore } from "@/stores/vaultStore";
@@ -56,6 +57,8 @@ export default function KlendPage() {
             {adminCopy.pausedVaultAlert}
           </Alert>
         )}
+
+        <YieldEarnedSummary assets={summary?.assets ?? []} />
 
         <KlendOpsTable assets={summary?.assets ?? []} paused={summary?.paused ?? false} />
       </Box>
