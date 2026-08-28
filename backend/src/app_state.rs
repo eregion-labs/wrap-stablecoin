@@ -93,7 +93,7 @@ impl AppState {
 
         let program_id = Pubkey::from_str(
             &std::env::var("PROGRAM_ID")
-                .unwrap_or_else(|_| "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT".to_string()),
+                .unwrap_or_else(|_| "HCrgCD3HkPXFF4CufxbvCVyfMhYJS8ZeLc6r5cLB9dNY".to_string()),
         )
         .context("invalid PROGRAM_ID")?;
 

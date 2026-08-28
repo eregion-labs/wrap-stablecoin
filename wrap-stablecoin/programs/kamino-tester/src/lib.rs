@@ -13,7 +13,7 @@ pub mod utils;
 
 pub use instructions::*;
 
-declare_id!("5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT");
+declare_id!("HCrgCD3HkPXFF4CufxbvCVyfMhYJS8ZeLc6r5cLB9dNY");
 
 fn check_access(
     is_public: bool,

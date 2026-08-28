@@ -15,7 +15,7 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
-const WRAPPED_TOKEN_PROGRAM_ID: &str = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT";
+const WRAPPED_TOKEN_PROGRAM_ID: &str = "HCrgCD3HkPXFF4CufxbvCVyfMhYJS8ZeLc6r5cLB9dNY";
 
 const LENDING_MARKET_SIZE: usize = 4656;
 const RESERVE_SIZE: usize = 8616;
