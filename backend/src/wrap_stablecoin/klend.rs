@@ -24,6 +24,13 @@ const DEFAULT_USDC_RESERVE: &str = "D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59
 const DEFAULT_USDC_SCOPE_PRICES: &str = "3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH";
 
 const ENV_SCOPE_PREFIX: &str = "KLEND_SCOPE_PRICES_";
+/// Reserves whose oracle is a Pyth price account (not Scope) — the account then goes in
+/// the pyth slot of refresh_reserve. Used by self-created devnet reserves.
+const ENV_PYTH_PREFIX: &str = "KLEND_PYTH_PRICES_";
+
+fn reserve_uses_pyth(reserve: &Pubkey) -> bool {
+    std::env::var(format!("{ENV_PYTH_PREFIX}{reserve}")).is_ok()
+}
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
     let mut hasher = Sha256::new();
@@ -44,7 +51,10 @@ pub fn load_klend_scope_prices_from_env() -> HashMap<Pubkey, Pubkey> {
         map.insert(reserve, oracle);
     }
     for (key, value) in std::env::vars() {
-        let Some(reserve_str) = key.strip_prefix(ENV_SCOPE_PREFIX) else {
+        let reserve_str = key
+            .strip_prefix(ENV_SCOPE_PREFIX)
+            .or_else(|| key.strip_prefix(ENV_PYTH_PREFIX));
+        let Some(reserve_str) = reserve_str else {
             continue;
         };
         let Ok(reserve) = Pubkey::from_str(reserve_str.trim()) else {
@@ -131,19 +141,27 @@ pub fn resolve_klend_cpi_accounts(
 pub fn build_refresh_reserve_ix(
     reserve: &Pubkey,
     lending_market: &Pubkey,
-    scope_prices: &Pubkey,
+    oracle: &Pubkey,
 ) -> Instruction {
     let klend_program = klend_program_id();
     let none = klend_program;
+    // Slot order: [reserve, market, pyth, switchboard, switchboard_twap, scope_prices].
+    // Scope reserves (mainnet/cloned) carry the oracle in the scope slot; Pyth reserves
+    // (self-created devnet) carry it in the pyth slot — the others stay sentinel.
+    let (pyth_slot, scope_slot) = if reserve_uses_pyth(reserve) {
+        (*oracle, none)
+    } else {
+        (none, *oracle)
+    };
     Instruction {
         program_id: klend_program,
         accounts: vec![
             AccountMeta::new(*reserve, false),
             AccountMeta::new_readonly(*lending_market, false),
+            AccountMeta::new_readonly(pyth_slot, false),
             AccountMeta::new_readonly(none, false),
             AccountMeta::new_readonly(none, false),
-            AccountMeta::new_readonly(none, false),
-            AccountMeta::new_readonly(*scope_prices, false),
+            AccountMeta::new_readonly(scope_slot, false),
         ],
         data: anchor_sighash("global", "refresh_reserve").to_vec(),
     }

@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-wrap_stablecoin = "BZQaR9BcpRBnGedU6BPAWwocHwvdCdjcJYD1doCVXhcS"
+wrap_stablecoin = "DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ"
 
 [registry]
 url = "https://api.apr.dev"
