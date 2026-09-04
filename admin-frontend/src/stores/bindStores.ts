@@ -2,6 +2,7 @@
 
 import { useMintStore } from "./mintStore";
 import { usePolicyStore } from "./policyStore";
+import { useSignerBalancesStore } from "./signerBalancesStore";
 import { useVaultStore } from "./vaultStore";
 
 let bound = false;
@@ -18,10 +19,15 @@ export function bindAdminStores(): void {
     if (state.summary === prev.summary) return;
     usePolicyStore.getState().syncFromSummary(state.summary);
     useMintStore.getState().syncFromSummary(state.summary);
+    void useSignerBalancesStore.getState().hydrate(state.summary);
   });
 }
 
 export function bootstrapAdminStores(): void {
   bindAdminStores();
+  const existing = useVaultStore.getState().summary;
+  if (existing) {
+    void useSignerBalancesStore.getState().hydrate(existing);
+  }
   void useVaultStore.getState().hydrate();
 }

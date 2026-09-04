@@ -42,6 +42,14 @@ export const adminCopy = {
   max: "Max",
   humanAmountHint: "Enter a human amount (e.g. 1.0), not base units.",
   redeemableBalance: (amount: string, symbol: string) => `Redeemable: ${amount} ${symbol}`,
+  signerHoldings: "Treasury signer holdings",
+  signerHoldingsCaption:
+    "Tokens in the treasury signer wallet. Mint spends collateral from here; redeem burns Florin from here.",
+  signerHoldingsToken: "Token",
+  signerHoldingsColumn: "Wallet",
+  signerWalletBalance: (amount: string, symbol: string) => `Signer wallet: ${amount} ${symbol}`,
+  loadingSignerBalance: "Loading signer wallet balance…",
+  signerBalanceUnavailable: "Couldn't load signer wallet balance (RPC busy). Try Refresh ledger.",
   pausedVaultAlert:
     "Vault is paused. Mint, redeem, Kamino deposit, and harvest are blocked. Recall, sweep, and treasury withdrawal still work.",
   klendNav: "Yield",
@@ -52,7 +60,6 @@ export const adminCopy = {
   klendNoAssets: "No registered collateral assets.",
   klendNotEnabled: "Kamino is not enabled for this asset. Vault-only ops (sweep, treasury withdraw) still apply.",
   klendDeploy: "Deploy",
-  klendDeployAll: "Deploy all",
   klendRecall: "Recall",
   klendRecallAll: "Recall all",
   klendHarvest: "Harvest",

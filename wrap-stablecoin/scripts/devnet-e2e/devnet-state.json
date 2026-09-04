@@ -6,7 +6,9 @@
       "mint": "7DfHyL9m8fohj5ysB4HhSCHDu4c8VGtA1KNjsgC1sqxe",
       "reserve": "4HEDpqMyNcECyNKnCKskauxH2X91UYvoD6UGYoamJ89a",
       "reserveLiquiditySupply": "94Ed2RhMcfK87H4SCTRkXddjNbRumggNtGHqaRn4P8Y1",
-      "reserveCollateralMint": "61CQ2dWrn8KABA5aNJSVbTurFXejMvtcTHSnSCJGjCuL"
+      "reserveCollateralMint": "61CQ2dWrn8KABA5aNJSVbTurFXejMvtcTHSnSCJGjCuL",
+      "borrower": "9TnWcSAEc3Mg6mLa6wBa1ByvUEtJfVUQvNNAjA8hcxW2",
+      "obligation": "6deyfvz3jMpzYFqf3P6iuvttRtTNFDyFRgwU3XSLsGot"
     },
     "2": {
       "symbol": "tUSD2",

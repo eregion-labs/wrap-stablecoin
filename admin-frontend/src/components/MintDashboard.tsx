@@ -14,6 +14,7 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useSnackbar } from "notistack";
 import PageHeading from "@/components/layout/PageHeading";
+import SignerBalancesPanel from "@/components/SignerBalancesPanel";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
 import { atomsToInputAmount, formatTokenAmount } from "@/lib/tokenAmount";
@@ -22,6 +23,7 @@ import { adminCopy } from "@/theme/copy";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultAsset, selectVaultLoading } from "@/stores/selectors";
 import { useMintStore } from "@/stores/mintStore";
+import { useSignerBalancesStore } from "@/stores/signerBalancesStore";
 import { useVaultStore } from "@/stores/vaultStore";
 
 export default function MintDashboard() {
@@ -49,6 +51,22 @@ export default function MintDashboard() {
   const wrappedSymbol = wrappedTokenSymbol(summary);
   const wrappedName = wrappedTokenName(summary);
   const selectedAsset = selectVaultAsset(summary, assetMint);
+  const signerBalances = useSignerBalancesStore((s) => s.balances);
+  const signerStatus = useSignerBalancesStore((s) => s.status);
+  const collateralWalletAtoms = assetMint ? (signerBalances[assetMint] ?? 0) : 0;
+  const wrappedWalletAtoms = summary ? (signerBalances[summary.wrappedMint] ?? 0) : 0;
+  const signerReady = signerStatus === "ready";
+  const mintHelperText =
+    signerStatus === "loading"
+      ? adminCopy.loadingSignerBalance
+      : signerStatus === "error"
+        ? adminCopy.signerBalanceUnavailable
+        : selectedAsset
+          ? `${adminCopy.signerWalletBalance(
+              formatTokenAmount(collateralWalletAtoms, selectedAsset.tokenDecimals),
+              mintLabel(selectedAsset.mint),
+            )} · ${adminCopy.humanAmountHint}`
+          : adminCopy.humanAmountHint;
 
   const onMint = async () => {
     const result = await submitMint();
@@ -100,7 +118,15 @@ export default function MintDashboard() {
             </Typography>
           )}
         </Box>
-        <Button size="small" variant="outlined" onClick={() => refresh()} disabled={busy !== null}>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => {
+            void refresh();
+            void useSignerBalancesStore.getState().refresh();
+          }}
+          disabled={busy !== null}
+        >
           {adminCopy.refreshLedger}
         </Button>
       </Stack>
@@ -119,32 +145,37 @@ export default function MintDashboard() {
         />
       )}
 
-      <Stack spacing={3} sx={{ mt: 3 }}>
-        <TextField
-          select
-          label={adminCopy.reserveCollateral}
-          value={assetMint}
-          onChange={(e) => setAssetMint(e.target.value)}
-          fullWidth
-          disabled={vaultAssets.length === 0}
-        >
-          {vaultAssets.length === 0 ? (
-            <MenuItem value="">No registered assets</MenuItem>
-          ) : (
-            vaultAssets.map((a) => (
-              <MenuItem key={a.mint} value={a.mint}>
-                {mintLabel(a.mint)}
-              </MenuItem>
-            ))
-          )}
-        </TextField>
+      <Box sx={{ ...actionCardSx, mt: 3, mb: 0 }}>
+        <Stack spacing={2}>
+          <TextField
+            select
+            label={adminCopy.reserveCollateral}
+            value={assetMint}
+            onChange={(e) => setAssetMint(e.target.value)}
+            fullWidth
+            disabled={vaultAssets.length === 0}
+          >
+            {vaultAssets.length === 0 ? (
+              <MenuItem value="">No registered assets</MenuItem>
+            ) : (
+              vaultAssets.map((a) => (
+                <MenuItem key={a.mint} value={a.mint}>
+                  {mintLabel(a.mint)}
+                  {signerReady
+                    ? ` · ${formatTokenAmount(signerBalances[a.mint] ?? 0, a.tokenDecimals)}`
+                    : ""}
+                </MenuItem>
+              ))
+            )}
+          </TextField>
 
-        <Box sx={{ ...actionCardSx, mb: 0 }}>
+          {summary && <SignerBalancesPanel summary={summary} />}
+
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
             aria-label="Mint or redeem Florin"
-            sx={{ mb: 2, minHeight: 40 }}
+            sx={{ minHeight: 40 }}
           >
             <Tab label={adminCopy.tabMint} />
             <Tab label={adminCopy.tabRedeem} />
@@ -160,12 +191,38 @@ export default function MintDashboard() {
                 value={mintAmount}
                 onChange={(e) => setMintAmount(e.target.value)}
                 fullWidth
-                helperText={adminCopy.humanAmountHint}
+                helperText={mintHelperText}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setMintAmount(
+                              atomsToInputAmount(
+                                collateralWalletAtoms,
+                                selectedAsset?.tokenDecimals ?? 6,
+                              ),
+                            )
+                          }
+                          disabled={busy !== null || !signerReady || collateralWalletAtoms <= 0}
+                          sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
+                        >
+                          {adminCopy.max}
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
               <Button
                 variant="contained"
                 disabled={
-                  busy !== null || !assetMint || (selectedAsset != null && !selectedAsset.mintAllowed)
+                  busy !== null ||
+                  !assetMint ||
+                  (selectedAsset != null && !selectedAsset.mintAllowed) ||
+                  (signerReady && collateralWalletAtoms <= 0)
                 }
                 onClick={onMint}
               >
@@ -189,7 +246,14 @@ export default function MintDashboard() {
                           summary?.wrappedDecimals ?? 6,
                         ),
                         wrappedSymbol,
-                      )} · ${adminCopy.humanAmountHint}`
+                      )}${
+                        signerReady
+                          ? ` · ${adminCopy.signerWalletBalance(
+                              formatTokenAmount(wrappedWalletAtoms, summary?.wrappedDecimals ?? 6),
+                              wrappedSymbol,
+                            )}`
+                          : ""
+                      } · ${adminCopy.humanAmountHint}`
                     : adminCopy.humanAmountHint
                 }
                 slotProps={{
@@ -201,7 +265,10 @@ export default function MintDashboard() {
                           onClick={() =>
                             setRedeemAmount(
                               atomsToInputAmount(
-                                selectedAsset?.maxRedeemable ?? 0,
+                                Math.min(
+                                  selectedAsset?.maxRedeemable ?? 0,
+                                  signerReady ? wrappedWalletAtoms : Number.POSITIVE_INFINITY,
+                                ),
                                 summary?.wrappedDecimals ?? 6,
                               ),
                             )
@@ -209,7 +276,8 @@ export default function MintDashboard() {
                           disabled={
                             busy !== null ||
                             !selectedAsset ||
-                            selectedAsset.maxRedeemable <= 0
+                            selectedAsset.maxRedeemable <= 0 ||
+                            (signerReady && wrappedWalletAtoms <= 0)
                           }
                           sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
                         >
@@ -250,8 +318,8 @@ export default function MintDashboard() {
               </Button>
             </Stack>
           )}
-        </Box>
-      </Stack>
+        </Stack>
+      </Box>
     </Box>
   );
 }

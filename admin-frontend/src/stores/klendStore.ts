@@ -8,7 +8,6 @@ import { useVaultStore } from "./vaultStore";
 
 export type KlendBusy =
   | "deploy"
-  | "deployAll"
   | "recall"
   | "recallAll"
   | "harvest"
@@ -37,7 +36,6 @@ type KlendState = {
     patch: Partial<KlendState["drafts"][string]>,
   ) => void;
   submitDeploy: (mint: string) => Promise<ActionResult<{ signature: string }>>;
-  submitDeployAll: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitRecall: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitRecallAll: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitHarvest: (mint: string) => Promise<ActionResult<{ signature: string }>>;
@@ -101,15 +99,6 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
         assetMint: mint,
         amount: parsed.data,
       });
-    } finally {
-      set({ busy: null, busyMint: null });
-    }
-  },
-
-  submitDeployAll: async (mint) => {
-    set({ busy: "deployAll", busyMint: mint });
-    try {
-      return await postAndRefresh("/v1/admin/deposit-all-to-klend", { assetMint: mint });
     } finally {
       set({ busy: null, busyMint: null });
     }

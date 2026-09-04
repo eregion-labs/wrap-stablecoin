@@ -3,6 +3,7 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -41,7 +42,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
   const busyMint = useKlendStore((s) => s.busyMint);
   const setDraft = useKlendStore((s) => s.setDraft);
   const submitDeploy = useKlendStore((s) => s.submitDeploy);
-  const submitDeployAll = useKlendStore((s) => s.submitDeployAll);
   const submitRecall = useKlendStore((s) => s.submitRecall);
   const submitRecallAll = useKlendStore((s) => s.submitRecallAll);
   const submitHarvest = useKlendStore((s) => s.submitHarvest);
@@ -124,6 +124,26 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                   onChange={(e) => setDraft(asset.mint, { deployAmount: e.target.value })}
                   disabled={deployLocked || klendOff}
                   sx={{ minWidth: 200 }}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              setDraft(asset.mint, {
+                                deployAmount: atomsToInputAmount(deployable, d),
+                              })
+                            }
+                            disabled={deployLocked || klendOff || deployable <= 0}
+                            sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
+                          >
+                            {adminCopy.max}
+                          </Button>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
                 />
                 <Button
                   variant="contained"
@@ -131,13 +151,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                   onClick={async () => notify(await submitDeploy(asset.mint), "Deployed")}
                 >
                   {rowBusy && busy === "deploy" ? adminCopy.submitting : adminCopy.klendDeploy}
-                </Button>
-                <Button
-                  variant="outlined"
-                  disabled={deployLocked || klendOff}
-                  onClick={async () => notify(await submitDeployAll(asset.mint), "Deployed all")}
-                >
-                  {rowBusy && busy === "deployAll" ? adminCopy.submitting : adminCopy.klendDeployAll}
                 </Button>
               </Stack>
 
