@@ -1,10 +1,13 @@
 /**
  * Step 1: create a shared KLend lending market + one reserve per test collateral
- * (tUSDA, tUSDB) on devnet, each with a pyth oracle and an aggressive borrow curve.
+ * on devnet, each with a pyth oracle and an aggressive borrow curve.
  * Idempotent: skips pieces already recorded in devnet-state.json.
- * Usage: npx ts-node scripts/devnet-e2e/10_setup_market.ts
+ *
+ * Usage:
+ *   npx ts-node scripts/devnet-e2e/10_setup_market.ts          # ensure A/B (and any existing state assets)
+ *   npx ts-node scripts/devnet-e2e/10_setup_market.ts 1 2 3    # add tUSD1, tUSD2, tUSD3 on the same market
  */
-import { Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js'
+import { Keypair, PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY } from '@solana/web3.js'
 import {
     createAssociatedTokenAccountIdempotentInstruction,
     createInitializeMintInstruction,
@@ -14,12 +17,37 @@ import {
     TOKEN_PROGRAM_ID,
 } from '@solana/spl-token'
 import Decimal from 'decimal.js'
-import { adminKeypair, connection, kitSigner, KLEND_PROGRAM, PYTH_USDC_FEED, readState, RPC_URL, sendIxs, writeState } from './common'
+import {
+    adminKeypair,
+    assetStatus,
+    connection,
+    ensureNumberedAssets,
+    kitSigner,
+    KLEND_PROGRAM,
+    numberedSymbol,
+    parseNumberedArgs,
+    printAssetRegistry,
+    PYTH_USDC_FEED,
+    readState,
+    RPC_URL,
+    sendIxs,
+    writeState,
+} from './common'
 
 const sdk = require('@kamino-finance/klend-sdk')
 const { createSolanaRpc } = require('@solana/kit')
 
 const INITIAL_MINT = 10_000_000n * 10n ** 6n // 10M of each test token to admin
+
+/** Devnet KLend now requires instruction_sysvar last; SDK 7.x IDL omits it. */
+function withIxSysvar(ix: any): any {
+    if (!ix?.accounts) return ix
+    const sysvar = SYSVAR_INSTRUCTIONS_PUBKEY.toBase58()
+    if (!ix.accounts.some((a: any) => a.address === sysvar)) {
+        ix.accounts.push({ address: sysvar, role: 0 })
+    }
+    return ix
+}
 
 async function ensureMint(conn: any, admin: Keypair, symbol: string, decimals: number): Promise<PublicKey> {
     const mintKp = Keypair.generate()
@@ -55,6 +83,8 @@ async function ensureReserve(conn: any, rpc: any, admin: Keypair, market: Public
         { address: reserve.toBase58() },
         KLEND_PROGRAM.toBase58(),
     )
+    // Devnet KLend InitReserve / UpdateReserveConfig require instruction_sysvar; SDK 7.x omits it.
+    for (const ix of createIxs) withIxSysvar(ix)
     await sendIxs(conn, createIxs, admin, [reserveKp], `reserve-${symbol}`)
     const pdas = await sdk.reservePdas(KLEND_PROGRAM.toBase58(), reserve.toBase58())
 
@@ -82,27 +112,52 @@ async function ensureReserve(conn: any, rpc: any, admin: Keypair, market: Public
     const manager = new sdk.KaminoManager(rpc, undefined, KLEND_PROGRAM.toBase58(), undefined)
     const marketState = await sdk.LendingMarket.fetch(rpc, market.toBase58(), KLEND_PROGRAM.toBase58())
     const configIxs = await manager.updateReserveIxs(kitSigner(admin.publicKey), { address: market.toBase58(), state: marketState }, reserve.toBase58(), cfg.getReserveConfig())
-    const sendable = configIxs.filter((c: any) => !c.requiresGlobalAdmin).map((c: any) => c.ix)
+    const sendable = configIxs.filter((c: any) => !c.requiresGlobalAdmin).map((c: any) => withIxSysvar(c.ix))
     for (let i = 0; i < sendable.length; i += 4) await sendIxs(conn, sendable.slice(i, i + 4), admin, [], `cfg-${symbol}-${i}`)
 
     const types = require('@kamino-finance/klend-sdk/dist/@codegen/klend/types')
     const limitBuf = Buffer.alloc(8)
     limitBuf.writeBigUInt64LE(1_000_000_000n * 10n ** 6n)
-    const outsideLimitIx = await sdk.updateReserveConfigIx(kitSigner(admin.publicKey), market.toBase58(), reserve.toBase58(), new types.UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup(), limitBuf, KLEND_PROGRAM.toBase58())
+    const outsideLimitIx = withIxSysvar(
+        await sdk.updateReserveConfigIx(kitSigner(admin.publicKey), market.toBase58(), reserve.toBase58(), new types.UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup(), limitBuf, KLEND_PROGRAM.toBase58()),
+    )
     await sendIxs(conn, [outsideLimitIx], admin, [], `cfg-${symbol}-outside`)
 
     return { reserve: reserve.toBase58(), reserveLiquiditySupply: pdas.liquiditySupplyVault.toString(), reserveCollateralMint: pdas.collateralMint.toString() }
 }
 
 async function main() {
+    const numbered = parseNumberedArgs(process.argv.slice(2))
     const conn = connection()
     const admin = adminKeypair()
     const rpc = createSolanaRpc(RPC_URL)
-    const state = readState()
+    let state = readState()
+    printAssetRegistry(state)
+
+    // Only the keys named on the CLI are touched. No args = ensure whatever state holds.
+    let keys: string[]
+    if (numbered.length) {
+        const mapped = numbered.filter((n) => assetStatus(state.assets[n]) === 'mapped')
+        for (const n of mapped) {
+            console.error(`refusing ${n}: ${state.assets[n].symbol} already mapped to reserve ${state.assets[n].reserve}`)
+        }
+        keys = numbered.filter((n) => !mapped.includes(n))
+        if (!keys.length) {
+            console.error('nothing to do — pick unused numbers, or delete the entry from devnet-state.json to remap')
+            process.exit(1)
+        }
+        state = ensureNumberedAssets(state, keys)
+        console.log('working on:', keys.map((n) => `${n}=${numberedSymbol(n)}`).join(', '))
+    } else {
+        keys = Object.keys(state.assets)
+        console.log('no keys given — ensuring existing state assets')
+    }
     console.log('admin:', admin.publicKey.toBase58())
 
+    const newReserves: { symbol: string; mint: string; reserve: string }[] = []
+
     // 1. mints
-    for (const key of Object.keys(state.assets)) {
+    for (const key of keys) {
         const a = state.assets[key]
         if (a.mint) {
             console.log(`${a.symbol} mint exists:`, a.mint)
@@ -114,7 +169,7 @@ async function main() {
         }
     }
 
-    // 2. shared lending market
+    // 2. shared lending market — never create a second one if already recorded
     if (state.lendingMarket) {
         console.log('market exists:', state.lendingMarket)
     } else {
@@ -148,8 +203,8 @@ async function main() {
     }
     const market = new PublicKey(state.lendingMarket!)
 
-    // 3. reserves per asset
-    for (const key of Object.keys(state.assets)) {
+    // 3. reserves per asset (same market)
+    for (const key of keys) {
         const a = state.assets[key]
         if (a.reserve) {
             console.log(`${a.symbol} reserve exists:`, a.reserve)
@@ -159,6 +214,16 @@ async function main() {
         Object.assign(a, res)
         writeState(state)
         console.log(`${a.symbol} reserve:`, a.reserve)
+        newReserves.push({ symbol: a.symbol, mint: a.mint!, reserve: a.reserve! })
+    }
+
+    if (newReserves.length) {
+        console.log('\n--- copy into backend/.env and restart ---')
+        for (const r of newReserves) {
+            console.log(`${r.symbol} mint: ${r.mint}`)
+            console.log(`KLEND_PYTH_PRICES_${r.reserve}=${PYTH_USDC_FEED.toBase58()}`)
+        }
+        console.log('--- then Register the mint on admin Reserves (do not run 20 for numbered keys) ---\n')
     }
 
     console.log('done. state:', JSON.stringify(readState(), null, 2))

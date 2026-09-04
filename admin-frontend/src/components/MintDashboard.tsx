@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Tab from "@mui/material/Tab";
@@ -15,6 +16,7 @@ import { useSnackbar } from "notistack";
 import PageHeading from "@/components/layout/PageHeading";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
+import { atomsToInputAmount, formatTokenAmount } from "@/lib/tokenAmount";
 import { actionCardSx } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
@@ -158,6 +160,7 @@ export default function MintDashboard() {
                 value={mintAmount}
                 onChange={(e) => setMintAmount(e.target.value)}
                 fullWidth
+                helperText={adminCopy.humanAmountHint}
               />
               <Button
                 variant="contained"
@@ -178,10 +181,53 @@ export default function MintDashboard() {
                 value={redeemAmount}
                 onChange={(e) => setRedeemAmount(e.target.value)}
                 fullWidth
+                helperText={
+                  selectedAsset
+                    ? `${adminCopy.redeemableBalance(
+                        formatTokenAmount(
+                          selectedAsset.maxRedeemable,
+                          summary?.wrappedDecimals ?? 6,
+                        ),
+                        wrappedSymbol,
+                      )} · ${adminCopy.humanAmountHint}`
+                    : adminCopy.humanAmountHint
+                }
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setRedeemAmount(
+                              atomsToInputAmount(
+                                selectedAsset?.maxRedeemable ?? 0,
+                                summary?.wrappedDecimals ?? 6,
+                              ),
+                            )
+                          }
+                          disabled={
+                            busy !== null ||
+                            !selectedAsset ||
+                            selectedAsset.maxRedeemable <= 0
+                          }
+                          sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
+                        >
+                          {adminCopy.max}
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
               {redeemQuote && (
                 <Typography variant="body2" color="text.secondary">
-                  Expected output: {redeemQuote.output} base units
+                  Expected output:{" "}
+                  {formatTokenAmount(
+                    redeemQuote.output,
+                    selectedAsset?.tokenDecimals ?? 6,
+                  )}{" "}
+                  {selectedAsset ? mintLabel(selectedAsset.mint) : ""}
                   {redeemQuote.haircutBps > 0 ? ` (haircut ${redeemQuote.haircutBps} bps)` : ""}
                 </Typography>
               )}
@@ -195,8 +241,8 @@ export default function MintDashboard() {
                   busy !== null ||
                   !assetMint ||
                   !redeemQuote?.canRedeem ||
-                  !Number.isFinite(Number(redeemAmount)) ||
-                  Number(redeemAmount) <= 0
+                  !Number.isFinite(Number(redeemAmount.replace(/,/g, ""))) ||
+                  Number(redeemAmount.replace(/,/g, "")) <= 0
                 }
                 onClick={onRedeem}
               >

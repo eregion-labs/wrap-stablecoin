@@ -1,7 +1,7 @@
 /**
  * Step 3: per-asset borrower that deposits collateral and borrows, driving that
  * reserve's utilization > 0 so supply interest (yield) accrues for the vault.
- * Usage: npx ts-node scripts/devnet-e2e/30_borrower.ts <A|B>
+ * Usage: npx ts-node scripts/devnet-e2e/30_borrower.ts <A|B|1|2|…>
  */
 import * as fs from 'fs'
 import * as path from 'path'
@@ -31,10 +31,17 @@ function borrowerKeypair(key: string): Keypair {
 }
 
 async function main() {
-    const key = (process.argv[2] ?? 'A').toUpperCase()
+    const raw = process.argv[2] ?? 'A'
+    // Letter keys (A/B) are case-insensitive; numbered keys stay as decimal strings.
+    const key = /^[1-9]\d*$/.test(raw) ? raw : raw.toUpperCase()
     const state = readState()
     const a = state.assets[key]
-    if (!a?.reserve) throw new Error(`asset ${key} has no reserve; run 10_setup_market first`)
+    if (!a?.reserve) throw new Error(`asset ${key} has no reserve; run 10_setup_market ${key} first`)
+    if (a.obligation && !process.env.FORCE) {
+        console.error(`${a.symbol} already has borrower ${a.borrower} (obligation ${a.obligation})`)
+        console.error('set FORCE=1 to deposit/borrow again')
+        process.exit(1)
+    }
     const conn = connection()
     const admin = adminKeypair()
     const borrower = borrowerKeypair(key)

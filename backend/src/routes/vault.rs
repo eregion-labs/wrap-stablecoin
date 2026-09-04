@@ -95,7 +95,7 @@ pub async fn vault_meta(
     Ok(Json(meta))
 }
 
-/// Largest wrapped-token accounts (RPC top 20). Keys are token-account addresses, not wallet owners.
+/// Largest wrapped-token accounts (RPC top 20) plus mint supply. Keys are token-account addresses, not wallet owners.
 #[utoipa::path(
     get,
     path = "/v1/vault/token-holders",

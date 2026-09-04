@@ -25,13 +25,15 @@ export default function AppHeader() {
   const pathname = usePathname();
   const config = useClientConfig();
 
-  const subtitle = pathname.startsWith("/policy")
+  const subtitle = pathname.startsWith("/reserves") || pathname.startsWith("/policy")
     ? adminCopy.reserveGovernanceSubtitle
-    : pathname.startsWith("/stats")
-      ? adminCopy.tokenStatsSubtitle
-      : pathname.startsWith("/klend")
-        ? adminCopy.klendSubtitle
-        : adminCopy.treasuryOperations;
+    : pathname.startsWith("/vault")
+      ? adminCopy.vaultNav
+      : pathname.startsWith("/stats")
+        ? adminCopy.tokenStatsSubtitle
+        : pathname.startsWith("/klend")
+          ? adminCopy.klendSubtitle
+          : adminCopy.treasuryOperations;
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
@@ -94,12 +96,21 @@ export default function AppHeader() {
             </Button>
             <Button
               component={Link}
-              href="/policy"
+              href="/reserves"
               size="small"
               variant="text"
-              sx={navSx(pathname.startsWith("/policy"))}
+              sx={navSx(pathname.startsWith("/reserves") || pathname.startsWith("/policy"))}
             >
-              {adminCopy.chamber}
+              {adminCopy.reserves}
+            </Button>
+            <Button
+              component={Link}
+              href="/vault"
+              size="small"
+              variant="text"
+              sx={navSx(pathname.startsWith("/vault"))}
+            >
+              {adminCopy.vaultNav}
             </Button>
             <Button
               component={Link}

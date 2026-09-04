@@ -23,4 +23,6 @@ Runs on port **3002**.
 ## Pages
 
 - **/** — Mint dashboard (wrap/redeem via backend admin wallet + pool accounting)
-- **/policy** — Register collateral and configure per-asset policy
+- **/reserves** — Register collateral, per-asset policy, and pool accounts
+- **/vault** — Pause, wrap/unwrap access, allowlist, admin transfer, mint-authority handoff
+- **/policy** — Redirects to `/reserves`

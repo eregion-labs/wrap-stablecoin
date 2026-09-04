@@ -54,7 +54,7 @@ Init already defaults both flags to public and haircuts to 0. Launch posture is 
 1. Keep **wrap public** (`set-wrap-public` `true`) so anyone can mint.
 2. Set **`redemptionHaircutBps`** high on the collateral pool (`update-asset-policy`) so redeem is obviously discounted. The public UI shows percent = bps / 100 (e.g. 2000 bps → 20%).
 3. Optionally leave unwrap public, or flip unwrap private after the allowlist is ready.
-4. **Before any private flag:** Chamber → initialize allowlist PDA, then bulk-add wallets (one pubkey per line). On-chain max is **64** (`AllowlistFull`) — a protocol limit, not a UI cap. Empty/missing allowlist means only admin can wrap/unwrap.
+4. **Before any private flag:** Vault → initialize allowlist PDA, then bulk-add wallets (one pubkey per line). On-chain max is **64** (`AllowlistFull`) — a protocol limit, not a UI cap. Empty/missing allowlist means only admin can wrap/unwrap.
 5. Private wrap/unwrap txs use the allowlist PDA in the instruction slot before `collateral_token_program` and `florin_token_program`. Public (and admin) txs use the program-id sentinel in that same slot. A missing slot shifts the token programs and the program rejects the ix.
 
 Private-wrap smoke: with `wrapPublic=false`, `POST /v1/tx/issue` for a non-member returns 400 `"not on allowlist"`; a member’s wrap ix has the allowlist PDA at account index 9 (not the program id). Public wrap (default localnet) uses the sentinel — see `wrap-stablecoin/scripts/backend_smoke.ts`.
@@ -73,7 +73,7 @@ Exits non-zero when any pool has `freeLiquidity < liabilityUnderlying + cushion`
 
 The operator console (`admin-frontend`) calls `/v1/admin/*`. See [Backend-API.md](Backend-API.md).
 
-### Chamber (`/policy`) — vault governance
+### Vault (`/vault`) — vault governance
 
 Server-signed (treasury keypair):
 
@@ -83,7 +83,6 @@ Server-signed (treasury keypair):
 | Wrap / unwrap public | `POST /v1/admin/set-wrap-public`, `set-unwrap-public` |
 | Init / add / remove allowlist | `POST /v1/admin/init-allowlist`, `add-to-allowlist` (`pubkey` or `pubkeys[]`), `remove-from-allowlist` |
 | Propose / cancel admin transfer | `POST /v1/admin/transfer-authority`, `cancel-transfer-authority` |
-| Enable Kamino (per asset, one-shot) | `POST /v1/admin/enable-klend` |
 | Propose / cancel mint authority | `POST /v1/admin/propose-mint-authority`, `cancel-propose-mint-authority` |
 
 Destination-signed (keypair JSON in the browser; secret never sent to the backend):
@@ -94,6 +93,12 @@ Destination-signed (keypair JSON in the browser; secret never sent to the backen
 | Accept mint authority (permanently disables wrap) | `POST /v1/admin/accept-mint-authority/tx` |
 
 Mint-authority accept requires typing `DISABLE WRAP` in the UI. Remaining accounts (all `AssetConfig` PDAs) are attached by the backend.
+
+### Reserves (`/reserves`) — collateral policy
+
+Register assets, haircuts, caps, status, and Enable Kamino. Pool **Accounts** (liquidity, liability, surplus) sit on the same page.
+
+Enable Kamino (per asset, one-shot) is `POST /v1/admin/enable-klend`.
 
 ### Yield (`/klend`) — Kamino ops
 

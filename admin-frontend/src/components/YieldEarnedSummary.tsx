@@ -8,6 +8,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { shortMint } from "@/lib/mints";
+import ExplorerLink from "@/components/ExplorerLink";
 import type { VaultAsset } from "@/types/vault";
 
 /**
@@ -93,7 +94,9 @@ export default function YieldEarnedSummary({ assets }: { assets: VaultAsset[] })
                 sx={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center", py: 1, borderTop: "1px solid", borderColor: "divider" }}
               >
                 <Typography variant="body2" sx={{ minWidth: 104, fontWeight: 600 }}>
-                  {shortMint(a.mint)}
+                  <ExplorerLink address={a.mint} type="token">
+                    {shortMint(a.mint)}
+                  </ExplorerLink>
                 </Typography>
                 <Figure label="Deployed" value={formatTokenAmount(a.deployedToKamino, a.tokenDecimals)} />
                 <Figure

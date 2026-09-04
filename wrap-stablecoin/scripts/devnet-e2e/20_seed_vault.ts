@@ -1,13 +1,15 @@
 /**
- * Step 2: initialize the wrap_stablecoin vault and register both collaterals
+ * Step 2: initialize the wrap_stablecoin vault and register A/B collaterals
  * against their devnet KLend reserves. initialize -> add_asset(A) -> enable_klend(A)
  * -> add_asset(B) -> enable_klend(B). Idempotent.
+ * Numbered dummies (tUSD1, …) are intentionally skipped — Register them on the
+ * admin Reserves page after copying the mint from 10_setup_market.
  * Usage: npx ts-node scripts/devnet-e2e/20_seed_vault.ts
  */
 import * as anchor from '@coral-xyz/anchor'
 import { PublicKey, SystemProgram } from '@solana/web3.js'
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { adminKeypair, connection, KLEND_PROGRAM, lmaPda, readState, WRAP_PROGRAM, writeState } from './common'
+import { adminKeypair, connection, lmaPda, readState, VAULT_ASSET_KEYS, WRAP_PROGRAM, writeState } from './common'
 
 const IDL = require('../../target/idl/wrap_stablecoin.json')
 
@@ -61,9 +63,13 @@ async function main() {
     state.wrappedMint = wrappedMint.toBase58()
     writeState(state)
 
-    for (const key of Object.keys(state.assets)) {
+    // A/B only — numbered keys are registered via the admin Reserves UI
+    for (const key of VAULT_ASSET_KEYS) {
         const a = state.assets[key]
-        const mint = new PublicKey(a.mint!)
+        if (!a?.mint || !a.reserve) {
+            throw new Error(`asset ${key} incomplete; run 10_setup_market first`)
+        }
+        const mint = new PublicKey(a.mint)
         const assetConfig = pda([S.assetConfig, vaultConfig.toBuffer(), mint.toBuffer()])
         const tokenVault = pda([S.tokenVault, assetConfig.toBuffer()])
         const treasuryVault = pda([S.treasuryVault, assetConfig.toBuffer()])

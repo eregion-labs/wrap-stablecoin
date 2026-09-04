@@ -1,5 +1,41 @@
 {
   "assets": {
+    "1": {
+      "symbol": "tUSD1",
+      "decimals": 6,
+      "mint": "7DfHyL9m8fohj5ysB4HhSCHDu4c8VGtA1KNjsgC1sqxe",
+      "reserve": "4HEDpqMyNcECyNKnCKskauxH2X91UYvoD6UGYoamJ89a",
+      "reserveLiquiditySupply": "94Ed2RhMcfK87H4SCTRkXddjNbRumggNtGHqaRn4P8Y1",
+      "reserveCollateralMint": "61CQ2dWrn8KABA5aNJSVbTurFXejMvtcTHSnSCJGjCuL"
+    },
+    "2": {
+      "symbol": "tUSD2",
+      "decimals": 6,
+      "mint": "2PVnHCsrkrHAyrk6CDZ1nuWogEQBjDmD3t6nz27s3ya7",
+      "reserve": "HhGhKLTGt6voaDYobHhzy2Hmrod1VM1o5k36wkphaVvN",
+      "reserveLiquiditySupply": "Bga1bRqtXGtHDEJJH95hCZWmDTYxhhoEDekRnE4RBjj7",
+      "reserveCollateralMint": "ASirbnK6M7JYpqEFhgNugSD7Vbr9z2mvbsW7HJDj6N1f"
+    },
+    "3": {
+      "symbol": "tUSD3",
+      "decimals": 6,
+      "mint": "9s2ByyX8a6qjN6sJnJYH5wb2ysLDHxWLeK7Ve7rv3WB6",
+      "reserve": "AzeYYe18rXjsPmGWH1qa6tePMsGn4HxiM49qkLCJemt7",
+      "reserveLiquiditySupply": "9vPZPastiYcgwc9Abdq8XCxXvneFpZAHhRmr1GApgK7p",
+      "reserveCollateralMint": "JD62Z3iKbQ8NVA6burPXQnzszYbrJ5bpRVAC1uvRoJpV",
+      "borrower": "AZFrhMrAneAvH7jPbnNfSQbevfRyRNbDTQc6CR3jtVEi",
+      "obligation": "6LfJHUsvh2s1orhUURiJHSq8KUPNXjzBFGQAwzeSL2dH"
+    },
+    "4": {
+      "symbol": "tUSD4",
+      "decimals": 6,
+      "mint": "9vJgRZSie62MyK259Ypo5evW5pVdcXAeFsNr4NgV6dBc",
+      "reserve": "6Th8gSjacf7izuQXHj4qT4NXfBJpUbSbLNz4hvvcLtcx",
+      "reserveLiquiditySupply": "CGk2pXqezNJ2pbBjfYktmpuQFnSbs4kcZt2zjPsWvQML",
+      "reserveCollateralMint": "EDthq8RFKBDkUmdLkWa9xAFToLb6BhWtoFh6kRrcSgP2",
+      "borrower": "B4RnydedbuTAbFcvJPnNDfcBHChkwzhMfNVnPCktx9X4",
+      "obligation": "CfJvvSmsMBnNKjJkfssNrqgajkhCnMGbpuMBzVsGAFY1"
+    },
     "A": {
       "symbol": "tUSDA",
       "decimals": 6,

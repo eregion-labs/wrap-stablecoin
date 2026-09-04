@@ -41,6 +41,8 @@ export type VaultAsset = {
   netLiability: number;
   assetStatus: AssetStatus;
   klendEnabled: boolean;
+  lendingMarket?: string | null;
+  klendReserve?: string | null;
 };
 
 /** Vault-level governance fields on GET /v1/vault/meta and /v1/vault/assets. */
@@ -62,6 +64,8 @@ export type VaultSummary = VaultGovernance & {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  /** Wrapped mint supply as a human decimal string (RPC uiAmountString). */
+  circulatingSupply?: string;
   assets: VaultAsset[];
 };
 
@@ -73,12 +77,16 @@ export type VaultMeta = VaultGovernance & {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  /** Wrapped mint supply as a human decimal string (RPC uiAmountString). */
+  circulatingSupply?: string;
 };
 
-/** Response from GET /v1/vault/token-holders (token-account → amount atoms). */
+/** Response from GET /v1/vault/token-holders (token-account → human decimal amount). */
 export type TokenHolders = {
   wrappedMint: string;
   decimals: number;
+  /** Mint supply as a human decimal string. */
+  supply?: string;
   holders: Record<string, string>;
 };
 

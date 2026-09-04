@@ -8,9 +8,10 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useSnackbar } from "notistack";
 import { mintLabel } from "@/lib/mints";
-import { formatTokenAmount } from "@/lib/tokenAmount";
+import { atomsToInputAmount, formatTokenAmount } from "@/lib/tokenAmount";
 import { cardSx } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
+import ExplorerLink from "@/components/ExplorerLink";
 import type { VaultAsset } from "@/types/vault";
 import { useKlendStore } from "@/stores/klendStore";
 import type { ActionResult } from "@/stores/types";
@@ -73,7 +74,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           deployAmount: "",
           recallAmount: "",
           harvestAmount: "",
-          sweepAmount: String(asset.homeSurplus || ""),
+          sweepAmount: asset.homeSurplus > 0 ? atomsToInputAmount(asset.homeSurplus, d) : "",
           treasuryAmount: "",
           destination: "",
         };
@@ -86,7 +87,11 @@ export default function KlendOpsTable({ assets, paused }: Props) {
         return (
           <Box key={asset.mint} sx={cardSx}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
-              <Typography variant="subtitle1">{mintLabel(asset.mint)}</Typography>
+              <Typography variant="subtitle1">
+                <ExplorerLink address={asset.mint} type="token">
+                  {mintLabel(asset.mint)}
+                </ExplorerLink>
+              </Typography>
               {asset.klendEnabled ? (
                 <Chip label="Kamino" size="small" variant="outlined" />
               ) : (

@@ -528,6 +528,10 @@ pub struct VaultAssetView {
     pub net_liability: u64,
     pub asset_status: String,
     pub klend_enabled: bool,
+    /// KLend lending market, present when Kamino is enabled for this asset.
+    pub lending_market: Option<String>,
+    /// KLend reserve, present when Kamino is enabled for this asset.
+    pub klend_reserve: Option<String>,
 }
 
 fn optional_pubkey(pk: &Pubkey) -> Option<String> {
@@ -536,6 +540,20 @@ fn optional_pubkey(pk: &Pubkey) -> Option<String> {
     } else {
         Some(pk.to_string())
     }
+}
+
+/// Human-decimal supply string (`uiAmountString`), falling back to raw atoms.
+fn mint_supply_ui(rpc: &RpcClient, mint: &Pubkey) -> String {
+    rpc.get_token_supply(mint)
+        .ok()
+        .map(|s| {
+            if !s.ui_amount_string.is_empty() {
+                s.ui_amount_string
+            } else {
+                s.amount
+            }
+        })
+        .unwrap_or_default()
 }
 
 fn fetch_allowlist_keys(
@@ -579,6 +597,8 @@ pub struct VaultSummaryView {
     pub wrapped_mint: String,
     pub wrapped_decimals: u8,
     pub mint_metadata: Option<MintMetadata>,
+    /// Wrapped mint supply as a human decimal string (`uiAmountString`).
+    pub circulating_supply: String,
     pub assets: Vec<VaultAssetView>,
 }
 
@@ -599,6 +619,8 @@ pub struct VaultMetaView {
     pub wrapped_mint: String,
     pub wrapped_decimals: u8,
     pub mint_metadata: Option<MintMetadata>,
+    /// Wrapped mint supply as a human decimal string (`uiAmountString`).
+    pub circulating_supply: String,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -812,6 +834,8 @@ pub fn fetch_vault_assets(
             net_liability: liability,
             asset_status: asset_status_label(cfg.asset_status),
             klend_enabled: klend.is_some(),
+            lending_market: klend.as_ref().map(|k| k.lending_market.to_string()),
+            klend_reserve: klend.as_ref().map(|k| k.reserve.to_string()),
         });
     }
     Ok(VaultSummaryView {
@@ -830,6 +854,7 @@ pub fn fetch_vault_assets(
         mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)
             .ok()
             .flatten(),
+        circulating_supply: mint_supply_ui(rpc, &vault.wrapped_mint),
         assets: out,
     })
 }
@@ -856,6 +881,7 @@ pub fn fetch_vault_meta(
         mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)
             .ok()
             .flatten(),
+        circulating_supply: mint_supply_ui(rpc, &vault.wrapped_mint),
     })
 }
 
@@ -865,7 +891,9 @@ pub fn fetch_vault_meta(
 pub struct TokenHoldersView {
     pub wrapped_mint: String,
     pub decimals: u8,
-    /// Token-account address → raw amount (atoms) as a decimal string.
+    /// Mint supply as a human decimal string (`uiAmountString`).
+    pub supply: String,
+    /// Token-account address → human decimal amount (`uiAmountString`).
     pub holders: std::collections::BTreeMap<String, String>,
 }
 
@@ -880,11 +908,17 @@ pub fn fetch_token_holders(
         .with_context(|| format!("getTokenLargestAccounts {}", vault.wrapped_mint))?;
     let mut holders = std::collections::BTreeMap::new();
     for account in accounts {
-        holders.insert(account.address, account.amount.amount);
+        let ui = if !account.amount.ui_amount_string.is_empty() {
+            account.amount.ui_amount_string
+        } else {
+            account.amount.amount
+        };
+        holders.insert(account.address, ui);
     }
     Ok(TokenHoldersView {
         wrapped_mint: vault.wrapped_mint.to_string(),
         decimals: vault.wrapped_decimals,
+        supply: mint_supply_ui(rpc, &vault.wrapped_mint),
         holders,
     })
 }

@@ -88,6 +88,7 @@ export default function TokenStatsPage() {
               wrappedMint={source.wrappedMint}
               wrappedDecimals={source.wrappedDecimals}
               mintMetadata={source.mintMetadata}
+              circulatingSupply={holdersData?.supply ?? source.circulatingSupply}
             />
           </Box>
         )}

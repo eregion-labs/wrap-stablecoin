@@ -21,8 +21,8 @@ export const WRAP_PROGRAM = new PublicKey('DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy
 /** Live devnet Pyth receiver USDC/USD price update account; both test stables peg ~$1. */
 export const PYTH_USDC_FEED = new PublicKey('Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX')
 
-const MONOREPO_ROOT = path.resolve(__dirname, '..', '..', '..')
-export const SECRETS_DIR = process.env.SECRETS_DIR ?? path.join(MONOREPO_ROOT, '.secrets')
+const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
+export const SECRETS_DIR = process.env.SECRETS_DIR ?? path.join(PACKAGE_ROOT, '.secrets')
 export const STATE_FILE = path.join(__dirname, 'devnet-state.json')
 
 export function loadKeypair(file: string): Keypair {
@@ -155,4 +155,68 @@ export function refreshReserveIx(reserve: PublicKey, market: PublicKey): Transac
 
 export function lmaPda(market: PublicKey): PublicKey {
     return PublicKey.findProgramAddressSync([Buffer.from('lma'), market.toBuffer()], KLEND_PROGRAM)[0]
+}
+
+/** Vault-seeded e2e assets only — numbered dummies are registered via the admin Reserves UI. */
+export const VAULT_ASSET_KEYS = ['A', 'B'] as const
+
+/** Numbered dummy key `N` → symbol `tUSDN` (e.g. 1 → tUSD1). */
+export function numberedSymbol(n: string | number): string {
+    return `tUSD${n}`
+}
+
+/** Parse CLI args as positive integers (e.g. `1 2 3`). Rejects letters and zero. */
+export function parseNumberedArgs(argv: string[]): string[] {
+    const out: string[] = []
+    for (const raw of argv) {
+        if (!/^[1-9]\d*$/.test(raw)) {
+            throw new Error(`expected positive integer asset key, got ${JSON.stringify(raw)}`)
+        }
+        if (!out.includes(raw)) out.push(raw)
+    }
+    return out
+}
+
+/** Ensure state.assets[N] exists for each numbered key (does not overwrite mint/reserve). */
+export function ensureNumberedAssets(state: DevnetState, numbers: string[]): DevnetState {
+    for (const n of numbers) {
+        if (!state.assets[n]) {
+            state.assets[n] = { symbol: numberedSymbol(n), decimals: 6 }
+        } else if (!state.assets[n].symbol) {
+            state.assets[n].symbol = numberedSymbol(n)
+        }
+    }
+    return writeState(state)
+}
+
+/**
+ * `unmapped` = nothing on chain yet, `partial` = mint but no KLend reserve
+ * (resumable after a failed run), `mapped` = mint + reserve already recorded.
+ */
+export type AssetStatus = 'unmapped' | 'partial' | 'mapped'
+
+export function assetStatus(a?: AssetState): AssetStatus {
+    if (!a?.mint) return 'unmapped'
+    return a.reserve ? 'mapped' : 'partial'
+}
+
+/** devnet-state.json is the registry of which key owns which mint/reserve. */
+export function printAssetRegistry(state: DevnetState): void {
+    const keys = Object.keys(state.assets)
+    console.log('registry (devnet-state.json)')
+    if (!keys.length) {
+        console.log('(empty)')
+        return
+    }
+    const head = ['KEY', 'SYMBOL', 'STATUS', 'MINT', 'RESERVE']
+    const rows = keys.map((key) => {
+        const a = state.assets[key]
+        return [key, a.symbol ?? '-', assetStatus(a), a.mint ?? '-', a.reserve ?? '-']
+    })
+    // Column widths so addresses stay flush-left and selectable as whole words.
+    const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)))
+    const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd()
+    console.log(line(head))
+    console.log(widths.map((w) => '-'.repeat(w)).join('  '))
+    for (const r of rows) console.log(line(r))
 }

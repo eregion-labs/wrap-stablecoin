@@ -150,10 +150,10 @@ export default function VaultControlsPanel() {
   const allowlistReady = meta.allowlist != null;
 
   return (
-    <Box sx={{ maxWidth: 1280, mx: "auto", pt: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ maxWidth: 1280, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
       <Box sx={{ mb: 2 }}>
         <PageHeading
-          label={adminCopy.chamber}
+          label={adminCopy.vaultNav}
           title={adminCopy.vaultControls}
           description={adminCopy.vaultControlsSubtitle}
         />
@@ -234,6 +234,14 @@ export default function VaultControlsPanel() {
             Admin
           </Typography>
           <AddressCell address={meta.admin} />
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 0.5 }}>
+            {adminCopy.vaultConfig}
+          </Typography>
+          <AddressCell address={meta.vaultConfig} />
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 0.5 }}>
+            {adminCopy.programId}
+          </Typography>
+          <AddressCell address={meta.programId} />
         </Section>
 
         <Section title={adminCopy.allowlistTitle}>

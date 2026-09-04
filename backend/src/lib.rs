@@ -18,7 +18,7 @@ pub mod tx_submit;
 pub mod wrap_stablecoin;
 
 use crate::app_state::AppState;
-use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
+use crate::routes::{admin, admin_ops, client_config, guard, klend_lookup, ping, tx, vault};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -52,6 +52,7 @@ use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
         admin_ops::accept_authority_tx,
         admin_ops::accept_authority,
         admin_ops::enable_klend,
+        klend_lookup::klend_reserve,
         admin_ops::propose_mint_authority,
         admin_ops::cancel_propose_mint_authority,
         admin_ops::accept_mint_authority_tx,
@@ -93,6 +94,9 @@ use crate::routes::{admin, admin_ops, client_config, guard, ping, tx, vault};
         admin_ops::TransferAuthorityBody,
         admin_ops::ProposeMintAuthorityBody,
         admin_ops::EnableKlendBody,
+        klend_lookup::KlendReserveQuery,
+        crate::wrap_stablecoin::KlendReserveLookup,
+        crate::wrap_stablecoin::KlendReserveMatch,
         vault::VaultAssetsResponse,
         vault::VaultMetaResponse,
         vault::TokenHoldersResponse,
@@ -155,6 +159,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/accept-authority/tx", post(admin_ops::accept_authority_tx))
         .route("/accept-authority", post(admin_ops::accept_authority))
         .route("/enable-klend", post(admin_ops::enable_klend))
+        .route("/klend-reserve", axum::routing::get(klend_lookup::klend_reserve))
         .route("/propose-mint-authority", post(admin_ops::propose_mint_authority))
         .route("/cancel-propose-mint-authority", post(admin_ops::cancel_propose_mint_authority))
         .route("/accept-mint-authority/tx", post(admin_ops::accept_mint_authority_tx))

@@ -2,10 +2,12 @@
 
 import { useMemo } from "react";
 import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { truncateAddrShort } from "@/lib/address";
-import { formatTokenAmount } from "@/lib/tokenAmount";
+import { formatApiTokenAmount } from "@/lib/tokenAmount";
+import AddressCell from "@/components/AddressCell";
 import { cardSx, civicBlue, colorSuccess, florentineRed, accentBrown, ledgerInk, textMuted } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
 
@@ -22,6 +24,7 @@ type HolderSlice = {
   key: string;
   label: string;
   value: number;
+  raw: string;
   pct: string;
   isOthers: boolean;
 };
@@ -36,6 +39,7 @@ function buildSlices(holders: Record<string, string>): HolderSlice[] {
   const entries = Object.entries(holders)
     .map(([address, amount]) => ({
       address,
+      raw: amount,
       value: Number(amount),
     }))
     .filter((e) => Number.isFinite(e.value) && e.value > 0)
@@ -53,6 +57,7 @@ function buildSlices(holders: Record<string, string>): HolderSlice[] {
     key: e.address,
     label: truncateAddrShort(e.address, 4, 4),
     value: e.value,
+    raw: e.raw,
     pct: pctOf(e.value),
     isOthers: false,
   }));
@@ -62,6 +67,7 @@ function buildSlices(holders: Record<string, string>): HolderSlice[] {
       key: "others",
       label: adminCopy.holdersOthers,
       value: othersValue,
+      raw: String(othersValue),
       pct: pctOf(othersValue),
       isOthers: true,
     });
@@ -107,7 +113,7 @@ function HoldersTooltip({
         {addrLabel}
       </Typography>
       <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
-        {formatTokenAmount(slice.value, decimals)} {symbol} ({slice.pct}%)
+        {formatApiTokenAmount(slice.raw, decimals)} {symbol} ({slice.pct}%)
       </Typography>
     </Box>
   );
@@ -161,6 +167,27 @@ export default function TokenHoldersPieChart({ holders, decimals, symbol }: Prop
           </PieChart>
         </ResponsiveContainer>
       </Box>
+      <Stack spacing={1} sx={{ mt: 2 }}>
+        {slices
+          .filter((slice) => !slice.isOthers)
+          .map((slice) => (
+            <Stack
+              key={slice.key}
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <AddressCell address={slice.key} />
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', flexShrink: 0 }}
+              >
+                {formatApiTokenAmount(slice.raw, decimals)} {symbol}
+              </Typography>
+            </Stack>
+          ))}
+      </Stack>
     </Box>
   );
 }

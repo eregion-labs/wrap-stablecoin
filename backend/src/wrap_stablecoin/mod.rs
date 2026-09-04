@@ -3,6 +3,7 @@
 mod builder;
 mod governance;
 mod klend;
+mod klend_lookup;
 mod pda;
 mod verify;
 
@@ -27,5 +28,9 @@ pub use governance::{
     unsigned_transfer_authority_tx_bytes,
 };
 pub use klend::load_klend_scope_prices_from_env;
+pub use klend_lookup::{
+    lookup_klend_reserves_for_mint, KlendReserveLookup, KlendReserveMatch, KAMINO_DEVNET_MARKET,
+    KAMINO_MAIN_MARKET,
+};
 pub use pda::*;
 pub use verify::{ensure_tx_targets_program, tx_targets_program};

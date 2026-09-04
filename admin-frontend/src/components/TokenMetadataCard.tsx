@@ -7,6 +7,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AddressCell from "@/components/AddressCell";
 import { BRANDING } from "@/branding";
+import { formatApiTokenAmount } from "@/lib/tokenAmount";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
 import { cardSx } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
@@ -17,18 +18,25 @@ type Props = {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  /** Mint supply as a human decimal string, or atom integer; omit while loading. */
+  circulatingSupply?: string | null;
 };
 
 export default function TokenMetadataCard({
   wrappedMint,
   wrappedDecimals,
   mintMetadata,
+  circulatingSupply,
 }: Props) {
   const config = useClientConfig();
   const network = config.solana.network;
   const name = wrappedTokenName({ mintMetadata });
   const symbol = wrappedTokenSymbol({ mintMetadata });
   const imageUri = BRANDING.icon.trim() || undefined;
+  const supplyLabel =
+    circulatingSupply != null && circulatingSupply.trim() !== ""
+      ? `${formatApiTokenAmount(circulatingSupply, wrappedDecimals)} ${symbol}`
+      : "—";
 
   return (
     <Box sx={{ ...cardSx, mb: 0 }}>
@@ -54,7 +62,7 @@ export default function TokenMetadataCard({
               spacing={{ xs: 0.5, sm: 2 }}
               alignItems={{ sm: "center" }}
             >
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 180 }}>
                 {adminCopy.tokenContract}
               </Typography>
               <AddressCell address={wrappedMint} type="token" />
@@ -64,11 +72,23 @@ export default function TokenMetadataCard({
               spacing={{ xs: 0.5, sm: 2 }}
               alignItems={{ sm: "center" }}
             >
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 180 }}>
                 {adminCopy.decimals}
               </Typography>
               <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
                 {wrappedDecimals}
+              </Typography>
+            </Stack>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={{ xs: 0.5, sm: 2 }}
+              alignItems={{ sm: "center" }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 180 }}>
+                {adminCopy.circulatingSupply}
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+                {supplyLabel}
               </Typography>
             </Stack>
           </Stack>

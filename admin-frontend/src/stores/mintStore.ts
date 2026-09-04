@@ -2,9 +2,19 @@
 
 import { create } from "zustand";
 import { apiGet, apiPost } from "@/lib/api";
+import { parseTokenAmount } from "@/lib/tokenAmount";
 import type { RedeemQuote, VaultSummary } from "@/types/vault";
 import { actionErr, actionOk, type ActionResult } from "./types";
 import { useVaultStore } from "./vaultStore";
+
+function collateralDecimals(assetMint: string): number {
+  const asset = useVaultStore.getState().summary?.assets.find((a) => a.mint === assetMint);
+  return asset?.tokenDecimals ?? 6;
+}
+
+function wrappedDecimals(): number {
+  return useVaultStore.getState().summary?.wrappedDecimals ?? 6;
+}
 
 const QUOTE_DEBOUNCE_MS = 300;
 
@@ -34,8 +44,8 @@ type MintState = {
 
 const initialMintState = {
   assetMint: "",
-  mintAmount: "1000000",
-  redeemAmount: "1000000",
+  mintAmount: "1",
+  redeemAmount: "1",
   redeemQuote: null as RedeemQuote | null,
   quoteStatus: "idle" as QuoteStatus,
   busy: null as "mint" | "redeem" | null,
@@ -97,8 +107,8 @@ export const useMintStore = create<MintState>()((set, get) => ({
     set({ _quoteGeneration: generation });
 
     const { assetMint, redeemAmount } = get();
-    const amount = Number(redeemAmount);
-    if (!assetMint || !Number.isFinite(amount) || amount <= 0) {
+    const amount = parseTokenAmount(redeemAmount, wrappedDecimals());
+    if (!assetMint || amount == null) {
       set({ redeemQuote: null, quoteStatus: "idle" });
       return;
     }
@@ -120,8 +130,8 @@ export const useMintStore = create<MintState>()((set, get) => ({
 
   submitMint: async () => {
     const { assetMint, mintAmount } = get();
-    const amount = Number(mintAmount);
-    if (!assetMint || !Number.isFinite(amount) || amount <= 0) {
+    const amount = parseTokenAmount(mintAmount, collateralDecimals(assetMint));
+    if (!assetMint || amount == null) {
       return actionErr("invalid amount");
     }
 
@@ -142,8 +152,8 @@ export const useMintStore = create<MintState>()((set, get) => ({
 
   submitRedeem: async () => {
     const { assetMint, redeemAmount, redeemQuote } = get();
-    const amount = Number(redeemAmount);
-    if (!assetMint || !Number.isFinite(amount) || amount <= 0) {
+    const amount = parseTokenAmount(redeemAmount, wrappedDecimals());
+    if (!assetMint || amount == null) {
       return actionErr("invalid amount");
     }
     if (!redeemQuote?.canRedeem) {

@@ -30,6 +30,7 @@ wrap-stablecoin = { path = "../wrap-stablecoin/programs/wrap-stablecoin", defaul
 ] }
 anchor-lang = "0.31.1"
 solana-client = "2.2.1"
+solana-account-decoder-client-types = "2.2.1"
 solana-sdk = "2.2.1"
 spl-associated-token-account = "6.0.0"
 spl-token = "7.0.0"
@@ -38,6 +39,7 @@ borsh = "1.5"
 sha2 = "0.10"
 base64 = "0.22"
 bincode = "1.3"
+ureq = { version = "2.12", features = ["json"] }
 
 [[bin]]
 name = "wrap-stablecoin-api"

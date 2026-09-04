@@ -34,6 +34,8 @@ export type VaultAsset = {
   netLiability: number;
   assetStatus: string;
   klendEnabled: boolean;
+  lendingMarket?: string | null;
+  klendReserve?: string | null;
 };
 
 export type VaultSummary = {
@@ -50,6 +52,7 @@ export type VaultSummary = {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  circulatingSupply?: string;
   assets: VaultAsset[];
 };
 
@@ -67,6 +70,7 @@ export type VaultMeta = {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  circulatingSupply?: string;
 };
 
 export type AssetStatus =

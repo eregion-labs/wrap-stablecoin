@@ -255,7 +255,7 @@ Enable Kamino (one-shot per asset):
 
 ### Destination-signed accepts
 
-`POST /v1/admin/accept-authority/tx` and `POST /v1/admin/accept-mint-authority/tx` return `{ "transactionB64": "..." }` (bincode `VersionedTransaction`). The fee payer / signer is the on-chain pending destination. The Chamber UI signs in the browser from a keypair JSON file; the secret never hits the backend.
+`POST /v1/admin/accept-authority/tx` and `POST /v1/admin/accept-mint-authority/tx` return `{ "transactionB64": "..." }` (bincode `VersionedTransaction`). The fee payer / signer is the on-chain pending destination. The Vault controls UI signs in the browser from a keypair JSON file; the secret never hits the backend.
 
 `accept_mint_authority` remaining accounts are every registered `AssetConfig` PDA in vault order. Accepting **permanently disables wrap**.
 

@@ -2,17 +2,29 @@ import { ADMIN_COLLATERAL_MINTS } from "@/lib/mints";
 import type { VaultAsset, VaultSummary } from "@/types/vault";
 import type { LoadStatus } from "./types";
 
+/** On-chain vault asset slot cap (`MAX_REGISTERED_ASSETS`). */
+export const MAX_REGISTERED_ASSETS = 8;
+
 export function selectVaultLoading(status: LoadStatus): boolean {
   return status === "idle" || status === "loading";
 }
 
-export function selectRowMints(summary: VaultSummary | null): string[] {
+/**
+ * Mints shown as Reserves rows.
+ * Catalog (CCC/TTT) is localnet-only; elsewhere rows are on-chain assets only.
+ */
+export function selectRowMints(
+  summary: VaultSummary | null,
+  opts?: { includeCatalog?: boolean },
+): string[] {
   const seen = new Set<string>();
   const mints: string[] = [];
-  for (const m of ADMIN_COLLATERAL_MINTS) {
-    if (!seen.has(m)) {
-      seen.add(m);
-      mints.push(m);
+  if (opts?.includeCatalog) {
+    for (const m of ADMIN_COLLATERAL_MINTS) {
+      if (!seen.has(m)) {
+        seen.add(m);
+        mints.push(m);
+      }
     }
   }
   for (const a of summary?.assets ?? []) {
