@@ -27,7 +27,7 @@ export const adminCopy = {
   refreshHolders: "Refresh holders",
   accounts: "Accounts",
   accountsCaption:
-    "Per-pool reserves, liability, and redeemable capacity.",
+    "Per-pool controls (issue/redeem, status, haircuts, caps, cushion), reserves, liability, and redeemable capacity.",
   issueViaTreasury: "Issue",
   redeemViaTreasury: "Redeem",
   submitting: "Submitting…",
@@ -191,7 +191,7 @@ export const metricHints = {
   },
   cushion: {
     label: "Cushion",
-    hint: "Operator reserve (min_liquidity_target) kept in the home vault and not deployed to Kamino.",
+    hint: "This pool's min liquidity: underlying kept in the home vault, not deployed to Kamino, and not sweepable as home surplus. Users can still redeem through it. 0 = no reserve.",
   },
   inKamino: {
     label: "In Kamino",
@@ -243,24 +243,32 @@ export const metricHints = {
   },
   mintCap: {
     label: "Issue cap",
-    hint: "Max outstanding liability (issued − redeemed) for this pool, in wrapped atoms as a human amount. 0 = unlimited. New issues that would exceed it fail.",
+    hint: "Max outstanding Florin from this pool (issued − redeemed). This is the protocol's exposure to this reserve. 0 = unlimited. New issues that would exceed it fail.",
   },
   exposureCap: {
     label: "Exposure cap",
-    hint: "Second liability ceiling in wrapped atoms (same check as issue cap today). 0 = unlimited. Use for a governance dashboard limit alongside issue cap.",
+    hint: "Second, optional ceiling on the same outstanding liability as issue cap. Same wrap check; the tighter of the two wins. 0 = unused.",
   },
   policyActions: {
     label: "Actions",
-    hint: "Register creates the on-chain pool for an unregistered mint. Save policy writes Issue/Redeem, Status, haircuts, caps, and Min liquidity for a registered pool.",
+    hint: "Register creates the on-chain pool for an unregistered mint. Save policy writes Issue/Redeem, Status, haircuts, caps, and Cushion for a registered pool.",
   },
 } as const satisfies Record<string, MetricHint>;
 
 export type MetricHintKey = keyof typeof metricHints;
 
-/** Liability in wrapped-token units; label includes the mint symbol. */
+/** Outstanding minted against a reserve (pool liability); label includes the mint symbol. */
 export function liabilityWrappedMetric(wrappedSymbol: string): MetricHint {
   return {
     label: `Liability (${wrappedSymbol})`,
-    hint: `Outstanding wrapped tokens (${wrappedSymbol}) still redeemable through this pool (minted − redeemed).`,
+    hint: `Outstanding ${wrappedSymbol} issued against this reserve (issued − redeemed). Same as Minted. maxRedeemable = min(this, home vault); anything above maxRedeemable needs a Kamino recall before redeem — that remainder is not the same as In Kamino (which can include surplus).`,
+  };
+}
+
+/** Left-column Accounts label for the same liability figure. */
+export function mintedByReserveMetric(wrappedSymbol: string): MetricHint {
+  return {
+    label: `Minted (${wrappedSymbol})`,
+    hint: liabilityWrappedMetric(wrappedSymbol).hint,
   };
 }

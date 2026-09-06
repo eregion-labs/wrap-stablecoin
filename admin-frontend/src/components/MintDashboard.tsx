@@ -3,15 +3,14 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import Link from "@mui/material/Link";
 import CircularProgress from "@mui/material/CircularProgress";
+import { ReserveCollateralSelect } from "@florin/ui";
 import { useSnackbar } from "notistack";
 import NextLink from "next/link";
 import AmountActionRow from "@/components/AmountActionRow";
@@ -186,27 +185,19 @@ export default function MintDashboard() {
             </Typography>
           </Stack>
 
-          <TextField
-            select
+          <ReserveCollateralSelect
             label={adminCopy.reserveCollateral}
             value={assetMint}
-            onChange={(e) => setAssetMint(e.target.value)}
-            fullWidth
+            onChange={setAssetMint}
             disabled={vaultAssets.length === 0}
-          >
-            {vaultAssets.length === 0 ? (
-              <MenuItem value="">No registered assets</MenuItem>
-            ) : (
-              vaultAssets.map((a) => (
-                <MenuItem key={a.mint} value={a.mint}>
-                  {mintLabel(a.mint)}
-                  {signerReady
-                    ? ` · ${formatTokenAmount(signerBalances[a.mint] ?? 0, a.tokenDecimals)}`
-                    : ""}
-                </MenuItem>
-              ))
-            )}
-          </TextField>
+            emptyLabel="No registered assets"
+            options={vaultAssets.map((a) => ({
+              value: a.mint,
+              label: signerReady
+                ? `${mintLabel(a.mint)} · ${formatTokenAmount(signerBalances[a.mint] ?? 0, a.tokenDecimals)}`
+                : mintLabel(a.mint),
+            }))}
+          />
 
           {summary && <SignerBalancesPanel summary={summary} />}
 

@@ -26,7 +26,7 @@ Asset
 | `update_asset_policy` | admin | Mint/redeem flags, haircuts, caps, status |
 | `wrap` | user | Deposit chosen asset → `token_vault` → mint Florin (FLRN) |
 | `unwrap` | user | Burn Florin (FLRN) → transfer from `token_vault` only; capped by pool `liability` |
-| `deposit_to_klend` | admin | Per-asset KLend CPI; respects `min_liquidity_target` cushion |
+| `deposit_to_klend` | admin | Per-asset KLend CPI; respects cushion (`min_liquidity_target`) |
 | `deposit_all_to_klend` | admin | Deploy `token_vault − cushion` to Kamino |
 | `withdraw_from_klend` | admin | Per-asset KLend CPI → free vault |
 | `withdraw_all_from_klend` | admin | Recall full Kamino position → free vault |

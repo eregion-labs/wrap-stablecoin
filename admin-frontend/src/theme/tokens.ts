@@ -40,7 +40,7 @@ export const gradientBg = paper;
  * - Scan: tables / ledgers — fill the page column; overflow-x only after the window is used.
  * - Explain: prose — layout.explain (640) or layout.explainLong (720), left.
  * - Act page: whole-page compose / settings — actPageSx (960, centered).
- * - Act block: Act under Scan (e.g. yield ops) — actBlockSx (960, left; no mx auto).
+ * - Act block: Act under Scan (e.g. yield ops) — actBlockSx (960, centered).
  *
  * Never invent 1100 / 1280. Never give Act Scan width. Never give Scan Act width.
  */
@@ -61,6 +61,7 @@ export const actPageSx = {
 export const actBlockSx = {
   width: "100%",
   maxWidth: layout.act,
+  mx: "auto",
 };
 
 /** Hairline paper card — no shadow, 1px corners. */

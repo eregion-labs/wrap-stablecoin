@@ -28,8 +28,10 @@ Assume 1:1 stable value between registered collaterals and Florin (FLRN) (modulo
 ```text
 backing_i   = token_vault_i + kamino_value_i
 surplus_i   = backing_i − liability_i   (conceptual; see extraction paths below)
-cushion_i   = min_liquidity_target_i      (underlying atoms; operator reserve)
+cushion_i   = min liquidity for pool i   (underlying atoms; stored as min_liquidity_target)
 ```
+
+Cushion is the operator name for that min-liquidity reserve: kept in the home vault, not deployed to Kamino, and not sweepable as home surplus. Users can still redeem through it.
 
 After emergency recall (`withdraw_all_from_klend`): `kamino_value_i = 0`, yield sits in `token_vault_i`.
 

@@ -13,6 +13,8 @@ type Props = {
   variant?: "body2" | "caption" | "overline" | "inherit";
   align?: "left" | "right" | "center";
   component?: "span" | "div";
+  /** Allow the label to fold onto multiple lines (Accounts headers). */
+  wrap?: boolean;
 };
 
 /**
@@ -25,6 +27,7 @@ export default function HintLabel({
   variant = "inherit",
   align = "left",
   component = "span",
+  wrap = false,
 }: Props) {
   const display = label ?? metric.label;
   return (
@@ -32,13 +35,18 @@ export default function HintLabel({
       component={component}
       sx={{
         display: "inline-flex",
-        alignItems: "center",
+        alignItems: wrap ? "flex-start" : "center",
         gap: 0.35,
         justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
-        whiteSpace: "nowrap",
+        whiteSpace: wrap ? "normal" : "nowrap",
+        maxWidth: wrap ? "9.5rem" : undefined,
       }}
     >
-      <Typography component="span" variant={variant} sx={{ lineHeight: 1.3 }}>
+      <Typography
+        component="span"
+        variant={variant}
+        sx={{ lineHeight: 1.25, whiteSpace: wrap ? "normal" : "inherit" }}
+      >
         {display}
       </Typography>
       <Tooltip title={metric.hint} enterDelay={200} leaveDelay={100}>
@@ -58,6 +66,8 @@ export default function HintLabel({
             outline: "none",
             borderRadius: "2px",
             px: 0.15,
+            flexShrink: 0,
+            mt: wrap ? "0.15em" : 0,
             "&:hover, &:focus-visible": {
               color: "text.primary",
             },

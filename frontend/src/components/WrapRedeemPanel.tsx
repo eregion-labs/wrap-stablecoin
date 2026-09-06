@@ -12,7 +12,7 @@ import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
-import MenuItem from "@mui/material/MenuItem";
+import { ReserveCollateralSelect } from "@florin/ui";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 import { apiGet, apiPost } from "@/lib/api";
@@ -433,23 +433,16 @@ export default function WrapRedeemPanel() {
         />
 
         <Stack spacing={0.5}>
-          <TextField
-            select
+          <ReserveCollateralSelect
             label={publicCopy.reserveCollateral}
             value={assetMint}
-            onChange={(e) => setAssetMint(e.target.value)}
-            fullWidth
-          >
-            {vaultAssets.length === 0 ? (
-              <MenuItem value={assetMint}>{mintLabel(assetMint)}</MenuItem>
-            ) : (
-              vaultAssets.map((a) => (
-                <MenuItem key={a.mint} value={a.mint}>
-                  {mintLabel(a.mint)}
-                </MenuItem>
-              ))
-            )}
-          </TextField>
+            onChange={setAssetMint}
+            emptyLabel={mintLabel(assetMint)}
+            options={vaultAssets.map((a) => ({
+              value: a.mint,
+              label: mintLabel(a.mint),
+            }))}
+          />
           <Typography variant="caption" color="text.secondary">
             <ExplorerLink address={assetMint} type="token">
               {assetMint}

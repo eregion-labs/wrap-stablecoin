@@ -19,7 +19,7 @@ export type PolicyDraft = {
   redemptionHaircutBps: string;
   mintCap: string;
   exposureCap: string;
-  minLiquidityTarget: string;
+  cushion: string;
   assetStatus: AssetStatus;
 };
 
@@ -39,7 +39,7 @@ function assetToDraft(mint: string, asset?: VaultAsset): PolicyDraft {
     redemptionHaircutBps: String(asset?.redemptionHaircutBps ?? 0),
     mintCap: atomsToInputAmount(asset?.mintCap ?? 0, decimals),
     exposureCap: atomsToInputAmount(asset?.exposureCap ?? 0, decimals),
-    minLiquidityTarget: atomsToInputAmount(asset?.minLiquidityTarget ?? 0, decimals),
+    cushion: atomsToInputAmount(asset?.cushion ?? 0, decimals),
     assetStatus: (asset?.assetStatus as AssetStatus) ?? "active",
   };
 }
@@ -162,8 +162,8 @@ export const usePolicyStore = create<PolicyState>()((set, get) => ({
       summary?.assets.find((a) => a.mint === mint)?.tokenDecimals ?? 6;
     const mintCap = parseTokenAmountOrZero(draft.mintCap, decimals);
     const exposureCap = parseTokenAmountOrZero(draft.exposureCap, decimals);
-    const minLiquidityTarget = parseTokenAmountOrZero(draft.minLiquidityTarget, decimals);
-    if (mintCap == null || exposureCap == null || minLiquidityTarget == null) {
+    const cushion = parseTokenAmountOrZero(draft.cushion, decimals);
+    if (mintCap == null || exposureCap == null || cushion == null) {
       return actionErr("invalid cap or liquidity amount");
     }
 
@@ -190,7 +190,7 @@ export const usePolicyStore = create<PolicyState>()((set, get) => ({
         redemptionHaircutBps: Number(draft.redemptionHaircutBps) || 0,
         mintCap,
         exposureCap,
-        minLiquidityTarget,
+        minLiquidityTarget: cushion,
         assetStatus: draft.assetStatus,
       });
 

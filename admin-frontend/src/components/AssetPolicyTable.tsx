@@ -156,7 +156,7 @@ export default function AssetPolicyTable() {
                 <HintLabel metric={metricHints.exposureCap} align="right" />
               </TableCell>
               <TableCell align="right">
-                <HintLabel metric={metricHints.cushion} label="Min liquidity" align="right" />
+                <HintLabel metric={metricHints.cushion} align="right" />
               </TableCell>
               <TableCell align="right">
                 <HintLabel metric={metricHints.policyActions} align="right" />
@@ -279,10 +279,8 @@ export default function AssetPolicyTable() {
                       <TextField
                         size="small"
                         type="number"
-                        value={draft.minLiquidityTarget}
-                        onChange={(e) =>
-                          updateDraft(mint, { minLiquidityTarget: e.target.value })
-                        }
+                        value={draft.cushion}
+                        onChange={(e) => updateDraft(mint, { cushion: e.target.value })}
                         disabled={isBusy || !draft.registered}
                         inputProps={{ min: 0, style: { textAlign: "right" } }}
                         sx={{ width: 120 }}

@@ -11,7 +11,7 @@ Operator runbook for deposit/redemption decoupling and per-pool surplus manageme
 | `liability` | Florin (FLRN) redemption obligation for this pool |
 | `backing` | `freeLiquidity + deployedToKamino` |
 | `homeSurplus` | Sweepable home vault excess above liability + cushion |
-| `cushion` | `min_liquidity_target` (reserved home balance) |
+| `cushion` | Cushion — pool min liquidity (home-vault reserve; on-chain `min_liquidity_target`) |
 | `maxRedeemable` | Max Florin (FLRN) burnable from this pool now |
 | `collateralKtokens` | kTokens held in `collateral_vault` |
 | `kaminoAvailableLiquidity` | Reserve free liquidity (underlying) available for redeem |
@@ -49,7 +49,7 @@ User unwrap never recalls Kamino automatically.
 - **Stop redeem:** `redeem_enabled: false` or `asset_status: MintOnly`.
 - **Global pause:** `set_paused` — blocks wrap, unwrap, Kamino deposit, and harvest. Kamino recall, sweep home surplus, and treasury withdrawal still work.
 - **Public wrap/unwrap:** `set_wrap_public` / `set_unwrap_public`; when false, callers must be on the allowlist (or be admin). Init the allowlist PDA and add members **before** flipping a flag private.
-- **Cushion:** set `min_liquidity_target` to reserve home vault on Kamino deploy.
+- **Cushion:** set the pool’s min liquidity (`min_liquidity_target`) to reserve home vault on Kamino deploy and home-surplus sweep.
 
 ## Launch recipe (open wrap, discounted redeem)
 
