@@ -28,10 +28,12 @@ import { selectRowMints } from "@/stores/selectors";
 import { useGovernanceStore } from "@/stores/governanceStore";
 import { usePolicyStore } from "@/stores/policyStore";
 import type { AssetStatus } from "@/types/vault";
-import { monoSx } from "@/theme/tokens";
+import { wrappedTokenSymbol } from "@/types/vault";
+import { monoSx, pageColumnSx } from "@/theme/tokens";
 import { useVaultStore } from "@/stores/vaultStore";
 import { adminCopy, metricHints } from "@/theme/copy";
 import HintLabel from "@/components/HintLabel";
+import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 
 const STATUS_OPTIONS: AssetStatus[] = [
   "active",
@@ -97,7 +99,7 @@ export default function AssetPolicyTable() {
   };
 
   return (
-    <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ ...pageColumnSx, py: { xs: 3, md: 5 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3, gap: 2 }}>
         <PageHeading
           label={adminCopy.reserves}
@@ -115,6 +117,14 @@ export default function AssetPolicyTable() {
         </Alert>
       )}
 
+      {summary && summary.assets.length > 0 && (
+        <VaultAccountingPanel
+          assets={summary.assets}
+          wrappedDecimals={summary.wrappedDecimals}
+          wrappedSymbol={wrappedTokenSymbol(summary)}
+        />
+      )}
+
       <AddCollateralPanel />
 
       <TableContainer component={Paper} variant="outlined" sx={{ overflowX: "auto" }}>
@@ -124,15 +134,33 @@ export default function AssetPolicyTable() {
               <TableCell>
                 <HintLabel metric={metricHints.asset} />
               </TableCell>
-              <TableCell align="center">Mint</TableCell>
-              <TableCell align="center">Redeem</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Mint haircut (bps)</TableCell>
-              <TableCell align="right">Redeem haircut (bps)</TableCell>
-              <TableCell align="right">Mint cap</TableCell>
-              <TableCell align="right">Exposure cap</TableCell>
-              <TableCell align="right">Min liquidity</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell align="center">
+                <HintLabel metric={metricHints.mintEnabled} align="center" />
+              </TableCell>
+              <TableCell align="center">
+                <HintLabel metric={metricHints.redeemEnabled} align="center" />
+              </TableCell>
+              <TableCell>
+                <HintLabel metric={metricHints.assetStatus} />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.mintHaircutBps} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.redeemHaircutBps} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.mintCap} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.exposureCap} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.cushion} label="Min liquidity" align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.policyActions} align="right" />
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

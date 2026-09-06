@@ -13,7 +13,7 @@ import Typography from "@mui/material/Typography";
 import { BRANDING } from "@/branding";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
 import { adminCopy } from "@/theme/copy";
-import { ledgerInk, textMuted } from "@/theme/tokens";
+import { ledgerInk, pageColumnSx, textMuted } from "@/theme/tokens";
 
 const navSx = (active: boolean) => ({
   color: active ? ledgerInk : textMuted,
@@ -37,7 +37,7 @@ export default function AppHeader() {
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
-      <Container maxWidth={false} disableGutters sx={{ maxWidth: 1800, mx: "auto", px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth={false} disableGutters sx={pageColumnSx}>
         <Toolbar disableGutters sx={{ minHeight: 60, gap: 2 }}>
           <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
             <Box

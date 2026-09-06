@@ -151,7 +151,7 @@ export const adminCopy = {
     "Paste an existing token mint. The console looks up whether a Kamino reserve already exists on this cluster — Register does not create one.",
   assetMintPubkey: "Token mint pubkey",
   registerMint: "Register",
-  mintEnabledLabel: "Mint",
+  mintEnabledLabel: "Issue",
   redeemEnabledLabel: "Redeem",
   klendLookupChecking: "Checking Kamino for this mint…",
   klendLookupFound: "Kamino reserve found on this cluster. Enable Kamino after register to point at it.",
@@ -220,6 +220,38 @@ export const metricHints = {
   maxRedeemable: {
     label: "Max redeemable",
     hint: "The lesser of this pool's liability and home-vault liquidity, in wrapped tokens.",
+  },
+  mintEnabled: {
+    label: "Issue",
+    hint: "When on (and Status allows), users may issue wrapped tokens against this collateral. Off blocks new issues for this pool.",
+  },
+  redeemEnabled: {
+    label: "Redeem",
+    hint: "When on (and Status allows), users may burn wrapped tokens for this collateral. Off blocks unwraps for this pool.",
+  },
+  assetStatus: {
+    label: "Status",
+    hint: "Pool mode layered on the Issue/Redeem switches: active (both), mint_only (issue only), redeem_only, paused, or deprecated. Issue/redeem only run when both the matching switch and this status allow it.",
+  },
+  mintHaircutBps: {
+    label: "Issue haircut (bps)",
+    hint: "Basis points withheld on issue. 0 = 1:1; 200 = issue 0.98 wrapped per 1.0 collateral (2%). Percent = bps / 100.",
+  },
+  redeemHaircutBps: {
+    label: "Redeem haircut (bps)",
+    hint: "Basis points withheld on unwrap. 0 = 1:1; 2000 = pay 0.80 collateral per 1.0 wrapped burned (20%). Percent = bps / 100.",
+  },
+  mintCap: {
+    label: "Issue cap",
+    hint: "Max outstanding liability (issued − redeemed) for this pool, in wrapped atoms as a human amount. 0 = unlimited. New issues that would exceed it fail.",
+  },
+  exposureCap: {
+    label: "Exposure cap",
+    hint: "Second liability ceiling in wrapped atoms (same check as issue cap today). 0 = unlimited. Use for a governance dashboard limit alongside issue cap.",
+  },
+  policyActions: {
+    label: "Actions",
+    hint: "Register creates the on-chain pool for an unregistered mint. Save policy writes Issue/Redeem, Status, haircuts, caps, and Min liquidity for a registered pool.",
   },
 } as const satisfies Record<string, MetricHint>;
 

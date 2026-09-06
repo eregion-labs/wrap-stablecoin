@@ -8,10 +8,13 @@ import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import PageHeading from "@/components/layout/PageHeading";
 import KlendOpsTable from "@/components/KlendOpsTable";
+import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import YieldEarnedSummary from "@/components/YieldEarnedSummary";
 import { adminCopy } from "@/theme/copy";
+import { layout, pageColumnSx } from "@/theme/tokens";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useVaultStore } from "@/stores/vaultStore";
+import { wrappedTokenSymbol } from "@/types/vault";
 
 export default function YieldPage() {
   const status = useVaultStore((s) => s.status);
@@ -31,7 +34,7 @@ export default function YieldPage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+      <Box sx={{ ...pageColumnSx, py: { xs: 3, md: 5 } }}>
         <Stack
           direction="row"
           justifyContent="space-between"
@@ -48,7 +51,7 @@ export default function YieldPage() {
           </Button>
         </Stack>
 
-        <Box sx={{ mb: 4, maxWidth: 720 }}>
+        <Box sx={{ mb: 4, maxWidth: layout.explainLong }}>
           {adminCopy.klendHarvestSweepBlurb.map((paragraph) => (
             <Typography
               key={paragraph}
@@ -71,6 +74,14 @@ export default function YieldPage() {
           <Alert severity="warning" sx={{ mb: 2 }}>
             {adminCopy.pausedVaultAlert}
           </Alert>
+        )}
+
+        {summary && summary.assets.length > 0 && (
+          <VaultAccountingPanel
+            assets={summary.assets}
+            wrappedDecimals={summary.wrappedDecimals}
+            wrappedSymbol={wrappedTokenSymbol(summary)}
+          />
         )}
 
         <YieldEarnedSummary assets={summary?.assets ?? []} />

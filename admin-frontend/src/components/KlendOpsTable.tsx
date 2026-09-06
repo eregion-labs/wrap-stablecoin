@@ -10,7 +10,7 @@ import AmountActionRow from "@/components/AmountActionRow";
 import ExplorerLink from "@/components/ExplorerLink";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
-import { cardSx } from "@/theme/tokens";
+import { actBlockSx, cardSx } from "@/theme/tokens";
 import { adminCopy, metricHints, type MetricHint } from "@/theme/copy";
 import HintLabel from "@/components/HintLabel";
 import type { VaultAsset } from "@/types/vault";
@@ -104,7 +104,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
         const kaminoAvailable = asset.kaminoAvailableLiquidity ?? 0;
 
         return (
-          <Box key={asset.mint} sx={cardSx}>
+          <Box key={asset.mint} sx={{ ...cardSx, ...actBlockSx }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
               <Typography variant="subtitle1">
                 <ExplorerLink address={asset.mint} type="token">
@@ -180,6 +180,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                 decimals={d}
                 availableLabel={adminCopy.klendAvailableDeploy}
                 symbol={symbol}
+                fullWidth
                 disabled={deployLocked || klendOff}
                 executeLabel={adminCopy.klendDeploy}
                 executeBusy={rowBusy && busy === "deploy"}
@@ -194,6 +195,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                 decimals={d}
                 availableLabel={adminCopy.klendAvailableRecall}
                 symbol={adminCopy.klendKtokenUnit}
+                fullWidth
                 disabled={locked || klendOff}
                 executeLabel={adminCopy.klendRecall}
                 executeBusy={rowBusy && busy === "recall"}
@@ -216,6 +218,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                 availableLabel={adminCopy.klendAvailableHarvest}
                 symbol={adminCopy.klendKtokenUnit}
                 helperExtra={adminCopy.klendHarvestHint}
+                fullWidth
                 disabled={deployLocked || klendOff}
                 executeLabel={adminCopy.klendHarvest}
                 executeBusy={rowBusy && busy === "harvest"}
@@ -231,6 +234,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                 decimals={d}
                 availableMetric={metricHints.homeSurplus}
                 symbol={symbol}
+                fullWidth
                 disabled={locked}
                 executeLabel={adminCopy.klendSweep}
                 executeBusy={rowBusy && busy === "sweep"}
@@ -247,6 +251,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
                 decimals={d}
                 availableMetric={metricHints.treasury}
                 symbol={symbol}
+                fullWidth
                 disabled={locked}
                 executeLabel={adminCopy.klendWithdrawTreasury}
                 executeBusy={rowBusy && busy === "withdrawTreasury"}

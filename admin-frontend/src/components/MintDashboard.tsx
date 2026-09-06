@@ -21,7 +21,7 @@ import SwapPreviewPanel from "@/components/SwapPreviewPanel";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
-import { actionCardSx, monoSx } from "@/theme/tokens";
+import { actionCardSx, layout, monoSx, pageColumnSx } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultAsset, selectVaultLoading } from "@/stores/selectors";
@@ -131,7 +131,7 @@ export default function MintDashboard() {
     redeemQuote.input > 0;
 
   return (
-    <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ ...pageColumnSx, py: { xs: 3, md: 5 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4, gap: 2 }}>
         <Box>
           <PageHeading
@@ -177,7 +177,7 @@ export default function MintDashboard() {
         />
       )}
 
-      <Box sx={{ ...actionCardSx, mt: 3, mb: 0, maxWidth: 960, mx: "auto" }}>
+      <Box sx={{ ...actionCardSx, mt: 3, mb: 0, maxWidth: layout.act, mx: "auto" }}>
         <Stack spacing={2}>
           <Stack spacing={0.25}>
             <Typography variant="subtitle2">{adminCopy.composeTitle}</Typography>

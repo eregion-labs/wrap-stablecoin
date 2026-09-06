@@ -114,7 +114,7 @@ Mint-authority accept requires typing `DISABLE WRAP` in the UI. Remaining accoun
 
 ### Reserves (`/reserves`) — collateral policy
 
-Register assets, haircuts, caps, status, and Enable Kamino. Pool **Accounts** (liquidity, liability, surplus) sit on the same page.
+Register assets, haircuts, caps, status, and Enable Kamino. The Accounts ledger sits under the heading on Swap Window, Reserves, and Yield; actions follow below it.
 
 Enable Kamino (per asset, one-shot) is `POST /v1/admin/enable-klend`.
 

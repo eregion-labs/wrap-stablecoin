@@ -19,7 +19,7 @@ import type { ActionResult } from "@/stores/types";
 import { useVaultStore } from "@/stores/vaultStore";
 import PageHeading from "@/components/layout/PageHeading";
 import { adminCopy } from "@/theme/copy";
-import { cardSx, monoSx } from "@/theme/tokens";
+import { actPageSx, cardSx, monoSx } from "@/theme/tokens";
 
 const DISABLE_WRAP = adminCopy.disableWrapPhrase;
 
@@ -150,7 +150,7 @@ export default function VaultControlsPanel() {
   const allowlistReady = meta.allowlist != null;
 
   return (
-    <Box sx={{ maxWidth: 1280, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ ...actPageSx, py: { xs: 3, md: 5 } }}>
       <Box sx={{ mb: 2 }}>
         <PageHeading
           label={adminCopy.vaultNav}
