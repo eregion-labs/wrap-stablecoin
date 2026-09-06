@@ -1,18 +1,18 @@
 "use client";
 
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
-import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useSnackbar } from "notistack";
-import { mintLabel } from "@/lib/mints";
-import { atomsToInputAmount, formatTokenAmount } from "@/lib/tokenAmount";
-import { cardSx } from "@/theme/tokens";
-import { adminCopy } from "@/theme/copy";
+import AmountActionRow from "@/components/AmountActionRow";
 import ExplorerLink from "@/components/ExplorerLink";
+import { mintLabel } from "@/lib/mints";
+import { formatTokenAmount } from "@/lib/tokenAmount";
+import { cardSx } from "@/theme/tokens";
+import { adminCopy, metricHints, type MetricHint } from "@/theme/copy";
+import HintLabel from "@/components/HintLabel";
 import type { VaultAsset } from "@/types/vault";
 import { useKlendStore } from "@/stores/klendStore";
 import type { ActionResult } from "@/stores/types";
@@ -22,13 +22,27 @@ type Props = {
   paused: boolean;
 };
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  metric,
+}: {
+  label: string;
+  value: string;
+  metric?: MetricHint;
+}) {
   return (
     <Box>
-      <Typography variant="caption" color="text.secondary" display="block">
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+      {metric ? (
+        <Typography variant="caption" color="text.secondary" display="block" component="div">
+          <HintLabel metric={metric} label={label} variant="inherit" />
+        </Typography>
+      ) : (
+        <Typography variant="caption" color="text.secondary" display="block">
+          {label}
+        </Typography>
+      )}
+      <Typography variant="body2" sx={{ fontVariantNumeric: "tabular-nums" }}>
         {value}
       </Typography>
     </Box>
@@ -70,11 +84,12 @@ export default function KlendOpsTable({ assets, paused }: Props) {
     <Stack spacing={3}>
       {assets.map((asset) => {
         const d = asset.tokenDecimals;
+        const symbol = mintLabel(asset.mint);
         const draft = drafts[asset.mint] ?? {
           deployAmount: "",
           recallAmount: "",
           harvestAmount: "",
-          sweepAmount: asset.homeSurplus > 0 ? atomsToInputAmount(asset.homeSurplus, d) : "",
+          sweepAmount: "",
           treasuryAmount: "",
           destination: "",
         };
@@ -83,13 +98,17 @@ export default function KlendOpsTable({ assets, paused }: Props) {
         const locked = rowBusy;
         const deployLocked = paused || locked;
         const deployable = Math.max(0, asset.freeLiquidity - asset.cushion);
+        const collateralKtokens = asset.collateralKtokens ?? 0;
+        const maxRecallable = asset.maxRecallableKtokens ?? 0;
+        const maxHarvestable = asset.maxHarvestableKtokens ?? 0;
+        const kaminoAvailable = asset.kaminoAvailableLiquidity ?? 0;
 
         return (
           <Box key={asset.mint} sx={cardSx}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
               <Typography variant="subtitle1">
                 <ExplorerLink address={asset.mint} type="token">
-                  {mintLabel(asset.mint)}
+                  {symbol}
                 </ExplorerLink>
               </Typography>
               {asset.klendEnabled ? (
@@ -100,13 +119,50 @@ export default function KlendOpsTable({ assets, paused }: Props) {
             </Stack>
 
             <Stack direction="row" spacing={3} flexWrap="wrap" sx={{ mb: 2, rowGap: 1 }}>
-              <Stat label="Home vault" value={formatTokenAmount(asset.freeLiquidity, d)} />
-              <Stat label="In Kamino" value={formatTokenAmount(asset.deployedToKamino, d)} />
-              <Stat label="Cushion" value={formatTokenAmount(asset.cushion, d)} />
+              <Stat
+                metric={metricHints.homeVault}
+                label={metricHints.homeVault.label}
+                value={formatTokenAmount(asset.freeLiquidity, d)}
+              />
+              <Stat
+                metric={metricHints.inKamino}
+                label={adminCopy.klendPrincipalInKamino}
+                value={formatTokenAmount(asset.deployedToKamino, d)}
+              />
+              <Stat
+                label={adminCopy.klendKtokensHeld}
+                value={formatTokenAmount(collateralKtokens, d)}
+              />
+              <Stat
+                label={adminCopy.klendKaminoAvailable}
+                value={formatTokenAmount(kaminoAvailable, d)}
+              />
+              <Stat
+                metric={metricHints.cushion}
+                label={metricHints.cushion.label}
+                value={formatTokenAmount(asset.cushion, d)}
+              />
               <Stat label="Deployable" value={formatTokenAmount(deployable, d)} />
-              <Stat label="Backing" value={formatTokenAmount(asset.backing, d)} />
-              <Stat label="Home surplus" value={formatTokenAmount(asset.homeSurplus, d)} />
-              <Stat label="Treasury" value={formatTokenAmount(asset.treasuryBalance, d)} />
+              <Stat
+                metric={metricHints.backing}
+                label={metricHints.backing.label}
+                value={formatTokenAmount(asset.backing, d)}
+              />
+              <Stat
+                metric={metricHints.kaminoSurplus}
+                label={adminCopy.klendHarvestable}
+                value={formatTokenAmount(asset.kaminoSurplus, d)}
+              />
+              <Stat
+                metric={metricHints.homeSurplus}
+                label={metricHints.homeSurplus.label}
+                value={formatTokenAmount(asset.homeSurplus, d)}
+              />
+              <Stat
+                metric={metricHints.treasury}
+                label={metricHints.treasury.label}
+                value={formatTokenAmount(asset.treasuryBalance, d)}
+              />
             </Stack>
 
             {klendOff && (
@@ -116,139 +172,101 @@ export default function KlendOpsTable({ assets, paused }: Props) {
             )}
 
             <Stack spacing={1.5}>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-                <TextField
-                  size="small"
-                  label={adminCopy.klendDeployAmount}
-                  value={draft.deployAmount}
-                  onChange={(e) => setDraft(asset.mint, { deployAmount: e.target.value })}
-                  disabled={deployLocked || klendOff}
-                  sx={{ minWidth: 200 }}
-                  slotProps={{
-                    input: {
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <Button
-                            size="small"
-                            onClick={() =>
-                              setDraft(asset.mint, {
-                                deployAmount: atomsToInputAmount(deployable, d),
-                              })
-                            }
-                            disabled={deployLocked || klendOff || deployable <= 0}
-                            sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
-                          >
-                            {adminCopy.max}
-                          </Button>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-                <Button
-                  variant="contained"
-                  disabled={deployLocked || klendOff}
-                  onClick={async () => notify(await submitDeploy(asset.mint), "Deployed")}
-                >
-                  {rowBusy && busy === "deploy" ? adminCopy.submitting : adminCopy.klendDeploy}
-                </Button>
-              </Stack>
+              <AmountActionRow
+                label={adminCopy.klendDeployAmount}
+                value={draft.deployAmount}
+                onChange={(v) => setDraft(asset.mint, { deployAmount: v })}
+                availableAtoms={deployable}
+                decimals={d}
+                availableLabel={adminCopy.klendAvailableDeploy}
+                symbol={symbol}
+                disabled={deployLocked || klendOff}
+                executeLabel={adminCopy.klendDeploy}
+                executeBusy={rowBusy && busy === "deploy"}
+                onExecute={async () => notify(await submitDeploy(asset.mint), "Deployed")}
+              />
 
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-                <TextField
-                  size="small"
-                  label={adminCopy.klendRecallAmount}
-                  value={draft.recallAmount}
-                  onChange={(e) => setDraft(asset.mint, { recallAmount: e.target.value })}
-                  disabled={locked || klendOff}
-                  sx={{ minWidth: 200 }}
-                />
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  disabled={locked || klendOff}
-                  onClick={async () => notify(await submitRecall(asset.mint), "Recalled")}
-                >
-                  {rowBusy && busy === "recall" ? adminCopy.submitting : adminCopy.klendRecall}
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  disabled={locked || klendOff}
-                  onClick={async () => notify(await submitRecallAll(asset.mint), "Recalled all")}
-                >
-                  {rowBusy && busy === "recallAll" ? adminCopy.submitting : adminCopy.klendRecallAll}
-                </Button>
-              </Stack>
+              <AmountActionRow
+                label={adminCopy.klendRecallAmount}
+                value={draft.recallAmount}
+                onChange={(v) => setDraft(asset.mint, { recallAmount: v })}
+                availableAtoms={maxRecallable}
+                decimals={d}
+                availableLabel={adminCopy.klendAvailableRecall}
+                symbol={adminCopy.klendKtokenUnit}
+                disabled={locked || klendOff}
+                executeLabel={adminCopy.klendRecall}
+                executeBusy={rowBusy && busy === "recall"}
+                executeColor="secondary"
+                onExecute={async () => notify(await submitRecall(asset.mint), "Recalled")}
+                secondaryExecuteLabel={adminCopy.klendRecallAll}
+                secondaryExecuteBusy={rowBusy && busy === "recallAll"}
+                secondaryExecuteDisabled={collateralKtokens <= 0}
+                onSecondaryExecute={async () =>
+                  notify(await submitRecallAll(asset.mint), "Recalled all")
+                }
+              />
 
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-                <TextField
-                  size="small"
-                  label={adminCopy.klendHarvestAmount}
-                  value={draft.harvestAmount}
-                  onChange={(e) => setDraft(asset.mint, { harvestAmount: e.target.value })}
-                  disabled={deployLocked || klendOff}
-                  sx={{ minWidth: 200 }}
-                />
-                <Button
-                  variant="outlined"
-                  disabled={deployLocked || klendOff}
-                  onClick={async () => notify(await submitHarvest(asset.mint), "Harvested")}
-                >
-                  {rowBusy && busy === "harvest" ? adminCopy.submitting : adminCopy.klendHarvest}
-                </Button>
-                <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 360 }}>
-                  {adminCopy.klendHarvestHint}
-                </Typography>
-              </Stack>
+              <AmountActionRow
+                label={adminCopy.klendHarvestAmount}
+                value={draft.harvestAmount}
+                onChange={(v) => setDraft(asset.mint, { harvestAmount: v })}
+                availableAtoms={maxHarvestable}
+                decimals={d}
+                availableLabel={adminCopy.klendAvailableHarvest}
+                symbol={adminCopy.klendKtokenUnit}
+                helperExtra={adminCopy.klendHarvestHint}
+                disabled={deployLocked || klendOff}
+                executeLabel={adminCopy.klendHarvest}
+                executeBusy={rowBusy && busy === "harvest"}
+                executeVariant="outlined"
+                onExecute={async () => notify(await submitHarvest(asset.mint), "Harvested")}
+              />
 
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-                <TextField
-                  size="small"
-                  label={adminCopy.klendSweepAmount}
-                  value={draft.sweepAmount}
-                  onChange={(e) => setDraft(asset.mint, { sweepAmount: e.target.value })}
-                  disabled={locked}
-                  sx={{ minWidth: 200 }}
-                />
-                <Button
-                  variant="outlined"
-                  disabled={locked || asset.homeSurplus <= 0}
-                  onClick={async () => notify(await submitSweep(asset.mint), "Swept surplus")}
-                >
-                  {rowBusy && busy === "sweep" ? adminCopy.submitting : adminCopy.klendSweep}
-                </Button>
-              </Stack>
+              <AmountActionRow
+                label={adminCopy.klendSweepAmount}
+                value={draft.sweepAmount}
+                onChange={(v) => setDraft(asset.mint, { sweepAmount: v })}
+                availableAtoms={asset.homeSurplus}
+                decimals={d}
+                availableMetric={metricHints.homeSurplus}
+                symbol={symbol}
+                disabled={locked}
+                executeLabel={adminCopy.klendSweep}
+                executeBusy={rowBusy && busy === "sweep"}
+                executeVariant="outlined"
+                executeDisabled={asset.homeSurplus <= 0}
+                onExecute={async () => notify(await submitSweep(asset.mint), "Swept surplus")}
+              />
 
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-                <TextField
-                  size="small"
-                  label={adminCopy.klendTreasuryAmount}
-                  value={draft.treasuryAmount}
-                  onChange={(e) => setDraft(asset.mint, { treasuryAmount: e.target.value })}
-                  disabled={locked}
-                  sx={{ minWidth: 160 }}
-                />
-                <TextField
-                  size="small"
-                  label={adminCopy.klendDestination}
-                  value={draft.destination}
-                  onChange={(e) => setDraft(asset.mint, { destination: e.target.value })}
-                  disabled={locked}
-                  sx={{ minWidth: 280, flex: 1 }}
-                />
-                <Button
-                  variant="outlined"
-                  disabled={locked || asset.treasuryBalance <= 0}
-                  onClick={async () =>
-                    notify(await submitWithdrawTreasury(asset.mint), "Treasury withdrawn")
-                  }
-                >
-                  {rowBusy && busy === "withdrawTreasury"
-                    ? adminCopy.submitting
-                    : adminCopy.klendWithdrawTreasury}
-                </Button>
-              </Stack>
+              <AmountActionRow
+                label={adminCopy.klendTreasuryAmount}
+                value={draft.treasuryAmount}
+                onChange={(v) => setDraft(asset.mint, { treasuryAmount: v })}
+                availableAtoms={asset.treasuryBalance}
+                decimals={d}
+                availableMetric={metricHints.treasury}
+                symbol={symbol}
+                disabled={locked}
+                executeLabel={adminCopy.klendWithdrawTreasury}
+                executeBusy={rowBusy && busy === "withdrawTreasury"}
+                executeVariant="outlined"
+                executeDisabled={asset.treasuryBalance <= 0}
+                minWidth={160}
+                onExecute={async () =>
+                  notify(await submitWithdrawTreasury(asset.mint), "Treasury withdrawn")
+                }
+                extraField={
+                  <TextField
+                    size="small"
+                    label={adminCopy.klendDestination}
+                    value={draft.destination}
+                    onChange={(e) => setDraft(asset.mint, { destination: e.target.value })}
+                    disabled={locked}
+                    sx={{ minWidth: 280, flex: 1 }}
+                  />
+                }
+              />
             </Stack>
           </Box>
         );

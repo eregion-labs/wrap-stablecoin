@@ -1,7 +1,7 @@
 "use client";
 
 import Box from "@mui/material/Box";
-import { cardSx } from "@/theme/tokens";
+import { cardSx, monoSx } from "@/theme/tokens";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -13,8 +13,9 @@ import Typography from "@mui/material/Typography";
 import { mintLabel, shortMint } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { BRANDING } from "@/branding";
-import { adminCopy } from "@/theme/copy";
+import { adminCopy, liabilityWrappedMetric, metricHints } from "@/theme/copy";
 import ExplorerLink from "@/components/ExplorerLink";
+import HintLabel from "@/components/HintLabel";
 import type { VaultAsset } from "@/types/vault";
 
 type Props = {
@@ -25,7 +26,7 @@ type Props = {
 
 function AmountCell({ amount, decimals }: { amount: number; decimals: number }) {
   return (
-    <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', whiteSpace: "nowrap" }}>
+    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
       {formatTokenAmount(amount, decimals)}
     </TableCell>
   );
@@ -49,11 +50,7 @@ function KaminoMarketCell({ asset }: { asset: VaultAsset }) {
           {adminCopy.kaminoMarketLive}
         </Typography>
         {market ? (
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
-          >
+          <Typography variant="caption" color="text.secondary" sx={monoSx}>
             <ExplorerLink address={market}>{shortMint(market)}</ExplorerLink>
           </Typography>
         ) : null}
@@ -90,15 +87,31 @@ function AssetRow({
       <AmountCell amount={asset.backing} decimals={d} />
       <AmountCell amount={asset.treasuryBalance} decimals={d} />
       <AmountCell amount={asset.kaminoSurplus} decimals={d} />
-      <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+      <TableCell align="right">
         {formatTokenAmount(asset.liability, wrappedDecimals)}
       </TableCell>
       <AmountCell amount={asset.liabilityUnderlying} decimals={d} />
       <AmountCell amount={asset.homeSurplus} decimals={d} />
-      <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+      <TableCell align="right">
         {formatTokenAmount(asset.maxRedeemable, wrappedDecimals)}
       </TableCell>
     </TableRow>
+  );
+}
+
+function HeaderCell({
+  metric,
+  align = "left",
+  label,
+}: {
+  metric: { label: string; hint: string };
+  align?: "left" | "right" | "center";
+  label?: string;
+}) {
+  return (
+    <TableCell align={align}>
+      <HintLabel metric={metric} label={label} align={align} variant="inherit" />
+    </TableCell>
   );
 }
 
@@ -110,6 +123,8 @@ export default function VaultAccountingPanel({
   if (assets.length === 0) {
     return null;
   }
+
+  const liabilityWrapped = liabilityWrappedMetric(wrappedSymbol);
 
   return (
     <Box sx={cardSx}>
@@ -123,18 +138,18 @@ export default function VaultAccountingPanel({
         <Table size="small" sx={{ minWidth: 800 }}>
           <TableHead>
             <TableRow>
-              <TableCell>Asset</TableCell>
-              <TableCell>{adminCopy.kaminoMarket}</TableCell>
-              <TableCell align="right">Home vault</TableCell>
-              <TableCell align="right">Cushion</TableCell>
-              <TableCell align="right">In Kamino</TableCell>
-              <TableCell align="right">Backing</TableCell>
-              <TableCell align="right">Treasury</TableCell>
-              <TableCell align="right">Kamino surplus</TableCell>
-              <TableCell align="right">Liability ({wrappedSymbol})</TableCell>
-              <TableCell align="right">Liability (underlying)</TableCell>
-              <TableCell align="right">Home surplus</TableCell>
-              <TableCell align="right">Max redeemable</TableCell>
+              <HeaderCell metric={metricHints.asset} />
+              <HeaderCell metric={metricHints.kaminoMarket} />
+              <HeaderCell metric={metricHints.homeVault} align="right" />
+              <HeaderCell metric={metricHints.cushion} align="right" />
+              <HeaderCell metric={metricHints.inKamino} align="right" />
+              <HeaderCell metric={metricHints.backing} align="right" />
+              <HeaderCell metric={metricHints.treasury} align="right" />
+              <HeaderCell metric={metricHints.kaminoSurplus} align="right" />
+              <HeaderCell metric={liabilityWrapped} align="right" />
+              <HeaderCell metric={metricHints.liabilityUnderlying} align="right" />
+              <HeaderCell metric={metricHints.homeSurplus} align="right" />
+              <HeaderCell metric={metricHints.maxRedeemable} align="right" />
             </TableRow>
           </TableHead>
           <TableBody>

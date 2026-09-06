@@ -246,19 +246,20 @@ fn get_token_account_amount(rpc: &RpcClient, ata: &Pubkey) -> Result<u64> {
     Ok(u64::from_le_bytes(acc.data[64..72].try_into().unwrap()))
 }
 
-/// Unharvested Kamino yield for one reserve: the redeemable value of the kTokens we hold
-/// minus the principal we've tracked. Reads the reserve's stored state (fresh as of its
-/// last on-chain refresh_reserve), so the figure advances whenever a KLend op runs.
-/// Byte offsets are the KLend Reserve layout (account size 8624): liquidity.availableAmount
-/// u64 @224, borrowedAmountSf u128 @232, accumulatedProtocolFeesSf u128 @344 (both /2^60),
-/// collateral.mintTotalSupply u64 @2592.
-fn kamino_surplus_mark(rpc: &RpcClient, klend: &KLendConfig) -> u64 {
-    let Ok(acc) = rpc.get_account(&klend.reserve) else {
-        return 0;
-    };
+/// KLend Reserve liquidity/collateral snapshot (account size 8624).
+/// Offsets: liquidity.availableAmount u64 @224, borrowedAmountSf u128 @232,
+/// accumulatedProtocolFeesSf u128 @344 (both /2^60), collateral.mintTotalSupply u64 @2592.
+struct KlendReserveMark {
+    available: u128,
+    total_liq: u128,
+    coll_supply: u128,
+}
+
+fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
+    let acc = rpc.get_account(reserve).ok()?;
     let d = &acc.data;
     if d.len() < 2600 {
-        return 0;
+        return None;
     }
     let read_u64 = |o: usize| u64::from_le_bytes(d[o..o + 8].try_into().unwrap()) as u128;
     let read_u128 = |o: usize| u128::from_le_bytes(d[o..o + 16].try_into().unwrap());
@@ -268,13 +269,48 @@ fn kamino_surplus_mark(rpc: &RpcClient, klend: &KLendConfig) -> u64 {
     let fees = read_u128(344) / sf;
     let coll_supply = read_u64(2592);
     if coll_supply == 0 {
-        return 0;
+        return None;
     }
     let total_liq = available + borrowed - fees;
-    let ktokens = get_token_account_amount(rpc, &klend.collateral_vault).unwrap_or(0) as u128;
-    let live_value = ktokens.saturating_mul(total_liq) / coll_supply;
+    if total_liq == 0 {
+        return None;
+    }
+    Some(KlendReserveMark {
+        available,
+        total_liq,
+        coll_supply,
+    })
+}
+
+/// Convert underlying atoms → kTokens at the reserve exchange rate (floor).
+fn underlying_to_ktokens(underlying: u128, mark: &KlendReserveMark) -> u64 {
+    (underlying.saturating_mul(mark.coll_supply) / mark.total_liq).min(u64::MAX as u128) as u64
+}
+
+/// Caps for recall/harvest in kToken atoms, plus reserve free liquidity and underlying surplus.
+/// Returns `(collateral_ktokens, kamino_available, max_recallable, max_harvestable, kamino_surplus)`.
+fn klend_ktoken_caps(rpc: &RpcClient, klend: &KLendConfig) -> (u64, u64, u64, u64, u64) {
+    let collateral_ktokens = get_token_account_amount(rpc, &klend.collateral_vault).unwrap_or(0);
+    let Some(mark) = decode_klend_reserve(rpc, &klend.reserve) else {
+        return (collateral_ktokens, 0, 0, 0, 0);
+    };
+    let available_u64 = mark.available.min(u64::MAX as u128) as u64;
+    let max_by_liquidity = underlying_to_ktokens(mark.available, &mark);
+    let max_recallable = collateral_ktokens.min(max_by_liquidity);
+
+    let ktokens = collateral_ktokens as u128;
+    let live_value = ktokens.saturating_mul(mark.total_liq) / mark.coll_supply;
     let tracked = klend.total_liquidity_in_klend as u128;
-    live_value.saturating_sub(tracked).min(u64::MAX as u128) as u64
+    let surplus = live_value.saturating_sub(tracked).min(u64::MAX as u128) as u64;
+    let max_harvestable = collateral_ktokens.min(underlying_to_ktokens(surplus as u128, &mark));
+
+    (
+        collateral_ktokens,
+        available_u64,
+        max_recallable,
+        max_harvestable,
+        surplus,
+    )
 }
 
 pub fn build_versioned_tx(
@@ -532,6 +568,14 @@ pub struct VaultAssetView {
     pub lending_market: Option<String>,
     /// KLend reserve, present when Kamino is enabled for this asset.
     pub klend_reserve: Option<String>,
+    /// kTokens held in `collateral_vault` (0 if Kamino off).
+    pub collateral_ktokens: u64,
+    /// Reserve free liquidity available for redeem (0 if Kamino off).
+    pub kamino_available_liquidity: u64,
+    /// Max kTokens that can be recalled given vault holdings and reserve free liquidity.
+    pub max_recallable_ktokens: u64,
+    /// Max kTokens that can be harvested (surplus converted at exchange rate, capped by holdings).
+    pub max_harvestable_ktokens: u64,
 }
 
 fn optional_pubkey(pk: &Pubkey) -> Option<String> {
@@ -794,12 +838,17 @@ pub fn fetch_vault_assets(
             liability_to_underlying_amount(liability, cfg.token_decimals, vault.wrapped_decimals)
                 .unwrap_or(0);
         let cushion = cfg.min_liquidity_target;
-        // Unharvested Kamino yield: kToken redeemable value (as of the reserve's last
-        // on-chain refresh) minus the principal we track. Lags until the next refresh.
-        let kamino_surplus = klend
+        // Unharvested Kamino yield + kToken recall/harvest caps (single reserve decode).
+        let (
+            collateral_ktokens,
+            kamino_available_liquidity,
+            max_recallable_ktokens,
+            max_harvestable_ktokens,
+            kamino_surplus,
+        ) = klend
             .as_ref()
-            .map(|k| kamino_surplus_mark(rpc, k))
-            .unwrap_or(0);
+            .map(|k| klend_ktoken_caps(rpc, k))
+            .unwrap_or((0, 0, 0, 0, 0));
         let home_surplus = home_surplus_amount(
             free_liquidity,
             liability,
@@ -836,6 +885,10 @@ pub fn fetch_vault_assets(
             klend_enabled: klend.is_some(),
             lending_market: klend.as_ref().map(|k| k.lending_market.to_string()),
             klend_reserve: klend.as_ref().map(|k| k.reserve.to_string()),
+            collateral_ktokens,
+            kamino_available_liquidity,
+            max_recallable_ktokens,
+            max_harvestable_ktokens,
         });
     }
     Ok(VaultSummaryView {

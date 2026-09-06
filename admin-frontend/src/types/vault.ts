@@ -29,6 +29,14 @@ export type VaultAsset = {
   kaminoSurplus: number;
   homeSurplus: number;
   maxRedeemable: number;
+  /** kTokens in collateral_vault (0 if Kamino off). */
+  collateralKtokens?: number;
+  /** Reserve free liquidity (underlying atoms). */
+  kaminoAvailableLiquidity?: number;
+  /** Max kTokens for withdraw-from-klend. */
+  maxRecallableKtokens?: number;
+  /** Max kTokens for harvest-yield. */
+  maxHarvestableKtokens?: number;
   mintEnabled: boolean;
   redeemEnabled: boolean;
   mintAllowed: boolean;

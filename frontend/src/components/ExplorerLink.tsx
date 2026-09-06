@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "@mui/material/Link";
 import { createExplorerUrl, truncateAddrStandard, type ExplorerAccountType } from "@/lib/address";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
+import { monoSx } from "@/theme/tokens";
 
 type Props = {
   address: string;
@@ -31,7 +32,7 @@ export default function ExplorerLink({ address, type = "account", children }: Pr
       rel="noopener noreferrer"
       underline="hover"
       onClick={(e) => e.stopPropagation()}
-      sx={{ fontFamily: children ? "inherit" : 'var(--font-dm-mono), "DM Mono", monospace' }}
+      sx={children ? undefined : monoSx}
     >
       {label}
     </Link>

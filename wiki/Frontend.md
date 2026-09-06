@@ -89,6 +89,8 @@ pnpm run dev
 - `AppShell` / `AppHeader` — sticky navbar (read-only deployment chip)
 - `providers.tsx` — theme, snackbar, bootstrap
 
+Admin console pages (`admin-frontend`, port 3002): **Swap Window** `/`, **Reserves** `/reserves`, **Controls** `/controls`, **Yield** `/yield`, **Token Stats** `/stats`. Legacy `/vault` and `/klend` redirect. Copy lives in `admin-frontend/src/theme/copy.ts`. **Treasury** in the UI means `treasury_vault` only (not the Swap Window). See [Operations.md](Operations.md).
+
 ## Design language
 
 Both Next.js apps follow the live **florence-app** editorial look (white paper, Florentine red `#C2192B`, civic blue `#4A90B8`, 1px corners, EB Garamond / Inter / DM Mono). Tokens and MUI theme live in `frontend/src/theme/` and `admin-frontend/src/theme/`. The Florentine lily is served from each app’s `public/florentine-lily.png`. Backend Swagger UI at `/doc` uses the same palette. Appearance is frontend-static — `/v1/client-config` does not carry theme fields.

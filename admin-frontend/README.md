@@ -22,7 +22,11 @@ Runs on port **3002**.
 
 ## Pages
 
-- **/** — Mint dashboard (wrap/redeem via backend admin wallet + pool accounting)
+- **/** — Swap Window (issue / redeem via backend admin wallet + pool accounting)
 - **/reserves** — Register collateral, per-asset policy, and pool accounts
-- **/vault** — Pause, wrap/unwrap access, allowlist, admin transfer, mint-authority handoff
+- **/controls** — Pause, wrap/unwrap access, allowlist, admin transfer, mint-authority handoff
+- **/yield** — Kamino deploy / recall / harvest / sweep / withdraw treasury
+- **/stats** — Token metadata and holders
+- **/vault** — Redirects to `/controls`
+- **/klend** — Redirects to `/yield`
 - **/policy** — Redirects to `/reserves`

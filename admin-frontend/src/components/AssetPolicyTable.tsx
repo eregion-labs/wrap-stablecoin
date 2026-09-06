@@ -28,8 +28,10 @@ import { selectRowMints } from "@/stores/selectors";
 import { useGovernanceStore } from "@/stores/governanceStore";
 import { usePolicyStore } from "@/stores/policyStore";
 import type { AssetStatus } from "@/types/vault";
+import { monoSx } from "@/theme/tokens";
 import { useVaultStore } from "@/stores/vaultStore";
-import { adminCopy } from "@/theme/copy";
+import { adminCopy, metricHints } from "@/theme/copy";
+import HintLabel from "@/components/HintLabel";
 
 const STATUS_OPTIONS: AssetStatus[] = [
   "active",
@@ -100,7 +102,7 @@ export default function AssetPolicyTable() {
         <PageHeading
           label={adminCopy.reserves}
           title={adminCopy.reserveGovernance}
-          description="Register collateral reserves and configure issue/redeem flags, haircuts, caps, and status. The treasury signer signs and submits transactions via the backend."
+          description="Register collateral reserves and configure issue/redeem flags, haircuts, caps, and status. The admin signs and submits transactions via the backend."
         />
         <Button variant="outlined" size="small" onClick={() => refresh()} disabled={busyMint != null}>
           {adminCopy.refreshLedger}
@@ -119,7 +121,9 @@ export default function AssetPolicyTable() {
         <Table size="small" sx={{ minWidth: 1100 }}>
           <TableHead>
             <TableRow>
-              <TableCell>Asset</TableCell>
+              <TableCell>
+                <HintLabel metric={metricHints.asset} />
+              </TableCell>
               <TableCell align="center">Mint</TableCell>
               <TableCell align="center">Redeem</TableCell>
               <TableCell>Status</TableCell>
@@ -147,7 +151,7 @@ export default function AssetPolicyTable() {
                         <Typography variant="body2" fontWeight={600}>
                           {mintLabel(mint)}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+                        <Typography variant="caption" color="text.secondary" sx={monoSx}>
                           <ExplorerLink address={mint} type="token">
                             {shortMint(mint)}
                           </ExplorerLink>

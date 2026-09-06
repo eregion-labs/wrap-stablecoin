@@ -19,7 +19,7 @@ import type { ActionResult } from "@/stores/types";
 import { useVaultStore } from "@/stores/vaultStore";
 import PageHeading from "@/components/layout/PageHeading";
 import { adminCopy } from "@/theme/copy";
-import { cardSx } from "@/theme/tokens";
+import { cardSx, monoSx } from "@/theme/tokens";
 
 const DISABLE_WRAP = adminCopy.disableWrapPhrase;
 
@@ -311,7 +311,7 @@ export default function VaultControlsPanel() {
                   fullWidth
                   multiline
                   minRows={3}
-                  sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
+                  sx={monoSx}
                 />
                 <Button
                   size="small"

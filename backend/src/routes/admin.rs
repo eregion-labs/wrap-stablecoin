@@ -23,14 +23,14 @@ pub struct AddAssetRequest {
     /// Vault admin signer (must match on-chain `vault_config.admin`).
     pub admin: String,
     pub asset_mint: String,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub mint_enabled: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub redeem_enabled: bool,
 }
 
-fn default_true() -> bool {
-    true
+fn default_false() -> bool {
+    false
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]

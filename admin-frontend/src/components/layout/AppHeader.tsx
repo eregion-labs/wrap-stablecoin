@@ -27,11 +27,11 @@ export default function AppHeader() {
 
   const subtitle = pathname.startsWith("/reserves") || pathname.startsWith("/policy")
     ? adminCopy.reserveGovernanceSubtitle
-    : pathname.startsWith("/vault")
+    : pathname.startsWith("/controls") || pathname.startsWith("/vault")
       ? adminCopy.vaultNav
       : pathname.startsWith("/stats")
         ? adminCopy.tokenStatsSubtitle
-        : pathname.startsWith("/klend")
+        : pathname.startsWith("/yield") || pathname.startsWith("/klend")
           ? adminCopy.klendSubtitle
           : adminCopy.treasuryOperations;
 
@@ -61,7 +61,6 @@ export default function AppHeader() {
                 variant="h6"
                 component="span"
                 sx={{
-                  fontFamily: 'var(--font-eb-garamond), "EB Garamond", Georgia, serif',
                   fontWeight: 400,
                   letterSpacing: "0.18em",
                   fontSize: "1.35rem",
@@ -105,19 +104,19 @@ export default function AppHeader() {
             </Button>
             <Button
               component={Link}
-              href="/vault"
+              href="/controls"
               size="small"
               variant="text"
-              sx={navSx(pathname.startsWith("/vault"))}
+              sx={navSx(pathname.startsWith("/controls") || pathname.startsWith("/vault"))}
             >
               {adminCopy.vaultNav}
             </Button>
             <Button
               component={Link}
-              href="/klend"
+              href="/yield"
               size="small"
               variant="text"
-              sx={navSx(pathname.startsWith("/klend"))}
+              sx={navSx(pathname.startsWith("/yield") || pathname.startsWith("/klend"))}
             >
               {adminCopy.klendNav}
             </Button>

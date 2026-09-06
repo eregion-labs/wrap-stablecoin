@@ -13,6 +13,10 @@ Operator runbook for deposit/redemption decoupling and per-pool surplus manageme
 | `homeSurplus` | Sweepable home vault excess above liability + cushion |
 | `cushion` | `min_liquidity_target` (reserved home balance) |
 | `maxRedeemable` | Max Florin (FLRN) burnable from this pool now |
+| `collateralKtokens` | kTokens held in `collateral_vault` |
+| `kaminoAvailableLiquidity` | Reserve free liquidity (underlying) available for redeem |
+| `maxRecallableKtokens` | Max kTokens for `withdraw-from-klend` (holdings ∩ reserve liquidity) |
+| `maxHarvestableKtokens` | Max kTokens for `harvest-yield` (surplus converted at exchange rate) |
 
 See [Accounting.md](Accounting.md) for formulas.
 
@@ -54,7 +58,7 @@ Init already defaults both flags to public and haircuts to 0. Launch posture is 
 1. Keep **wrap public** (`set-wrap-public` `true`) so anyone can mint.
 2. Set **`redemptionHaircutBps`** high on the collateral pool (`update-asset-policy`) so redeem is obviously discounted. The public UI shows percent = bps / 100 (e.g. 2000 bps → 20%).
 3. Optionally leave unwrap public, or flip unwrap private after the allowlist is ready.
-4. **Before any private flag:** Vault → initialize allowlist PDA, then bulk-add wallets (one pubkey per line). On-chain max is **64** (`AllowlistFull`) — a protocol limit, not a UI cap. Empty/missing allowlist means only admin can wrap/unwrap.
+4. **Before any private flag:** Controls → initialize allowlist PDA, then bulk-add wallets (one pubkey per line). On-chain max is **64** (`AllowlistFull`) — a protocol limit, not a UI cap. Empty/missing allowlist means only admin can wrap/unwrap.
 5. Private wrap/unwrap txs use the allowlist PDA in the instruction slot before `collateral_token_program` and `florin_token_program`. Public (and admin) txs use the program-id sentinel in that same slot. A missing slot shifts the token programs and the program rejects the ix.
 
 Private-wrap smoke: with `wrapPublic=false`, `POST /v1/tx/issue` for a non-member returns 400 `"not on allowlist"`; a member’s wrap ix has the allowlist PDA at account index 9 (not the program id). Public wrap (default localnet) uses the sentinel — see `wrap-stablecoin/scripts/backend_smoke.ts`.
@@ -71,11 +75,25 @@ Exits non-zero when any pool has `freeLiquidity < liabilityUnderlying + cushion`
 
 ## Admin dashboard
 
-The operator console (`admin-frontend`) calls `/v1/admin/*`. See [Backend-API.md](Backend-API.md).
+The operator console (`admin-frontend`) calls `/v1/admin/*`. See [Backend-API.md](Backend-API.md). Strings live in `admin-frontend/src/theme/copy.ts`.
 
-### Vault (`/vault`) — vault governance
+### UI glossary
 
-Server-signed (treasury keypair):
+| Term | Meaning |
+|---|---|
+| **Swap Window** (`/`) | Issue / redeem via the admin wallet |
+| **Reserves** (`/reserves`) | Collateral policy and backing |
+| **Controls** (`/controls`) | Pause, wrap/unwrap, allowlist, admin / mint-authority handoff |
+| **Yield** (`/yield`) | Kamino deploy / recall / harvest / sweep / withdraw treasury |
+| **Token Stats** (`/stats`) | Mint metadata and holders |
+| **Treasury** | `treasury_vault` only — admin-owned, unencumbered, not liable, not reserves |
+| **Admin** | Vault admin pubkey / signing wallet |
+
+Legacy paths `/vault` and `/klend` redirect to `/controls` and `/yield`.
+
+### Controls (`/controls`) — vault governance
+
+Server-signed (admin keypair):
 
 | Action | Route |
 |---|---|
@@ -100,7 +118,7 @@ Register assets, haircuts, caps, status, and Enable Kamino. Pool **Accounts** (l
 
 Enable Kamino (per asset, one-shot) is `POST /v1/admin/enable-klend`.
 
-### Yield (`/klend`) — Kamino ops
+### Yield (`/yield`) — Kamino ops
 
 | Action | Route |
 |---|---|

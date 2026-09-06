@@ -42,7 +42,6 @@ export default function AppHeader() {
                 variant="h6"
                 component="span"
                 sx={{
-                  fontFamily: 'var(--font-eb-garamond), "EB Garamond", Georgia, serif',
                   fontWeight: 400,
                   letterSpacing: "0.18em",
                   fontSize: "1.35rem",

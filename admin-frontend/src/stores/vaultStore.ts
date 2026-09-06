@@ -9,6 +9,8 @@ type VaultState = {
   meta: VaultMeta | null;
   summary: VaultSummary | null;
   status: LoadStatus;
+  /** True while a background refresh is in flight (UI stays mounted). */
+  refreshing: boolean;
   error: string | null;
   /** Coalesces overlapping hydrate() calls. */
   inflight: Promise<void> | null;
@@ -22,6 +24,7 @@ const initialVaultState = {
   meta: null,
   summary: null,
   status: "idle" as LoadStatus,
+  refreshing: false,
   error: null,
   inflight: null,
 };
@@ -43,25 +46,41 @@ export const useVaultStore = create<VaultState>()((set, get) => ({
     const existing = get().inflight;
     if (existing) return existing;
 
+    const hasData = get().summary != null || get().meta != null;
     const run = (async () => {
-      set({ status: "loading", error: null });
+      if (hasData) {
+        set({ refreshing: true, error: null });
+      } else {
+        set({ status: "loading", error: null });
+      }
       try {
         const { meta, summary } = await fetchVault();
         set({
           meta,
           summary,
           status: "ready",
+          refreshing: false,
           error: null,
           inflight: null,
         });
       } catch (e) {
-        set({
-          meta: null,
-          summary: null,
-          status: "error",
-          error: (e as Error).message,
-          inflight: null,
-        });
+        if (hasData) {
+          // Keep stale ledger visible; surface the error.
+          set({
+            refreshing: false,
+            error: (e as Error).message,
+            inflight: null,
+          });
+        } else {
+          set({
+            meta: null,
+            summary: null,
+            status: "error",
+            refreshing: false,
+            error: (e as Error).message,
+            inflight: null,
+          });
+        }
       }
     })();
 

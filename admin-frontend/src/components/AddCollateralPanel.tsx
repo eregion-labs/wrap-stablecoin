@@ -2,11 +2,9 @@
 
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
-import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useEffect, useMemo, useState } from "react";
@@ -22,6 +20,7 @@ import {
 } from "@/stores/klendLookupStore";
 import { usePolicyStore } from "@/stores/policyStore";
 import { adminCopy } from "@/theme/copy";
+import { monoSx } from "@/theme/tokens";
 
 const LOOKUP_DEBOUNCE_MS = 400;
 
@@ -59,7 +58,7 @@ function KaminoFoundBody({
         </TextField>
       )}
       {match && (
-        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+        <Typography variant="caption" color="text.secondary" sx={monoSx}>
           {adminCopy.lendingMarket}:{" "}
           <ExplorerLink address={match.lendingMarket}>{shortMint(match.lendingMarket)}</ExplorerLink>
           {" · "}
@@ -80,8 +79,6 @@ export default function AddCollateralPanel() {
   const lookups = useKlendLookupStore((s) => s.lookups);
 
   const [newMint, setNewMint] = useState("");
-  const [newMintEnabled, setNewMintEnabled] = useState(true);
-  const [newRedeemEnabled, setNewRedeemEnabled] = useState(true);
   const [selectedReserve, setSelectedReserve] = useState(0);
 
   const parsed = useMemo(() => {
@@ -119,8 +116,8 @@ export default function AddCollateralPanel() {
 
   const onRegisterPasted = async () => {
     const result = await registerAsset(newMint, {
-      mintEnabled: newMintEnabled,
-      redeemEnabled: newRedeemEnabled,
+      mintEnabled: false,
+      redeemEnabled: false,
     });
     if (result.ok) {
       const mint = lookupMint ?? newMint.trim();
@@ -132,8 +129,6 @@ export default function AddCollateralPanel() {
         { variant: "success" },
       );
       setNewMint("");
-      setNewMintEnabled(true);
-      setNewRedeemEnabled(true);
     } else {
       enqueueSnackbar(result.error, { variant: "error" });
     }
@@ -164,29 +159,11 @@ export default function AddCollateralPanel() {
             helperText={parsed != null && !parsed.ok ? parsed.error : undefined}
             fullWidth
             sx={{ flex: 1, minWidth: 240 }}
-            inputProps={{
-              style: { fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' },
+            slotProps={{
+              input: {
+                sx: monoSx,
+              },
             }}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={newMintEnabled}
-                onChange={(e) => setNewMintEnabled(e.target.checked)}
-                disabled={busyMint != null}
-              />
-            }
-            label={adminCopy.mintEnabledLabel}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={newRedeemEnabled}
-                onChange={(e) => setNewRedeemEnabled(e.target.checked)}
-                disabled={busyMint != null}
-              />
-            }
-            label={adminCopy.redeemEnabledLabel}
           />
           <Button
             size="small"

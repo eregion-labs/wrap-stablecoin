@@ -5,7 +5,14 @@ import type { LoadStatus } from "./types";
 /** On-chain vault asset slot cap (`MAX_REGISTERED_ASSETS`). */
 export const MAX_REGISTERED_ASSETS = 8;
 
-export function selectVaultLoading(status: LoadStatus): boolean {
+export function selectVaultLoading(
+  status: LoadStatus,
+  summary: VaultSummary | null | undefined = undefined,
+): boolean {
+  // First load only — keep the shell mounted during background refresh.
+  if (summary !== undefined) {
+    return summary == null && (status === "idle" || status === "loading");
+  }
   return status === "idle" || status === "loading";
 }
 

@@ -20,6 +20,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useCallback, useState } from "react";
 import { useSnackbar } from "notistack";
 import { publicCopy } from "@/theme/copy";
+import { monoSx } from "@/theme/tokens";
 import ExplorerLink from "@/components/ExplorerLink";
 import { createExplorerUrl } from "@/lib/address";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
@@ -108,7 +109,7 @@ export default function WalletNavButton() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={wallet.adapter.icon} alt="" width={20} height={20} style={{ borderRadius: 4 }} />
           )}
-          <Typography component="span" variant="body2" sx={{ fontWeight: 600, fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+          <Typography component="span" variant="body2" sx={{ fontWeight: 600, ...monoSx }}>
             {truncateAddress(address)}
           </Typography>
         </Box>
@@ -136,7 +137,7 @@ export default function WalletNavButton() {
           </Typography>
           <Typography
             variant="body2"
-            sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
+            sx={{ ...monoSx, wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
           >
             <ExplorerLink address={address}>{address}</ExplorerLink>
           </Typography>

@@ -22,6 +22,7 @@ import {
   createApplicationServices,
   type ApplicationServices,
 } from "@/lib/bootstrap/createApplicationServices";
+import { sansStack } from "@/theme/tokens";
 
 type ReadyState = {
   status: "ready";
@@ -136,7 +137,7 @@ export default function ClientConfigProvider({ children }: { children: ReactNode
           alignItems: "center",
           justifyContent: "center",
           color: "#6b7280",
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: sansStack,
         }}
       >
         Loading deployment config…

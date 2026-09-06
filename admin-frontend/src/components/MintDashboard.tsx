@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Tab from "@mui/material/Tab";
@@ -11,14 +10,17 @@ import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
+import Link from "@mui/material/Link";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useSnackbar } from "notistack";
+import NextLink from "next/link";
+import AmountActionRow from "@/components/AmountActionRow";
 import PageHeading from "@/components/layout/PageHeading";
 import SignerBalancesPanel from "@/components/SignerBalancesPanel";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
-import { atomsToInputAmount, formatTokenAmount } from "@/lib/tokenAmount";
-import { actionCardSx } from "@/theme/tokens";
+import { formatTokenAmount } from "@/lib/tokenAmount";
+import { actionCardSx, monoSx } from "@/theme/tokens";
 import { adminCopy } from "@/theme/copy";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 import { selectVaultAsset, selectVaultLoading } from "@/stores/selectors";
@@ -34,6 +36,7 @@ export default function MintDashboard() {
   const error = useVaultStore((s) => s.error);
   const summary = useVaultStore((s) => s.summary);
   const refresh = useVaultStore((s) => s.refresh);
+  const refreshing = useVaultStore((s) => s.refreshing);
 
   const assetMint = useMintStore((s) => s.assetMint);
   const mintAmount = useMintStore((s) => s.mintAmount);
@@ -46,7 +49,7 @@ export default function MintDashboard() {
   const submitMint = useMintStore((s) => s.submitMint);
   const submitRedeem = useMintStore((s) => s.submitRedeem);
 
-  const loading = selectVaultLoading(status);
+  const loading = selectVaultLoading(status, summary);
   const vaultAssets = summary?.assets ?? [];
   const wrappedSymbol = wrappedTokenSymbol(summary);
   const wrappedName = wrappedTokenName(summary);
@@ -56,17 +59,30 @@ export default function MintDashboard() {
   const collateralWalletAtoms = assetMint ? (signerBalances[assetMint] ?? 0) : 0;
   const wrappedWalletAtoms = summary ? (signerBalances[summary.wrappedMint] ?? 0) : 0;
   const signerReady = signerStatus === "ready";
-  const mintHelperText =
+  const mintHelperExtra =
     signerStatus === "loading"
       ? adminCopy.loadingSignerBalance
       : signerStatus === "error"
         ? adminCopy.signerBalanceUnavailable
-        : selectedAsset
-          ? `${adminCopy.signerWalletBalance(
-              formatTokenAmount(collateralWalletAtoms, selectedAsset.tokenDecimals),
-              mintLabel(selectedAsset.mint),
-            )} · ${adminCopy.humanAmountHint}`
-          : adminCopy.humanAmountHint;
+        : adminCopy.humanAmountHint;
+
+  const redeemMaxAtoms = Math.min(
+    selectedAsset?.maxRedeemable ?? 0,
+    signerReady ? wrappedWalletAtoms : Number.POSITIVE_INFINITY,
+  );
+  const redeemHelperExtra = selectedAsset
+    ? `${adminCopy.redeemableBalance(
+        formatTokenAmount(selectedAsset.maxRedeemable, summary?.wrappedDecimals ?? 6),
+        wrappedSymbol,
+      )}${
+        signerReady
+          ? ` · ${adminCopy.signerWalletBalance(
+              formatTokenAmount(wrappedWalletAtoms, summary?.wrappedDecimals ?? 6),
+              wrappedSymbol,
+            )}`
+          : ""
+      } · ${adminCopy.humanAmountHint}`
+    : adminCopy.humanAmountHint;
 
   const onMint = async () => {
     const result = await submitMint();
@@ -112,7 +128,7 @@ export default function MintDashboard() {
               variant="caption"
               color="text.secondary"
               display="block"
-              sx={{ mt: 1, fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
+              sx={{ mt: 1, ...monoSx }}
             >
               {adminCopy.treasurySigner}: {summary.admin}
             </Typography>
@@ -125,7 +141,7 @@ export default function MintDashboard() {
             void refresh();
             void useSignerBalancesStore.getState().refresh();
           }}
-          disabled={busy !== null}
+          disabled={busy !== null || refreshing}
         >
           {adminCopy.refreshLedger}
         </Button>
@@ -186,136 +202,115 @@ export default function MintDashboard() {
               {selectedAsset && !selectedAsset.mintAllowed && (
                 <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
               )}
-              <TextField
+              <AmountActionRow
                 label={adminCopy.collateralAmount}
                 value={mintAmount}
-                onChange={(e) => setMintAmount(e.target.value)}
+                onChange={setMintAmount}
+                availableAtoms={collateralWalletAtoms}
+                decimals={selectedAsset?.tokenDecimals ?? 6}
+                availableLabel="Signer wallet"
+                symbol={selectedAsset ? mintLabel(selectedAsset.mint) : undefined}
+                helperText={
+                  selectedAsset && signerReady
+                    ? undefined
+                    : mintHelperExtra
+                }
+                helperExtra={adminCopy.humanAmountHint}
                 fullWidth
-                helperText={mintHelperText}
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            setMintAmount(
-                              atomsToInputAmount(
-                                collateralWalletAtoms,
-                                selectedAsset?.tokenDecimals ?? 6,
-                              ),
-                            )
-                          }
-                          disabled={busy !== null || !signerReady || collateralWalletAtoms <= 0}
-                          sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
-                        >
-                          {adminCopy.max}
-                        </Button>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-              <Button
-                variant="contained"
-                disabled={
+                disabled={busy !== null}
+                maxDisabled={busy !== null || !signerReady || collateralWalletAtoms <= 0}
+                executeLabel={adminCopy.issueViaTreasury}
+                executeBusy={busy === "mint"}
+                executeDisabled={
                   busy !== null ||
                   !assetMint ||
                   (selectedAsset != null && !selectedAsset.mintAllowed) ||
                   (signerReady && collateralWalletAtoms <= 0)
                 }
-                onClick={onMint}
-              >
-                {busy === "mint" ? adminCopy.submitting : adminCopy.issueViaTreasury}
-              </Button>
+                onExecute={onMint}
+              />
             </Stack>
           )}
 
           {tab === 1 && (
             <Stack spacing={1} role="tabpanel" aria-label={adminCopy.tabRedeem}>
-              <TextField
+              <AmountActionRow
                 label={adminCopy.redeemAmount(wrappedSymbol)}
                 value={redeemAmount}
-                onChange={(e) => setRedeemAmount(e.target.value)}
+                onChange={setRedeemAmount}
+                availableAtoms={Number.isFinite(redeemMaxAtoms) ? redeemMaxAtoms : 0}
+                decimals={summary?.wrappedDecimals ?? 6}
+                availableLabel="Available"
+                symbol={wrappedSymbol}
+                helperText={redeemHelperExtra}
                 fullWidth
-                helperText={
-                  selectedAsset
-                    ? `${adminCopy.redeemableBalance(
-                        formatTokenAmount(
-                          selectedAsset.maxRedeemable,
-                          summary?.wrappedDecimals ?? 6,
-                        ),
-                        wrappedSymbol,
-                      )}${
-                        signerReady
-                          ? ` · ${adminCopy.signerWalletBalance(
-                              formatTokenAmount(wrappedWalletAtoms, summary?.wrappedDecimals ?? 6),
-                              wrappedSymbol,
-                            )}`
-                          : ""
-                      } · ${adminCopy.humanAmountHint}`
-                    : adminCopy.humanAmountHint
+                disabled={busy !== null}
+                maxDisabled={
+                  busy !== null ||
+                  !selectedAsset ||
+                  selectedAsset.maxRedeemable <= 0 ||
+                  (signerReady && wrappedWalletAtoms <= 0)
                 }
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            setRedeemAmount(
-                              atomsToInputAmount(
-                                Math.min(
-                                  selectedAsset?.maxRedeemable ?? 0,
-                                  signerReady ? wrappedWalletAtoms : Number.POSITIVE_INFINITY,
-                                ),
-                                summary?.wrappedDecimals ?? 6,
-                              ),
-                            )
-                          }
-                          disabled={
-                            busy !== null ||
-                            !selectedAsset ||
-                            selectedAsset.maxRedeemable <= 0 ||
-                            (signerReady && wrappedWalletAtoms <= 0)
-                          }
-                          sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
-                        >
-                          {adminCopy.max}
-                        </Button>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-              {redeemQuote && (
-                <Typography variant="body2" color="text.secondary">
-                  Expected output:{" "}
-                  {formatTokenAmount(
-                    redeemQuote.output,
-                    selectedAsset?.tokenDecimals ?? 6,
-                  )}{" "}
-                  {selectedAsset ? mintLabel(selectedAsset.mint) : ""}
-                  {redeemQuote.haircutBps > 0 ? ` (haircut ${redeemQuote.haircutBps} bps)` : ""}
-                </Typography>
-              )}
-              {redeemQuote && !redeemQuote.canRedeem && (
-                <Alert severity="warning">Redemption would fail on-chain for this amount.</Alert>
-              )}
-              <Button
-                variant="contained"
-                color="secondary"
-                disabled={
+                executeLabel={adminCopy.redeemViaTreasury}
+                executeBusy={busy === "redeem"}
+                executeColor="secondary"
+                executeDisabled={
                   busy !== null ||
                   !assetMint ||
                   !redeemQuote?.canRedeem ||
                   !Number.isFinite(Number(redeemAmount.replace(/,/g, ""))) ||
                   Number(redeemAmount.replace(/,/g, "")) <= 0
                 }
-                onClick={onRedeem}
+                onExecute={onRedeem}
               >
-                {busy === "redeem" ? adminCopy.submitting : adminCopy.redeemViaTreasury}
-              </Button>
+                {redeemQuote && (
+                  <Typography variant="body2" color="text.secondary">
+                    Expected output:{" "}
+                    {formatTokenAmount(redeemQuote.output, selectedAsset?.tokenDecimals ?? 6)}{" "}
+                    {selectedAsset ? mintLabel(selectedAsset.mint) : ""}
+                    {redeemQuote.haircutBps > 0 ? ` (haircut ${redeemQuote.haircutBps} bps)` : ""}
+                  </Typography>
+                )}
+                {redeemQuote && !redeemQuote.redeemAllowed && (
+                  <Alert severity="warning">{adminCopy.redeemDisabledAlert}</Alert>
+                )}
+                {redeemQuote && redeemQuote.liabilityShortfall > 0 && (
+                  <Alert severity="warning">
+                    {adminCopy.redeemLiabilityAlert(
+                      formatTokenAmount(redeemQuote.liability, summary?.wrappedDecimals ?? 6),
+                      wrappedSymbol,
+                    )}
+                  </Alert>
+                )}
+                {redeemQuote && redeemQuote.liquidityShortfall > 0 && (
+                  <Alert severity="warning">
+                    {adminCopy.redeemLiquidityAlertLead(
+                      formatTokenAmount(
+                        redeemQuote.freeLiquidity,
+                        selectedAsset?.tokenDecimals ?? 6,
+                      ),
+                      selectedAsset ? mintLabel(selectedAsset.mint) : "",
+                    )}{" "}
+                    <Link
+                      component={NextLink}
+                      href="/yield"
+                      underline="hover"
+                      fontWeight={600}
+                      color="inherit"
+                    >
+                      {adminCopy.redeemLiquidityAlertRecall}
+                    </Link>{" "}
+                    {adminCopy.redeemLiquidityAlertTail}
+                  </Alert>
+                )}
+                {redeemQuote &&
+                  !redeemQuote.canRedeem &&
+                  redeemQuote.redeemAllowed &&
+                  redeemQuote.liabilityShortfall <= 0 &&
+                  redeemQuote.liquidityShortfall <= 0 && (
+                    <Alert severity="warning">{adminCopy.redeemWouldFailAlert}</Alert>
+                  )}
+              </AmountActionRow>
             </Stack>
           )}
         </Stack>

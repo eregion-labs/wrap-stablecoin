@@ -13,6 +13,7 @@ import ExplorerLink from "@/components/ExplorerLink";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { adminCopy } from "@/theme/copy";
+import { monoSx } from "@/theme/tokens";
 import { selectVaultLoading } from "@/stores/selectors";
 import { useSignerBalancesStore } from "@/stores/signerBalancesStore";
 import { wrappedTokenSymbol, type VaultSummary } from "@/types/vault";
@@ -52,11 +53,7 @@ export default function SignerBalancesPanel({ summary }: Props) {
           {adminCopy.signerHoldingsCaption}
         </Typography>
         {owner && (
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
-          >
+          <Typography variant="caption" color="text.secondary" sx={monoSx}>
             <ExplorerLink address={owner}>{owner}</ExplorerLink>
           </Typography>
         )}
@@ -89,10 +86,7 @@ export default function SignerBalancesPanel({ summary }: Props) {
                     {row.label}
                   </ExplorerLink>
                 </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
-                >
+                <TableCell align="right">
                   {status === "ready" ? formatTokenAmount(row.amount, row.decimals) : "—"}
                 </TableCell>
               </TableRow>

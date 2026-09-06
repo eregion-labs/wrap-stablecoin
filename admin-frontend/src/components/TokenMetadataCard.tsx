@@ -75,9 +75,7 @@ export default function TokenMetadataCard({
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 180 }}>
                 {adminCopy.decimals}
               </Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
-                {wrappedDecimals}
-              </Typography>
+              <Typography variant="body2">{wrappedDecimals}</Typography>
             </Stack>
             <Stack
               direction={{ xs: "column", sm: "row" }}
@@ -87,9 +85,7 @@ export default function TokenMetadataCard({
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 180 }}>
                 {adminCopy.circulatingSupply}
               </Typography>
-              <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
-                {supplyLabel}
-              </Typography>
+              <Typography variant="body2">{supplyLabel}</Typography>
             </Stack>
           </Stack>
         </Box>

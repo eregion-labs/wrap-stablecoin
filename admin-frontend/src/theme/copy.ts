@@ -1,19 +1,19 @@
-/** User-facing vocabulary — treasury office (admin). */
+/** User-facing vocabulary — admin console. Treasury = treasury_vault only. */
 export const adminCopy = {
-  officeTitle: "Treasury Office",
-  treasury: "Treasury",
+  officeTitle: "Swap Window",
+  treasury: "Swap Window",
   reserves: "Reserves",
   tokenStats: "Token Stats",
-  treasuryPageTitle: "Treasury",
+  treasuryPageTitle: "Swap Window",
   treasuryPageDescription: (wrappedName: string, wrappedSymbol: string) =>
-    `Issue ${wrappedName} from reserve collateral held by the treasury signer, or redeem ${wrappedSymbol} for underlying. The backend signs and submits transactions. Enter human amounts (e.g. 1.0), not base units.`,
-  treasurySigner: "Treasury signer",
-  treasuryOperations: "Treasury operations",
+    `Issue ${wrappedName} from reserve collateral held by the admin, or redeem ${wrappedSymbol} for underlying. The backend signs and submits transactions. Enter human amounts (e.g. 1.0), not base units.`,
+  treasurySigner: "Admin",
+  treasuryOperations: "Swap Window",
   reserveGovernance: "Reserve governance",
   tokenStatsSubtitle: "Token address & holders",
   tokenStatsPageTitle: "Token Stats",
   tokenStatsPageDescription: (wrappedName: string, wrappedSymbol: string) =>
-    `${wrappedName} (${wrappedSymbol}) mint metadata and largest token-account holders from the treasury API.`,
+    `${wrappedName} (${wrappedSymbol}) mint metadata and largest token-account holders from the API.`,
   tokenContract: "Token Contract",
   decimals: "Decimals",
   circulatingSupply: "Total circulating supply",
@@ -28,8 +28,8 @@ export const adminCopy = {
   accounts: "Accounts",
   accountsCaption:
     "Per-pool reserves, liability, and redeemable capacity.",
-  issueViaTreasury: "Issue via treasury",
-  redeemViaTreasury: "Redeem via treasury",
+  issueViaTreasury: "Issue",
+  redeemViaTreasury: "Redeem",
   submitting: "Submitting…",
   refreshLedger: "Refresh ledger",
   reserveGovernanceSubtitle: "Reserve governance",
@@ -42,28 +42,43 @@ export const adminCopy = {
   max: "Max",
   humanAmountHint: "Enter a human amount (e.g. 1.0), not base units.",
   redeemableBalance: (amount: string, symbol: string) => `Redeemable: ${amount} ${symbol}`,
-  signerHoldings: "Treasury signer holdings",
+  redeemDisabledAlert: "Redemption is disabled for this asset pool.",
+  redeemLiabilityAlert: (liability: string, symbol: string) =>
+    `Amount exceeds pool liability (${liability} ${symbol}). Reduce the burn amount or use another pool.`,
+  redeemLiquidityAlertLead: (liquidity: string, symbol: string) =>
+    `Free vault liquidity (${liquidity} ${symbol}) is below expected output.`,
+  redeemLiquidityAlertRecall: "Recall",
+  redeemLiquidityAlertTail: "from Kamino on Yield first.",
+  redeemWouldFailAlert: "Redemption would fail on-chain for this amount.",
+  signerHoldings: "Admin holdings",
   signerHoldingsCaption:
-    "Tokens in the treasury signer wallet. Mint spends collateral from here; redeem burns Florin from here.",
+    "Tokens in the admin wallet. Mint spends collateral from here; redeem burns Florin from here.",
   signerHoldingsToken: "Token",
   signerHoldingsColumn: "Wallet",
-  signerWalletBalance: (amount: string, symbol: string) => `Signer wallet: ${amount} ${symbol}`,
-  loadingSignerBalance: "Loading signer wallet balance…",
-  signerBalanceUnavailable: "Couldn't load signer wallet balance (RPC busy). Try Refresh ledger.",
+  signerWalletBalance: (amount: string, symbol: string) => `Admin wallet: ${amount} ${symbol}`,
+  loadingSignerBalance: "Loading admin wallet balance…",
+  signerBalanceUnavailable: "Couldn't load admin wallet balance (RPC busy). Try Refresh ledger.",
   pausedVaultAlert:
     "Vault is paused. Mint, redeem, Kamino deposit, and harvest are blocked. Recall, sweep, and treasury withdrawal still work.",
   klendNav: "Yield",
-  klendSubtitle: "Kamino liquidity",
+  klendSubtitle: "Yield",
   klendPageTitle: "Yield",
   klendPageDescription:
-    "Deploy home-vault collateral to Kamino, recall liquidity for redemptions, harvest yield, and sweep surplus. Enter human amounts. Harvest is capped on-chain.",
+    "Deploy idle collateral to Kamino, recall it for redemptions, then take protocol surplus into the treasury. Enter human amounts.",
+  klendHarvestSweepBlurb: [
+    "Harvest and sweep send the same extra to the treasury. They differ only in where that extra is sitting.",
+    "You deposited 100 for holders, so you owe them 100. Park that 100 in Kamino. Later Kamino says the receipts are worth 103.",
+    "If the extra 3 is still in Kamino, press Harvest: leave the 100 working and redeem only the yield into the treasury. If you already recalled, the home vault holds 103 against a 100 liability — press Sweep surplus to move the leftover 3. Holders cannot redeem it; redemptions stop at 100.",
+    "Recall brings principal and yield home together, so both buttons exist. Harvest is optional if you want the yield without recalling. Neither touches user principal. Withdraw treasury is the later step that pays the operator.",
+  ],
   klendNoAssets: "No registered collateral assets.",
   klendNotEnabled: "Kamino is not enabled for this asset. Vault-only ops (sweep, treasury withdraw) still apply.",
   klendDeploy: "Deploy",
   klendRecall: "Recall",
   klendRecallAll: "Recall all",
   klendHarvest: "Harvest",
-  klendHarvestHint: "kToken amount; on-chain harvest_yield enforces the surplus cap.",
+  klendHarvestHint: "Capped by harvestable kTokens (surplus at exchange rate). On-chain harvest_yield enforces the same cap.",
+  klendHarvestable: "Harvestable",
   klendSweep: "Sweep surplus",
   klendWithdrawTreasury: "Withdraw treasury",
   klendDeployAmount: "Deploy amount",
@@ -72,8 +87,17 @@ export const adminCopy = {
   klendSweepAmount: "Sweep amount",
   klendTreasuryAmount: "Treasury amount",
   klendDestination: "Destination wallet",
-  vaultControls: "Vault controls",
-  vaultNav: "Vault",
+  klendAvailableDeploy: "Deployable",
+  klendAvailableRecall: "Recallable",
+  klendAvailableHarvest: "Harvestable",
+  klendAvailableSweep: "Home surplus",
+  klendAvailableTreasury: "Treasury",
+  klendPrincipalInKamino: "Principal in Kamino",
+  klendKtokensHeld: "kTokens held",
+  klendKaminoAvailable: "Kamino available",
+  klendKtokenUnit: "kTokens",
+  vaultControls: "Controls",
+  vaultNav: "Controls",
   vaultControlsSubtitle:
     "Pause, public wrap/unwrap, allowlist, admin transfer, and mint-authority handoff. Server-signed except accept, which uses a destination keypair file in this browser.",
   wrapPermanentlyDisabled:
@@ -133,3 +157,66 @@ export const adminCopy = {
   reserveLiquiditySupply: "Reserve liquidity supply",
   collateralMint: "Collateral mint (kToken)",
 } as const;
+
+/** Shared accounting-term labels + hover hints. One explanation per concept. */
+export type MetricHint = {
+  label: string;
+  hint: string;
+};
+
+export const metricHints = {
+  asset: {
+    label: "Asset",
+    hint: "Collateral mint for this pool. Each asset has its own vault, liability, and optional Kamino wiring.",
+  },
+  kaminoMarket: {
+    label: "Kamino market",
+    hint: "Lending market this pool is pointed at. Live means Kamino is enabled; a dash means vault-only.",
+  },
+  homeVault: {
+    label: "Home vault",
+    hint: "Free liquidity in the home token vault. Redemptions pay from here. Excludes tokens deployed to Kamino and treasury.",
+  },
+  cushion: {
+    label: "Cushion",
+    hint: "Operator reserve (min_liquidity_target) kept in the home vault and not deployed to Kamino.",
+  },
+  inKamino: {
+    label: "In Kamino",
+    hint: "Principal currently deployed to Kamino. Does not include unharvested yield.",
+  },
+  backing: {
+    label: "Backing",
+    hint: "Home vault plus In Kamino. Collateral covering this pool's liability. Treasury is not backing.",
+  },
+  treasury: {
+    label: "Treasury",
+    hint: "Protocol yield in the treasury vault. Not user backing. Withdrawable; never redeployed to Kamino.",
+  },
+  kaminoSurplus: {
+    label: "Kamino surplus",
+    hint: "Unharvested Kamino yield above deployed principal. Harvest moves it to the treasury.",
+  },
+  liabilityUnderlying: {
+    label: "Liability (underlying)",
+    hint: "The same obligation in this asset's decimals. Used in the home-surplus formula.",
+  },
+  homeSurplus: {
+    label: "Home surplus",
+    hint: "Home vault minus liability (underlying) minus cushion, floored at zero. Sweepable by admin; not user-redeemable.",
+  },
+  maxRedeemable: {
+    label: "Max redeemable",
+    hint: "The lesser of this pool's liability and home-vault liquidity, in wrapped tokens.",
+  },
+} as const satisfies Record<string, MetricHint>;
+
+export type MetricHintKey = keyof typeof metricHints;
+
+/** Liability in wrapped-token units; label includes the mint symbol. */
+export function liabilityWrappedMetric(wrappedSymbol: string): MetricHint {
+  return {
+    label: `Liability (${wrappedSymbol})`,
+    hint: `Outstanding wrapped tokens (${wrappedSymbol}) still redeemable through this pool (minted − redeemed).`,
+  };
+}

@@ -9,6 +9,8 @@ import Typography from "@mui/material/Typography";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { shortMint } from "@/lib/mints";
 import ExplorerLink from "@/components/ExplorerLink";
+import HintLabel from "@/components/HintLabel";
+import { metricHints, type MetricHint } from "@/theme/copy";
 import type { VaultAsset } from "@/types/vault";
 
 /**
@@ -27,21 +29,20 @@ function Figure({
   value,
   sub,
   accent,
+  metric,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: boolean;
+  metric?: MetricHint;
 }) {
   return (
     <Stack spacing={0.15} sx={{ minWidth: 104 }}>
-      <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.4 }}>
-        {label}
+      <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.4 }} component="div">
+        {metric ? <HintLabel metric={metric} label={label} variant="inherit" /> : label}
       </Typography>
-      <Typography
-        variant="body1"
-        sx={{ fontFamily: "var(--font-mono, monospace)", fontVariantNumeric: "tabular-nums", color: accent ? "primary.main" : "text.primary" }}
-      >
+      <Typography variant="body2" sx={{ fontVariantNumeric: "tabular-nums", color: accent ? "primary.main" : "text.primary" }}>
         {value}
       </Typography>
       {sub ? (
@@ -98,15 +99,28 @@ export default function YieldEarnedSummary({ assets }: { assets: VaultAsset[] })
                     {shortMint(a.mint)}
                   </ExplorerLink>
                 </Typography>
-                <Figure label="Deployed" value={formatTokenAmount(a.deployedToKamino, a.tokenDecimals)} />
                 <Figure
+                  metric={metricHints.inKamino}
+                  label="Deployed"
+                  value={formatTokenAmount(a.deployedToKamino, a.tokenDecimals)}
+                />
+                <Figure
+                  metric={metricHints.kaminoSurplus}
                   label="Harvestable now"
                   value={formatTokenAmount(a.kaminoSurplus, a.tokenDecimals)}
                   sub={`${pct(a.kaminoSurplus, a.deployedToKamino)} of deployed`}
                   accent
                 />
-                <Figure label="Home surplus" value={formatTokenAmount(a.homeSurplus, a.tokenDecimals)} />
-                <Figure label="Harvested" value={formatTokenAmount(a.treasuryBalance, a.tokenDecimals)} />
+                <Figure
+                  metric={metricHints.homeSurplus}
+                  label={metricHints.homeSurplus.label}
+                  value={formatTokenAmount(a.homeSurplus, a.tokenDecimals)}
+                />
+                <Figure
+                  metric={metricHints.treasury}
+                  label="Harvested"
+                  value={formatTokenAmount(a.treasuryBalance, a.tokenDecimals)}
+                />
                 <Box sx={{ flex: 1 }} />
                 <Figure label="Total earned" value={formatTokenAmount(earned, a.tokenDecimals)} accent />
               </Box>
@@ -119,15 +133,28 @@ export default function YieldEarnedSummary({ assets }: { assets: VaultAsset[] })
             <Typography variant="body2" sx={{ minWidth: 104, fontWeight: 700 }}>
               All pools
             </Typography>
-            <Figure label="Deployed" value={formatTokenAmount(totalDeployed, d0)} />
             <Figure
+              metric={metricHints.inKamino}
+              label="Deployed"
+              value={formatTokenAmount(totalDeployed, d0)}
+            />
+            <Figure
+              metric={metricHints.kaminoSurplus}
               label="Harvestable now"
               value={formatTokenAmount(totalHarvestable, d0)}
               sub={`${pct(totalHarvestable, totalDeployed)} of deployed`}
               accent
             />
-            <Figure label="Home surplus" value={formatTokenAmount(totalHome, d0)} />
-            <Figure label="Harvested" value={formatTokenAmount(totalHarvested, d0)} />
+            <Figure
+              metric={metricHints.homeSurplus}
+              label={metricHints.homeSurplus.label}
+              value={formatTokenAmount(totalHome, d0)}
+            />
+            <Figure
+              metric={metricHints.treasury}
+              label="Harvested"
+              value={formatTokenAmount(totalHarvested, d0)}
+            />
             <Box sx={{ flex: 1 }} />
             <Figure label="Total earned" value={formatTokenAmount(totalEarned, d0)} accent />
           </Box>

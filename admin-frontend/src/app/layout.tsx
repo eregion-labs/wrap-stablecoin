@@ -7,7 +7,7 @@ import { adminCopy } from "@/theme/copy";
 
 export const metadata: Metadata = {
   title: `${BRANDING.name} — ${adminCopy.officeTitle}`,
-  description: "Treasury operations and reserve governance",
+  description: "Swap Window, reserves, controls, and yield operations",
 };
 
 export default function RootLayout({

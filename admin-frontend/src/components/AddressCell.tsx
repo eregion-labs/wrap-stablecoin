@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import { useSnackbar } from "notistack";
 import { createExplorerUrl, truncateAddrStandard } from "@/lib/address";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
+import { monoSx } from "@/theme/tokens";
 
 type Props = {
   address: string;
@@ -46,7 +47,7 @@ export default function AddressCell({ address, type = "account" }: Props) {
           rel="noopener noreferrer"
           underline="hover"
           sx={{
-            fontFamily: 'var(--font-dm-mono), "DM Mono", monospace',
+            ...monoSx,
             fontSize: "0.875rem",
             wordBreak: "break-all",
           }}
@@ -56,7 +57,7 @@ export default function AddressCell({ address, type = "account" }: Props) {
       ) : (
         <Typography
           component="span"
-          sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', fontSize: "0.875rem", wordBreak: "break-all" }}
+          sx={{ ...monoSx, fontSize: "0.875rem", wordBreak: "break-all" }}
         >
           {label}
         </Typography>

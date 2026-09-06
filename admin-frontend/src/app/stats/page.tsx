@@ -32,7 +32,7 @@ export default function TokenStatsPage() {
     void hydrateHolders();
   }, [hydrateHolders]);
 
-  const vaultLoading = selectVaultLoading(vaultStatus);
+  const vaultLoading = selectVaultLoading(vaultStatus, summary);
   const holdersLoading = holdersStatus === "idle" || holdersStatus === "loading";
 
   const source = meta ?? summary;

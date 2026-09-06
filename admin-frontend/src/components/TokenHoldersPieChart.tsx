@@ -112,7 +112,7 @@ function HoldersTooltip({
       <Typography variant="caption" display="block">
         {addrLabel}
       </Typography>
-      <Typography variant="body2" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+      <Typography variant="body2">
         {formatApiTokenAmount(slice.raw, decimals)} {symbol} ({slice.pct}%)
       </Typography>
     </Box>
@@ -179,10 +179,7 @@ export default function TokenHoldersPieChart({ holders, decimals, symbol }: Prop
               justifyContent="space-between"
             >
               <AddressCell address={slice.key} />
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', flexShrink: 0 }}
-              >
+              <Typography variant="body2" sx={{ flexShrink: 0 }}>
                 {formatApiTokenAmount(slice.raw, decimals)} {symbol}
               </Typography>
             </Stack>

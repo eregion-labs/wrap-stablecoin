@@ -122,7 +122,9 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
   submitRecallAll: async (mint) => {
     set({ busy: "recallAll", busyMint: mint });
     try {
-      return await postAndRefresh("/v1/admin/withdraw-all-from-klend", { assetMint: mint });
+      return await postAndRefresh("/v1/admin/withdraw-all-from-klend", {
+        assetMint: mint,
+      });
     } finally {
       set({ busy: null, busyMint: null });
     }

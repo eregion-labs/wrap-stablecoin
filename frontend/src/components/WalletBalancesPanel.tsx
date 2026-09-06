@@ -60,7 +60,7 @@ export default function WalletBalancesPanel({ summary, walletBalances, connected
                   {row.label}
                 </ExplorerLink>
               </TableCell>
-              <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', color: "text.secondary" }}>
+              <TableCell align="right" sx={{ color: "text.secondary" }}>
                 {row.amount === null
                   ? "—"
                   : formatTokenAmount(row.amount, row.decimals)}

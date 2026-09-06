@@ -33,8 +33,8 @@ function assetToDraft(mint: string, asset?: VaultAsset): PolicyDraft {
   return {
     mint,
     registered: asset != null,
-    mintEnabled: asset?.mintEnabled ?? true,
-    redeemEnabled: asset?.redeemEnabled ?? true,
+    mintEnabled: asset?.mintEnabled ?? false,
+    redeemEnabled: asset?.redeemEnabled ?? false,
     mintHaircutBps: String(asset?.mintHaircutBps ?? 0),
     redemptionHaircutBps: String(asset?.redemptionHaircutBps ?? 0),
     mintCap: atomsToInputAmount(asset?.mintCap ?? 0, decimals),
@@ -126,8 +126,8 @@ export const usePolicyStore = create<PolicyState>()((set, get) => ({
     }
 
     const draft = get().drafts[assetMint];
-    const mintEnabled = opts?.mintEnabled ?? draft?.mintEnabled ?? true;
-    const redeemEnabled = opts?.redeemEnabled ?? draft?.redeemEnabled ?? true;
+    const mintEnabled = opts?.mintEnabled ?? draft?.mintEnabled ?? false;
+    const redeemEnabled = opts?.redeemEnabled ?? draft?.redeemEnabled ?? false;
 
     set({ busyMint: assetMint });
     try {
