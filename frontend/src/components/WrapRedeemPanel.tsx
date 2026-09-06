@@ -454,17 +454,17 @@ export default function WrapRedeemPanel() {
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
-            aria-label="Mint or redeem Florin"
+            aria-label={publicCopy.tabsAriaLabel}
             sx={{ mb: 2, minHeight: 40 }}
           >
-            <Tab label={publicCopy.tabMint} />
+            <Tab label={publicCopy.tabIssue} />
             <Tab label={publicCopy.tabRedeem} />
           </Tabs>
 
           {tab === 0 && (
-            <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabMint}>
+            <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabIssue}>
               {selectedAsset && !selectedAsset.mintAllowed && (
-                <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
+                <Alert severity="warning">{publicCopy.issueDisabledAlert}</Alert>
               )}
               <TokenAmountField
                 label={publicCopy.collateralAmount}
@@ -481,14 +481,16 @@ export default function WrapRedeemPanel() {
                   {mintLabel(assetMint)} → receive{" "}
                   {formatTokenAmount(issueQuote.output, wrappedDecimals)} {wrappedSymbol}
                   {issueQuote.haircutBps > 0
-                    ? ` (${haircutPercent(issueQuote.haircutBps)} mint haircut)`
+                    ? publicCopy.issueHaircut(haircutPercent(issueQuote.haircutBps))
                     : ""}
                 </Typography>
               )}
               {issueQuote && issueQuote.mintCapRemaining != null && (
                 <Typography variant="caption" color="text.secondary">
-                  Mint cap remaining:{" "}
-                  {formatTokenAmount(issueQuote.mintCapRemaining, wrappedDecimals)} {wrappedSymbol}
+                  {publicCopy.issueCapRemaining(
+                    formatTokenAmount(issueQuote.mintCapRemaining, wrappedDecimals),
+                    wrappedSymbol,
+                  )}
                 </Typography>
               )}
               <Stack direction="row" spacing={1}>
@@ -519,12 +521,12 @@ export default function WrapRedeemPanel() {
                   receive {formatTokenAmount(redeemQuote.output, collateralDecimals)}{" "}
                   {mintLabel(assetMint)}
                   {redeemQuote.haircutBps > 0
-                    ? ` (${haircutPercent(redeemQuote.haircutBps)} redemption haircut)`
+                    ? publicCopy.redeemHaircut(haircutPercent(redeemQuote.haircutBps))
                     : ""}
                 </Typography>
               )}
               {redeemQuote && !redeemQuote.redeemAllowed && (
-                <Alert severity="warning">Redemption is disabled for this asset pool.</Alert>
+                <Alert severity="warning">{publicCopy.redeemDisabledAlert}</Alert>
               )}
               {redeemQuote && redeemQuote.liabilityShortfall > 0 && (
                 <Alert severity="warning">

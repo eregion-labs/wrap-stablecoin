@@ -87,7 +87,6 @@ export const adminCopy = {
   klendNotEnabled: "Kamino is not enabled for this asset. Vault-only ops (sweep, treasury withdraw) still apply.",
   klendDeploy: "Deploy",
   klendRecall: "Recall",
-  klendRecallAll: "Recall all",
   klendHarvest: "Harvest",
   klendHarvestHint: "Capped by harvestable kTokens (surplus at exchange rate). On-chain harvest_yield enforces the same cap.",
   klendHarvestable: "Harvestable",
@@ -196,6 +195,10 @@ export const metricHints = {
   inKamino: {
     label: "In Kamino",
     hint: "Principal currently deployed to Kamino. Does not include unharvested yield.",
+  },
+  yieldApy: {
+    label: "Yield APY",
+    hint: "Current Kamino supply APY for this reserve: borrow curve at live utilization, after the protocol take. Dash if Kamino is off. This is the reserve rate, not realized yield so far.",
   },
   backing: {
     label: "Backing",

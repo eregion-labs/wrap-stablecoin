@@ -44,7 +44,7 @@ export const cardSx = {
   overflowX: "auto",
 };
 
-/** Mint / redeem action card — 3px Florentine red top bar. */
+/** Issue / redeem action card — 3px Florentine red top bar. */
 export const actionCardSx = {
   ...cardSx,
   borderTop: `3px solid ${florentineRed}`,

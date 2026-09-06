@@ -9,7 +9,6 @@ import { useVaultStore } from "./vaultStore";
 export type KlendBusy =
   | "deploy"
   | "recall"
-  | "recallAll"
   | "harvest"
   | "sweep"
   | "withdrawTreasury"
@@ -37,7 +36,6 @@ type KlendState = {
   ) => void;
   submitDeploy: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitRecall: (mint: string) => Promise<ActionResult<{ signature: string }>>;
-  submitRecallAll: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitHarvest: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitSweep: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitWithdrawTreasury: (mint: string) => Promise<ActionResult<{ signature: string }>>;
@@ -113,17 +111,6 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
       return await postAndRefresh("/v1/admin/withdraw-from-klend", {
         assetMint: mint,
         collateralAmount: parsed.data,
-      });
-    } finally {
-      set({ busy: null, busyMint: null });
-    }
-  },
-
-  submitRecallAll: async (mint) => {
-    set({ busy: "recallAll", busyMint: mint });
-    try {
-      return await postAndRefresh("/v1/admin/withdraw-all-from-klend", {
-        assetMint: mint,
       });
     } finally {
       set({ busy: null, busyMint: null });

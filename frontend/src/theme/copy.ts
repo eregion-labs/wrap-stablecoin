@@ -1,10 +1,11 @@
 /** User-facing vocabulary — public merchant app. */
 export const publicCopy = {
-  pageTitle: "Mint & redeem",
+  pageTitle: "Issue & redeem",
   pageDescription:
     "Issue Florin against registered reserve collateral or redeem Florin for underlying.",
-  tabMint: "Mint Florin",
+  tabIssue: "Issue Florin",
   tabRedeem: "Redeem Florin",
+  tabsAriaLabel: "Issue or redeem Florin",
   holdings: "Holdings",
   holdingsColumn: "Holdings",
   connectAccount: "Connect account",
@@ -28,14 +29,20 @@ export const publicCopy = {
   signAndSend: "Sign & send",
   simulate: "Simulate",
   signing: "Signing…",
-  headerTagline: "Mint & redeem",
-  pausedAlert: "Vault is paused. Mint and redeem are blocked until an operator clears pause.",
+  headerTagline: "Issue & redeem",
+  pausedAlert: "Vault is paused. Issue and redeem are blocked until an operator clears pause.",
   mintAuthorityTransferredAlert:
-    "Mint authority has been transferred. Wrap is permanently disabled; redeem still follows pool policy.",
-  wrapPrivateAlert: "Mint is allowlist-only. Your connected wallet is not on the list.",
+    "Token mint authority has been transferred. Issuing is permanently disabled; redeem still follows pool policy.",
+  issueDisabledAlert: "Issuing is disabled for this asset pool.",
+  redeemDisabledAlert: "Redemption is disabled for this asset pool.",
+  issueHaircut: (pct: string) => ` (${pct} issue haircut)`,
+  redeemHaircut: (pct: string) => ` (${pct} redemption haircut)`,
+  issueCapRemaining: (amount: string, symbol: string) =>
+    `Issue cap remaining: ${amount} ${symbol}`,
+  wrapPrivateAlert: "Issue is allowlist-only. Your connected wallet is not on the list.",
   unwrapPrivateAlert: "Redeem is allowlist-only. Your connected wallet is not on the list.",
-  wrapPrivateListed: "Mint is allowlist-only. Your wallet is listed.",
+  wrapPrivateListed: "Issue is allowlist-only. Your wallet is listed.",
   unwrapPrivateListed: "Redeem is allowlist-only. Your wallet is listed.",
-  wrapPrivateDisconnected: "Mint is allowlist-only. Connect a listed wallet to mint.",
+  wrapPrivateDisconnected: "Issue is allowlist-only. Connect a listed wallet to issue.",
   unwrapPrivateDisconnected: "Redeem is allowlist-only. Connect a listed wallet to redeem.",
 } as const;

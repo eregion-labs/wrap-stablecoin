@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
@@ -11,6 +12,9 @@ import HintLabel from "@/components/HintLabel";
 
 type ButtonColor = "primary" | "secondary" | "inherit" | "success" | "error" | "info" | "warning";
 type ButtonVariant = "text" | "outlined" | "contained";
+
+/** Shared execute-column width so Yield (and similar) action rows line up. */
+export const ACTION_EXECUTE_MIN_WIDTH = 200;
 
 export type AmountActionRowProps = {
   label: string;
@@ -37,18 +41,10 @@ export type AmountActionRowProps = {
   onExecute: () => void;
   executeVariant?: ButtonVariant;
   executeColor?: ButtonColor;
-  /** Optional second button after execute (e.g. Recall all). */
-  secondaryExecuteLabel?: string;
-  secondaryExecuteBusy?: boolean;
-  secondaryExecuteDisabled?: boolean;
-  onSecondaryExecute?: () => void;
-  secondaryExecuteVariant?: ButtonVariant;
-  /** Optional field rendered between amount and execute (e.g. destination pubkey). */
+  /** Optional field below the amount row (e.g. destination pubkey) — keeps execute column aligned. */
   extraField?: ReactNode;
   /** Content after the action row (alerts, captions). */
   children?: ReactNode;
-  fullWidth?: boolean;
-  minWidth?: number;
 };
 
 export default function AmountActionRow({
@@ -71,15 +67,8 @@ export default function AmountActionRow({
   onExecute,
   executeVariant = "contained",
   executeColor = "primary",
-  secondaryExecuteLabel,
-  secondaryExecuteBusy = false,
-  secondaryExecuteDisabled = false,
-  onSecondaryExecute,
-  secondaryExecuteVariant = "outlined",
   extraField,
   children,
-  fullWidth = false,
-  minWidth = 200,
 }: AmountActionRowProps) {
   const maxOff = maxDisabled ?? (disabled || availableAtoms <= 0);
   const amountText =
@@ -102,15 +91,25 @@ export default function AmountActionRow({
 
   return (
     <Stack spacing={1}>
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "flex-start" }}>
+      <Box
+        sx={{
+          display: "grid",
+          gap: 1,
+          width: "100%",
+          alignItems: "start",
+          gridTemplateColumns: {
+            xs: "1fr",
+            md: `minmax(0, 1fr) ${ACTION_EXECUTE_MIN_WIDTH}px`,
+          },
+        }}
+      >
         <TextField
           size="small"
           label={label}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          fullWidth={fullWidth}
-          sx={{ minWidth, ...(fullWidth ? { flex: 1 } : {}) }}
+          fullWidth
           helperText={helperNode}
           slotProps={{
             input: {
@@ -129,28 +128,22 @@ export default function AmountActionRow({
             },
           }}
         />
-        {extraField}
         <Button
           variant={executeVariant}
           color={executeColor}
           disabled={executeDisabled || disabled}
           onClick={onExecute}
-          sx={{ mt: { md: 0.5 }, flexShrink: 0 }}
+          sx={{
+            mt: { md: 0.5 },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
+          }}
         >
           {executeBusy ? executeBusyLabel : executeLabel}
         </Button>
-        {secondaryExecuteLabel && onSecondaryExecute && (
-          <Button
-            variant={secondaryExecuteVariant}
-            color={executeColor}
-            disabled={secondaryExecuteDisabled || disabled}
-            onClick={onSecondaryExecute}
-            sx={{ mt: { md: 0.5 }, flexShrink: 0 }}
-          >
-            {secondaryExecuteBusy ? executeBusyLabel : secondaryExecuteLabel}
-          </Button>
-        )}
-      </Stack>
+      </Box>
+      {extraField}
       {children}
     </Stack>
   );

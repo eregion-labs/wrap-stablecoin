@@ -48,6 +48,14 @@ function CapCell({ amount, decimals }: { amount: number; decimals: number }) {
   );
 }
 
+function formatApyBps(bps: number | null | undefined, klendEnabled: boolean): string {
+  if (!klendEnabled || bps == null || !Number.isFinite(bps)) return "—";
+  return `${(bps / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
 function OnOffCell({ on }: { on: boolean }) {
   return (
     <TableCell
@@ -122,6 +130,9 @@ function AssetRow({
       <AmountCell amount={asset.cushion} decimals={d} />
       <AmountCell amount={asset.freeLiquidity} decimals={d} />
       <AmountCell amount={asset.deployedToKamino} decimals={d} />
+      <TableCell align="right" sx={denseCellSx}>
+        {formatApyBps(asset.kaminoSupplyApyBps, asset.klendEnabled)}
+      </TableCell>
       <AmountCell amount={asset.backing} decimals={d} />
       <AmountCell amount={asset.treasuryBalance} decimals={d} />
       <AmountCell amount={asset.kaminoSurplus} decimals={d} />
@@ -209,6 +220,7 @@ export default function VaultAccountingPanel({
               <HeaderCell metric={metricHints.cushion} align="right" />
               <HeaderCell metric={metricHints.homeVault} align="right" />
               <HeaderCell metric={metricHints.inKamino} align="right" />
+              <HeaderCell metric={metricHints.yieldApy} align="right" />
               <HeaderCell metric={metricHints.backing} align="right" />
               <HeaderCell metric={metricHints.treasury} align="right" />
               <HeaderCell metric={metricHints.kaminoSurplus} align="right" />

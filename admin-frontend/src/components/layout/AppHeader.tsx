@@ -39,7 +39,7 @@ export default function AppHeader() {
     <AppBar position="sticky" color="transparent" elevation={0}>
       <Container maxWidth={false} disableGutters sx={pageColumnSx}>
         <Toolbar disableGutters sx={{ minHeight: 60, gap: 2 }}>
-          <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
             <Box
               component={Link}
               href="/"
@@ -83,13 +83,13 @@ export default function AppHeader() {
               {subtitle}
             </Typography>
           </Box>
-          <Chip
-            size="small"
-            label={`${config.solana.network} · ${config.deploymentId}`}
-            variant="outlined"
-            sx={{ display: { xs: "none", md: "flex" }, borderRadius: "1px" }}
-          />
-          <Stack direction="row" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <Chip
+              size="small"
+              label={`${config.solana.network} · ${config.deploymentId}`}
+              variant="outlined"
+              sx={{ display: { xs: "none", md: "flex" }, borderRadius: "1px" }}
+            />
             <Button component={Link} href="/" size="small" variant="text" sx={navSx(pathname === "/")}>
               {adminCopy.treasury}
             </Button>
@@ -101,15 +101,6 @@ export default function AppHeader() {
               sx={navSx(pathname.startsWith("/reserves") || pathname.startsWith("/policy"))}
             >
               {adminCopy.reserves}
-            </Button>
-            <Button
-              component={Link}
-              href="/controls"
-              size="small"
-              variant="text"
-              sx={navSx(pathname.startsWith("/controls") || pathname.startsWith("/vault"))}
-            >
-              {adminCopy.vaultNav}
             </Button>
             <Button
               component={Link}
@@ -128,6 +119,15 @@ export default function AppHeader() {
               sx={navSx(pathname.startsWith("/stats"))}
             >
               {adminCopy.tokenStats}
+            </Button>
+            <Button
+              component={Link}
+              href="/controls"
+              size="small"
+              variant="text"
+              sx={navSx(pathname.startsWith("/controls") || pathname.startsWith("/vault"))}
+            >
+              {adminCopy.vaultNav}
             </Button>
           </Stack>
         </Toolbar>

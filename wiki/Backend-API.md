@@ -165,7 +165,7 @@ Optional `user=<wallet>` on both quotes sets `accessAllowed` (`true` if the flag
 
 ## Vault assets and meta
 
-**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino kToken caps when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`. See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
+**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino kToken caps when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`, `kaminoSupplyApyBps`. See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
 
 `withdraw-from-klend` and `harvest-yield` take **kToken** atoms (`collateralAmount`). Use `maxRecallableKtokens` / `maxHarvestableKtokens` for Max — not `deployedToKamino` / `kaminoSurplus` (those are underlying).
 

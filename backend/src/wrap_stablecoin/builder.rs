@@ -249,10 +249,56 @@ fn get_token_account_amount(rpc: &RpcClient, ata: &Pubkey) -> Result<u64> {
 /// KLend Reserve liquidity/collateral snapshot (account size 8624).
 /// Offsets: liquidity.availableAmount u64 @224, borrowedAmountSf u128 @232,
 /// accumulatedProtocolFeesSf u128 @344 (both /2^60), collateral.mintTotalSupply u64 @2592.
+/// Config (disc + header + liquidity + pads + collateral + pads): take rate u8 @4870,
+/// borrow curve 11×(util u32, rate u32) @4920. Checked against fixtures/klend/reserve.json.
+const KLEND_CURVE_POINTS: usize = 11;
+const KLEND_TAKE_RATE_PCT: usize = 4870;
+const KLEND_CURVE: usize = 4920;
+
 struct KlendReserveMark {
     available: u128,
     total_liq: u128,
     coll_supply: u128,
+    /// Current Kamino supply APY in bps, if the reserve config bytes are present.
+    supply_apy_bps: Option<u64>,
+}
+
+fn curve_borrow_apr_bps(util_bps: u64, points: &[(u32, u32)]) -> u64 {
+    if points.is_empty() {
+        return 0;
+    }
+    let u = util_bps.min(10_000);
+    let mut prev = points[0];
+    if u <= u64::from(prev.0) {
+        return u64::from(prev.1);
+    }
+    for &p in &points[1..] {
+        if u <= u64::from(p.0) {
+            let (u0, r0) = (u64::from(prev.0), u64::from(prev.1));
+            let (u1, r1) = (u64::from(p.0), u64::from(p.1));
+            if u1 == u0 {
+                return r1;
+            }
+            return r0 + (r1.saturating_sub(r0)) * (u - u0) / (u1 - u0);
+        }
+        prev = p;
+    }
+    u64::from(prev.1)
+}
+
+fn supply_apr_bps(util_bps: u64, borrow_apr_bps: u64, take_rate_pct: u8) -> u64 {
+    let keep = 100u64.saturating_sub(u64::from(take_rate_pct.min(100)));
+    borrow_apr_bps.saturating_mul(util_bps.min(10_000)) * keep / 10_000 / 100
+}
+
+/// Slot compounding ≈ e^apr − 1 (Kamino N is ~7.8e7 slots/year).
+fn apr_bps_to_apy_bps(apr_bps: u64) -> u64 {
+    let apr = apr_bps as f64 / 10_000.0;
+    let apy = apr.exp() - 1.0;
+    if !apy.is_finite() || apy < 0.0 {
+        return 0;
+    }
+    (apy * 10_000.0).round() as u64
 }
 
 fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
@@ -275,10 +321,25 @@ fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserv
     if total_liq == 0 {
         return None;
     }
+    let supply_apy_bps = (d.len() >= KLEND_CURVE + KLEND_CURVE_POINTS * 8).then(|| {
+        let take = d[KLEND_TAKE_RATE_PCT];
+        let mut points = [(0u32, 0u32); KLEND_CURVE_POINTS];
+        for (i, p) in points.iter_mut().enumerate() {
+            let o = KLEND_CURVE + i * 8;
+            *p = (
+                u32::from_le_bytes(d[o..o + 4].try_into().unwrap()),
+                u32::from_le_bytes(d[o + 4..o + 8].try_into().unwrap()),
+            );
+        }
+        let util_bps = (borrowed.saturating_mul(10_000) / total_liq).min(10_000) as u64;
+        let borrow = curve_borrow_apr_bps(util_bps, &points);
+        apr_bps_to_apy_bps(supply_apr_bps(util_bps, borrow, take))
+    });
     Some(KlendReserveMark {
         available,
         total_liq,
         coll_supply,
+        supply_apy_bps,
     })
 }
 
@@ -287,12 +348,12 @@ fn underlying_to_ktokens(underlying: u128, mark: &KlendReserveMark) -> u64 {
     (underlying.saturating_mul(mark.coll_supply) / mark.total_liq).min(u64::MAX as u128) as u64
 }
 
-/// Caps for recall/harvest in kToken atoms, plus reserve free liquidity and underlying surplus.
-/// Returns `(collateral_ktokens, kamino_available, max_recallable, max_harvestable, kamino_surplus)`.
-fn klend_ktoken_caps(rpc: &RpcClient, klend: &KLendConfig) -> (u64, u64, u64, u64, u64) {
+/// Caps for recall/harvest in kToken atoms, plus reserve free liquidity, surplus, and supply APY.
+/// Returns `(collateral_ktokens, kamino_available, max_recallable, max_harvestable, kamino_surplus, supply_apy_bps)`.
+fn klend_ktoken_caps(rpc: &RpcClient, klend: &KLendConfig) -> (u64, u64, u64, u64, u64, Option<u64>) {
     let collateral_ktokens = get_token_account_amount(rpc, &klend.collateral_vault).unwrap_or(0);
     let Some(mark) = decode_klend_reserve(rpc, &klend.reserve) else {
-        return (collateral_ktokens, 0, 0, 0, 0);
+        return (collateral_ktokens, 0, 0, 0, 0, None);
     };
     let available_u64 = mark.available.min(u64::MAX as u128) as u64;
     let max_by_liquidity = underlying_to_ktokens(mark.available, &mark);
@@ -310,6 +371,7 @@ fn klend_ktoken_caps(rpc: &RpcClient, klend: &KLendConfig) -> (u64, u64, u64, u6
         max_recallable,
         max_harvestable,
         surplus,
+        mark.supply_apy_bps,
     )
 }
 
@@ -576,6 +638,8 @@ pub struct VaultAssetView {
     pub max_recallable_ktokens: u64,
     /// Max kTokens that can be harvested (surplus converted at exchange rate, capped by holdings).
     pub max_harvestable_ktokens: u64,
+    /// Current Kamino supply APY in basis points (10000 = 100%). `null` if Kamino is off or the reserve could not be marked.
+    pub kamino_supply_apy_bps: Option<u64>,
 }
 
 fn optional_pubkey(pk: &Pubkey) -> Option<String> {
@@ -845,10 +909,11 @@ pub fn fetch_vault_assets(
             max_recallable_ktokens,
             max_harvestable_ktokens,
             kamino_surplus,
+            kamino_supply_apy_bps,
         ) = klend
             .as_ref()
             .map(|k| klend_ktoken_caps(rpc, k))
-            .unwrap_or((0, 0, 0, 0, 0));
+            .unwrap_or((0, 0, 0, 0, 0, None));
         let home_surplus = home_surplus_amount(
             free_liquidity,
             liability,
@@ -889,6 +954,7 @@ pub fn fetch_vault_assets(
             kamino_available_liquidity,
             max_recallable_ktokens,
             max_harvestable_ktokens,
+            kamino_supply_apy_bps,
         });
     }
     Ok(VaultSummaryView {
@@ -1650,6 +1716,23 @@ mod allowlist_slot_tests {
         assert_eq!(ix.accounts[9], sentinel);
         assert_eq!(ix.accounts[10].pubkey, collateral);
         assert_eq!(ix.accounts[11].pubkey, spl_token_program_id());
+    }
+
+    #[test]
+    fn klend_supply_apy_from_curve() {
+        // 0% util → 0; 50% of a flat 10% curve with 10% take → 4.5% APR → ~4.60% APY
+        let flat = [(0, 1_000), (10_000, 1_000)];
+        assert_eq!(curve_borrow_apr_bps(0, &flat), 1_000);
+        assert_eq!(curve_borrow_apr_bps(5_000, &flat), 1_000);
+        assert_eq!(supply_apr_bps(0, 1_000, 10), 0);
+        assert_eq!(supply_apr_bps(5_000, 1_000, 10), 450);
+        let apy = apr_bps_to_apy_bps(450);
+        assert!(apy > 450 && apy < 470, "apy={apy}");
+        // kink: 0→0, 9500→310, 10000→3040 (mainnet USDC-shaped)
+        let kink = [(0, 0), (9_500, 310), (10_000, 3_040)];
+        assert_eq!(curve_borrow_apr_bps(0, &kink), 0);
+        assert_eq!(curve_borrow_apr_bps(9_500, &kink), 310);
+        assert_eq!(curve_borrow_apr_bps(4_750, &kink), 155);
     }
 
     #[test]

@@ -37,6 +37,8 @@ export type VaultAsset = {
   maxRecallableKtokens?: number;
   /** Max kTokens for harvest-yield. */
   maxHarvestableKtokens?: number;
+  /** Current Kamino supply APY in bps (10000 = 100%). Null if Kamino is off. */
+  kaminoSupplyApyBps?: number | null;
   mintEnabled: boolean;
   redeemEnabled: boolean;
   mintAllowed: boolean;

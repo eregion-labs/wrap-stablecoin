@@ -230,7 +230,6 @@ export default function MintDashboard() {
                     : mintHelperExtra
                 }
                 helperExtra={adminCopy.humanAmountHint}
-                fullWidth
                 disabled={busy !== null}
                 maxDisabled={busy !== null || !signerReady || collateralWalletAtoms <= 0}
                 executeLabel={adminCopy.issueViaTreasury}
@@ -279,7 +278,6 @@ export default function MintDashboard() {
                 availableLabel="Available"
                 symbol={wrappedSymbol}
                 helperText={redeemHelperExtra}
-                fullWidth
                 disabled={busy !== null}
                 maxDisabled={
                   busy !== null ||

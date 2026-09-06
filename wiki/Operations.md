@@ -17,6 +17,7 @@ Operator runbook for deposit/redemption decoupling and per-pool surplus manageme
 | `kaminoAvailableLiquidity` | Reserve free liquidity (underlying) available for redeem |
 | `maxRecallableKtokens` | Max kTokens for `withdraw-from-klend` (holdings ∩ reserve liquidity) |
 | `maxHarvestableKtokens` | Max kTokens for `harvest-yield` (surplus converted at exchange rate) |
+| `kaminoSupplyApyBps` | Current Kamino supply APY in bps (`null` if Kamino off) |
 
 See [Accounting.md](Accounting.md) for formulas.
 

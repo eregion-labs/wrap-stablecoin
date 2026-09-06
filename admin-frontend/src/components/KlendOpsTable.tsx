@@ -59,7 +59,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
   const setDraft = useKlendStore((s) => s.setDraft);
   const submitDeploy = useKlendStore((s) => s.submitDeploy);
   const submitRecall = useKlendStore((s) => s.submitRecall);
-  const submitRecallAll = useKlendStore((s) => s.submitRecallAll);
   const submitHarvest = useKlendStore((s) => s.submitHarvest);
   const submitSweep = useKlendStore((s) => s.submitSweep);
   const submitWithdrawTreasury = useKlendStore((s) => s.submitWithdrawTreasury);
@@ -185,7 +184,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           decimals={d}
           availableLabel={adminCopy.klendAvailableDeploy}
           symbol={symbol}
-          fullWidth
           disabled={deployLocked || klendOff}
           executeLabel={adminCopy.klendDeploy}
           executeBusy={rowBusy && busy === "deploy"}
@@ -200,18 +198,11 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           decimals={d}
           availableLabel={adminCopy.klendAvailableRecall}
           symbol={adminCopy.klendKtokenUnit}
-          fullWidth
           disabled={locked || klendOff}
           executeLabel={adminCopy.klendRecall}
           executeBusy={rowBusy && busy === "recall"}
           executeColor="secondary"
           onExecute={async () => notify(await submitRecall(mint), "Recalled")}
-          secondaryExecuteLabel={adminCopy.klendRecallAll}
-          secondaryExecuteBusy={rowBusy && busy === "recallAll"}
-          secondaryExecuteDisabled={collateralKtokens <= 0}
-          onSecondaryExecute={async () =>
-            notify(await submitRecallAll(mint), "Recalled all")
-          }
         />
 
         <AmountActionRow
@@ -223,7 +214,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           availableLabel={adminCopy.klendAvailableHarvest}
           symbol={adminCopy.klendKtokenUnit}
           helperExtra={adminCopy.klendHarvestHint}
-          fullWidth
           disabled={deployLocked || klendOff}
           executeLabel={adminCopy.klendHarvest}
           executeBusy={rowBusy && busy === "harvest"}
@@ -239,7 +229,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           decimals={d}
           availableMetric={metricHints.homeSurplus}
           symbol={symbol}
-          fullWidth
           disabled={locked}
           executeLabel={adminCopy.klendSweep}
           executeBusy={rowBusy && busy === "sweep"}
@@ -256,13 +245,11 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           decimals={d}
           availableMetric={metricHints.treasury}
           symbol={symbol}
-          fullWidth
           disabled={locked}
           executeLabel={adminCopy.klendWithdrawTreasury}
           executeBusy={rowBusy && busy === "withdrawTreasury"}
           executeVariant="outlined"
           executeDisabled={asset.treasuryBalance <= 0}
-          minWidth={160}
           onExecute={async () =>
             notify(await submitWithdrawTreasury(mint), "Treasury withdrawn")
           }
@@ -273,7 +260,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
               value={draft.destination}
               onChange={(e) => setDraft(mint, { destination: e.target.value })}
               disabled={locked}
-              sx={{ minWidth: 280, flex: 1 }}
+              fullWidth
             />
           }
         />
