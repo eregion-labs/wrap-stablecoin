@@ -97,7 +97,7 @@ export default function AssetPolicyTable() {
   };
 
   return (
-    <Box sx={{ maxWidth: 1280, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3, gap: 2 }}>
         <PageHeading
           label={adminCopy.reserves}
@@ -118,7 +118,7 @@ export default function AssetPolicyTable() {
       <AddCollateralPanel />
 
       <TableContainer component={Paper} variant="outlined" sx={{ overflowX: "auto" }}>
-        <Table size="small" sx={{ minWidth: 1100 }}>
+        <Table size="small" sx={{ width: "100%", minWidth: 1100 }}>
           <TableHead>
             <TableRow>
               <TableCell>

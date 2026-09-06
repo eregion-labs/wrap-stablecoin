@@ -135,7 +135,7 @@ export default function VaultAccountingPanel({
         {adminCopy.accountsCaption}
       </Typography>
       <Box sx={{ overflowX: "auto" }}>
-        <Table size="small" sx={{ minWidth: 800 }}>
+        <Table size="small" sx={{ width: "100%", minWidth: 800 }}>
           <TableHead>
             <TableRow>
               <HeaderCell metric={metricHints.asset} />

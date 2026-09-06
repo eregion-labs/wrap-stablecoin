@@ -17,6 +17,7 @@ import NextLink from "next/link";
 import AmountActionRow from "@/components/AmountActionRow";
 import PageHeading from "@/components/layout/PageHeading";
 import SignerBalancesPanel from "@/components/SignerBalancesPanel";
+import SwapPreviewPanel from "@/components/SwapPreviewPanel";
 import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
@@ -41,6 +42,7 @@ export default function MintDashboard() {
   const assetMint = useMintStore((s) => s.assetMint);
   const mintAmount = useMintStore((s) => s.mintAmount);
   const redeemAmount = useMintStore((s) => s.redeemAmount);
+  const issueQuote = useMintStore((s) => s.issueQuote);
   const redeemQuote = useMintStore((s) => s.redeemQuote);
   const busy = useMintStore((s) => s.busy);
   const setAssetMint = useMintStore((s) => s.setAssetMint);
@@ -87,9 +89,10 @@ export default function MintDashboard() {
   const onMint = async () => {
     const result = await submitMint();
     if (result.ok) {
-      enqueueSnackbar(`Minted ${wrappedSymbol} — ${result.data.signature.slice(0, 8)}…`, {
-        variant: "success",
-      });
+      enqueueSnackbar(
+        adminCopy.issuedSnackbar(wrappedSymbol, result.data.signature.slice(0, 8)),
+        { variant: "success" },
+      );
     } else {
       enqueueSnackbar(result.error, { variant: "error" });
     }
@@ -98,7 +101,7 @@ export default function MintDashboard() {
   const onRedeem = async () => {
     const result = await submitRedeem();
     if (result.ok) {
-      enqueueSnackbar(`Redeemed underlying — ${result.data.signature.slice(0, 8)}…`, {
+      enqueueSnackbar(adminCopy.redeemedSnackbar(result.data.signature.slice(0, 8)), {
         variant: "success",
       });
     } else {
@@ -114,8 +117,21 @@ export default function MintDashboard() {
     );
   }
 
+  const showIssuePreview =
+    tab === 0 &&
+    selectedAsset != null &&
+    issueQuote != null &&
+    issueQuote.canMint &&
+    issueQuote.input > 0;
+  const showRedeemPreview =
+    tab === 1 &&
+    selectedAsset != null &&
+    redeemQuote != null &&
+    redeemQuote.canRedeem &&
+    redeemQuote.input > 0;
+
   return (
-    <Box sx={{ maxWidth: 960, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 4, gap: 2 }}>
         <Box>
           <PageHeading
@@ -161,8 +177,15 @@ export default function MintDashboard() {
         />
       )}
 
-      <Box sx={{ ...actionCardSx, mt: 3, mb: 0 }}>
+      <Box sx={{ ...actionCardSx, mt: 3, mb: 0, maxWidth: 960, mx: "auto" }}>
         <Stack spacing={2}>
+          <Stack spacing={0.25}>
+            <Typography variant="subtitle2">{adminCopy.composeTitle}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {adminCopy.composeCaption}
+            </Typography>
+          </Stack>
+
           <TextField
             select
             label={adminCopy.reserveCollateral}
@@ -190,7 +213,7 @@ export default function MintDashboard() {
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
-            aria-label="Mint or redeem Florin"
+            aria-label={adminCopy.tabAriaLabel}
             sx={{ minHeight: 40 }}
           >
             <Tab label={adminCopy.tabMint} />
@@ -228,7 +251,29 @@ export default function MintDashboard() {
                   (signerReady && collateralWalletAtoms <= 0)
                 }
                 onExecute={onMint}
-              />
+              >
+                {issueQuote && (
+                  <Typography variant="body2" color="text.secondary">
+                    {adminCopy.expectedIssueOutput}:{" "}
+                    {formatTokenAmount(issueQuote.output, summary?.wrappedDecimals ?? 6)}{" "}
+                    {wrappedSymbol}
+                    {issueQuote.haircutBps > 0 ? ` (haircut ${issueQuote.haircutBps} bps)` : ""}
+                  </Typography>
+                )}
+              </AmountActionRow>
+              {showIssuePreview && selectedAsset && issueQuote && (
+                <SwapPreviewPanel
+                  side="issue"
+                  asset={selectedAsset}
+                  wrappedDecimals={summary?.wrappedDecimals ?? 6}
+                  wrappedSymbol={wrappedSymbol}
+                  collateralSymbol={mintLabel(selectedAsset.mint)}
+                  input={issueQuote.input}
+                  output={issueQuote.output}
+                  adminCollateralAtoms={collateralWalletAtoms}
+                  adminWrappedAtoms={wrappedWalletAtoms}
+                />
+              )}
             </Stack>
           )}
 
@@ -265,7 +310,7 @@ export default function MintDashboard() {
               >
                 {redeemQuote && (
                   <Typography variant="body2" color="text.secondary">
-                    Expected output:{" "}
+                    {adminCopy.expectedRedeemOutput}:{" "}
                     {formatTokenAmount(redeemQuote.output, selectedAsset?.tokenDecimals ?? 6)}{" "}
                     {selectedAsset ? mintLabel(selectedAsset.mint) : ""}
                     {redeemQuote.haircutBps > 0 ? ` (haircut ${redeemQuote.haircutBps} bps)` : ""}
@@ -311,6 +356,19 @@ export default function MintDashboard() {
                     <Alert severity="warning">{adminCopy.redeemWouldFailAlert}</Alert>
                   )}
               </AmountActionRow>
+              {showRedeemPreview && selectedAsset && redeemQuote && (
+                <SwapPreviewPanel
+                  side="redeem"
+                  asset={selectedAsset}
+                  wrappedDecimals={summary?.wrappedDecimals ?? 6}
+                  wrappedSymbol={wrappedSymbol}
+                  collateralSymbol={mintLabel(selectedAsset.mint)}
+                  input={redeemQuote.input}
+                  output={redeemQuote.output}
+                  adminCollateralAtoms={collateralWalletAtoms}
+                  adminWrappedAtoms={wrappedWalletAtoms}
+                />
+              )}
             </Stack>
           )}
         </Stack>

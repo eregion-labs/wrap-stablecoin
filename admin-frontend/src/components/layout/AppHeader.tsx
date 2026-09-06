@@ -37,7 +37,7 @@ export default function AppHeader() {
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
-      <Container maxWidth="lg" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth={false} disableGutters sx={{ maxWidth: 1800, mx: "auto", px: { xs: 2, sm: 3 } }}>
         <Toolbar disableGutters sx={{ minHeight: 60, gap: 2 }}>
           <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
             <Box

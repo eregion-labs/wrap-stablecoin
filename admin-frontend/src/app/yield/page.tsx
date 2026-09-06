@@ -31,7 +31,7 @@ export default function YieldPage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <Box sx={{ maxWidth: 1100, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 }, width: "100%" }}>
+      <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
         <Stack
           direction="row"
           justifyContent="space-between"

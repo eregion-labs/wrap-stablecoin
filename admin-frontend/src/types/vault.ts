@@ -112,6 +112,19 @@ export type RedeemQuote = {
   maxRedeemable: number;
 };
 
+export type IssueQuote = {
+  input: number;
+  output: number;
+  haircutBps: number;
+  assetMint: string;
+  mintEnabled: boolean;
+  mintAllowed: boolean;
+  canMint: boolean;
+  mintCap: number;
+  mintCapRemaining: number | null;
+  accessAllowed: boolean | null;
+};
+
 export function wrappedTokenSymbol(
   summary: { mintMetadata?: MintMetadata | null } | null | undefined,
 ): string {

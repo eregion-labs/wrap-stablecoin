@@ -36,7 +36,7 @@ export default function ReservesPage() {
       )}
       <AssetPolicyTable />
       {summary && summary.assets.length > 0 && (
-        <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, pb: 5 }}>
+        <Box sx={{ width: "100%", maxWidth: 1800, mx: "auto", px: { xs: 2, sm: 3 }, pb: 5 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
             {adminCopy.accounts}
           </Typography>
