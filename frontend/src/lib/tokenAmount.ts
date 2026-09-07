@@ -20,6 +20,18 @@ export function parseTokenAmount(raw: string, decimals: number): number | null {
   return atoms;
 }
 
+/** Format raw token atoms as a Max-button input string (no grouping separators). */
+export function atomsToInputAmount(atoms: number, decimals: number): string {
+  if (!Number.isFinite(atoms) || atoms <= 0) return "0";
+  const scale = 10 ** decimals;
+  const rounded = Math.round(atoms);
+  const whole = Math.floor(rounded / scale);
+  const frac = Math.round(rounded - whole * scale);
+  if (frac === 0) return String(whole);
+  const fracStr = String(frac).padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole}.${fracStr}`;
+}
+
 export function haircutPercent(bps: number): string {
   return `${(bps / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 }

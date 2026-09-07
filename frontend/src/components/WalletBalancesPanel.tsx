@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { publicCopy } from "@/theme/copy";
+import ExplorerLink from "@/components/ExplorerLink";
 import { wrappedTokenSymbol, type VaultSummary } from "@/types/vault";
 
 type Props = {
@@ -54,8 +55,12 @@ export default function WalletBalancesPanel({ summary, walletBalances, connected
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row.key}>
-              <TableCell>{row.label}</TableCell>
-              <TableCell align="right" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', color: "text.secondary" }}>
+              <TableCell>
+                <ExplorerLink address={row.key} type="token">
+                  {row.label}
+                </ExplorerLink>
+              </TableCell>
+              <TableCell align="right" sx={{ color: "text.secondary" }}>
                 {row.amount === null
                   ? "—"
                   : formatTokenAmount(row.amount, row.decimals)}

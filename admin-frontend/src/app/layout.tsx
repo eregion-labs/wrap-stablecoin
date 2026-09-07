@@ -7,7 +7,7 @@ import { adminCopy } from "@/theme/copy";
 
 export const metadata: Metadata = {
   title: `${BRANDING.name} — ${adminCopy.officeTitle}`,
-  description: "Treasury operations and reserve governance",
+  description: "Swap Window, reserves, controls, and yield operations",
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className="min-h-full antialiased">
+      <body className="min-h-full antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

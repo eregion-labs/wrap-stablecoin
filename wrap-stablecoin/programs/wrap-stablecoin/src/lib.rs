@@ -15,7 +15,7 @@ pub mod utils;
 
 pub use instructions::*;
 
-declare_id!("BZQaR9BcpRBnGedU6BPAWwocHwvdCdjcJYD1doCVXhcS");
+declare_id!("DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ");
 
 fn check_access(
     is_public: bool,

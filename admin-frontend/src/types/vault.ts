@@ -29,6 +29,16 @@ export type VaultAsset = {
   kaminoSurplus: number;
   homeSurplus: number;
   maxRedeemable: number;
+  /** kTokens in collateral_vault (0 if Kamino off). */
+  collateralKtokens?: number;
+  /** Reserve free liquidity (underlying atoms). */
+  kaminoAvailableLiquidity?: number;
+  /** Max kTokens for withdraw-from-klend. */
+  maxRecallableKtokens?: number;
+  /** Max kTokens for harvest-yield. */
+  maxHarvestableKtokens?: number;
+  /** Current Kamino supply APY in bps (10000 = 100%). Null if Kamino is off. */
+  kaminoSupplyApyBps?: number | null;
   mintEnabled: boolean;
   redeemEnabled: boolean;
   mintAllowed: boolean;
@@ -41,6 +51,8 @@ export type VaultAsset = {
   netLiability: number;
   assetStatus: AssetStatus;
   klendEnabled: boolean;
+  lendingMarket?: string | null;
+  klendReserve?: string | null;
 };
 
 /** Vault-level governance fields on GET /v1/vault/meta and /v1/vault/assets. */
@@ -62,6 +74,8 @@ export type VaultSummary = VaultGovernance & {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  /** Wrapped mint supply as a human decimal string (RPC uiAmountString). */
+  circulatingSupply?: string;
   assets: VaultAsset[];
 };
 
@@ -73,12 +87,16 @@ export type VaultMeta = VaultGovernance & {
   wrappedMint: string;
   wrappedDecimals: number;
   mintMetadata?: MintMetadata | null;
+  /** Wrapped mint supply as a human decimal string (RPC uiAmountString). */
+  circulatingSupply?: string;
 };
 
-/** Response from GET /v1/vault/token-holders (token-account → amount atoms). */
+/** Response from GET /v1/vault/token-holders (token-account → human decimal amount). */
 export type TokenHolders = {
   wrappedMint: string;
   decimals: number;
+  /** Mint supply as a human decimal string. */
+  supply?: string;
   holders: Record<string, string>;
 };
 
@@ -94,6 +112,19 @@ export type RedeemQuote = {
   liquidityShortfall: number;
   liabilityShortfall: number;
   maxRedeemable: number;
+};
+
+export type IssueQuote = {
+  input: number;
+  output: number;
+  haircutBps: number;
+  assetMint: string;
+  mintEnabled: boolean;
+  mintAllowed: boolean;
+  canMint: boolean;
+  mintCap: number;
+  mintCapRemaining: number | null;
+  accessAllowed: boolean | null;
 };
 
 export function wrappedTokenSymbol(

@@ -165,7 +165,9 @@ Optional `user=<wallet>` on both quotes sets `accessAllowed` (`true` if the flag
 
 ## Vault assets and meta
 
-**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`. See [Accounting.md](Accounting.md).
+**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino kToken caps when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`, `kaminoSupplyApyBps`. See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
+
+`withdraw-from-klend` and `harvest-yield` take **kToken** atoms (`collateralAmount`). Use `maxRecallableKtokens` / `maxHarvestableKtokens` for Max — not `deployedToKamino` / `kaminoSurplus` (those are underlying).
 
 Both **`GET /v1/vault/meta`** and **`GET /v1/vault/assets`** include vault governance:
 
@@ -255,7 +257,7 @@ Enable Kamino (one-shot per asset):
 
 ### Destination-signed accepts
 
-`POST /v1/admin/accept-authority/tx` and `POST /v1/admin/accept-mint-authority/tx` return `{ "transactionB64": "..." }` (bincode `VersionedTransaction`). The fee payer / signer is the on-chain pending destination. The Chamber UI signs in the browser from a keypair JSON file; the secret never hits the backend.
+`POST /v1/admin/accept-authority/tx` and `POST /v1/admin/accept-mint-authority/tx` return `{ "transactionB64": "..." }` (bincode `VersionedTransaction`). The fee payer / signer is the on-chain pending destination. The Controls UI signs in the browser from a keypair JSON file; the secret never hits the backend.
 
 `accept_mint_authority` remaining accounts are every registered `AssetConfig` PDA in vault order. Accepting **permanently disables wrap**.
 

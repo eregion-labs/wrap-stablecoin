@@ -2,7 +2,7 @@
 
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import { redRuleSx, sectionLabelSx } from "@/theme/tokens";
+import { layout, redRuleSx, sectionLabelSx, serifStack } from "@/theme/tokens";
 
 type Props = {
   label?: string;
@@ -27,8 +27,8 @@ export default function PageHeading({ label, title, description }: Props) {
           variant="body2"
           color="text.secondary"
           sx={{
-            maxWidth: 640,
-            fontFamily: 'var(--font-eb-garamond), "EB Garamond", Georgia, serif',
+            maxWidth: layout.explain,
+            fontFamily: serifStack,
             fontStyle: "italic",
             fontSize: "1.05rem",
             lineHeight: 1.7,

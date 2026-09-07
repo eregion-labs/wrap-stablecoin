@@ -1,6 +1,5 @@
 import { createTheme } from "@mui/material/styles";
 import {
-  accentBrown,
   civicBlue,
   colorError,
   colorInfo,
@@ -10,16 +9,15 @@ import {
   focusRing,
   hairline,
   ledgerInk,
+  monoStack,
   mutedWash,
   offWhite,
   paper,
+  sansStack,
+  serifStack,
   textDisabled,
   textMuted,
 } from "./tokens";
-
-const serifStack = 'var(--font-eb-garamond), "EB Garamond", Georgia, serif';
-const sansStack = "var(--font-inter), system-ui, sans-serif";
-const monoStack = 'var(--font-dm-mono), "DM Mono", ui-monospace, monospace';
 
 export const theme = createTheme({
   palette: {
@@ -196,7 +194,8 @@ export const theme = createTheme({
           "& .MuiOutlinedInput-root": {
             borderRadius: "1px",
             backgroundColor: offWhite,
-            fontFamily: monoStack,
+            fontFamily: sansStack,
+            fontVariantNumeric: "tabular-nums",
             "& fieldset": {
               borderColor: hairline,
             },
@@ -265,14 +264,20 @@ export const theme = createTheme({
           border: `1px solid rgba(46, 158, 91, 0.25)`,
         },
         standardWarning: {
-          backgroundColor: "rgba(138, 94, 58, 0.1)",
-          color: accentBrown,
-          border: `1px solid rgba(138, 94, 58, 0.25)`,
+          backgroundColor: "rgba(194, 25, 43, 0.1)",
+          color: florentineRed,
+          border: `1px solid rgba(194, 25, 43, 0.35)`,
+          "& .MuiAlert-icon": {
+            color: florentineRed,
+          },
         },
         standardError: {
-          backgroundColor: "rgba(194, 25, 43, 0.08)",
+          backgroundColor: "rgba(194, 25, 43, 0.14)",
           color: colorError,
-          border: `1px solid rgba(194, 25, 43, 0.25)`,
+          border: `1px solid rgba(194, 25, 43, 0.45)`,
+          "& .MuiAlert-icon": {
+            color: colorError,
+          },
         },
         standardInfo: {
           backgroundColor: "rgba(74, 144, 184, 0.1)",

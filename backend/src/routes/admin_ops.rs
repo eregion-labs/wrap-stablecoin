@@ -38,9 +38,9 @@ pub struct ExecuteResponse {
 #[serde(rename_all = "camelCase")]
 pub struct RegisterAssetRequest {
     pub asset_mint: String,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub mint_enabled: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub redeem_enabled: bool,
 }
 
@@ -150,8 +150,8 @@ pub struct EnableKlendBody {
     pub collateral_mint: String,
 }
 
-fn default_true() -> bool {
-    true
+fn default_false() -> bool {
+    false
 }
 
 fn b64_encode_tx(bytes: &[u8]) -> String {

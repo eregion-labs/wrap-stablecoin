@@ -3,6 +3,7 @@
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
+import OpenInNewOutlinedIcon from "@mui/icons-material/OpenInNewOutlined";
 import SwapHorizOutlinedIcon from "@mui/icons-material/SwapHorizOutlined";
 import VpnKeyOutlinedIcon from "@mui/icons-material/VpnKeyOutlined";
 import Box from "@mui/material/Box";
@@ -19,6 +20,10 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useCallback, useState } from "react";
 import { useSnackbar } from "notistack";
 import { publicCopy } from "@/theme/copy";
+import { monoSx } from "@/theme/tokens";
+import ExplorerLink from "@/components/ExplorerLink";
+import { createExplorerUrl } from "@/lib/address";
+import { useClientConfig } from "@/providers/ClientConfigProvider";
 
 function truncateAddress(addr: string): string {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
@@ -28,6 +33,7 @@ export default function WalletNavButton() {
   const { publicKey, connected, connecting, disconnect, wallet } = useWallet();
   const { setVisible } = useWalletModal();
   const { enqueueSnackbar } = useSnackbar();
+  const config = useClientConfig();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(anchorEl);
 
@@ -80,6 +86,11 @@ export default function WalletNavButton() {
   }
 
   const address = publicKey.toBase58();
+  const explorerHref = createExplorerUrl({
+    address,
+    network: config.solana.network,
+    explorerBaseUrl: config.links.explorerBaseUrl,
+  });
 
   return (
     <>
@@ -98,7 +109,7 @@ export default function WalletNavButton() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={wallet.adapter.icon} alt="" width={20} height={20} style={{ borderRadius: 4 }} />
           )}
-          <Typography component="span" variant="body2" sx={{ fontWeight: 600, fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
+          <Typography component="span" variant="body2" sx={{ fontWeight: 600, ...monoSx }}>
             {truncateAddress(address)}
           </Typography>
         </Box>
@@ -126,9 +137,9 @@ export default function WalletNavButton() {
           </Typography>
           <Typography
             variant="body2"
-            sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace', wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
+            sx={{ ...monoSx, wordBreak: "break-all", mt: 0.5, fontWeight: 500 }}
           >
-            {address}
+            <ExplorerLink address={address}>{address}</ExplorerLink>
           </Typography>
           {wallet?.adapter.name && (
             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
@@ -143,6 +154,20 @@ export default function WalletNavButton() {
           </ListItemIcon>
           <ListItemText>{publicCopy.copyAddress}</ListItemText>
         </MenuItem>
+        {explorerHref && (
+          <MenuItem
+            component="a"
+            href={explorerHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setAnchorEl(null)}
+          >
+            <ListItemIcon>
+              <OpenInNewOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{publicCopy.viewOnExplorer}</ListItemText>
+          </MenuItem>
+        )}
         <MenuItem onClick={handleChangeWallet}>
           <ListItemIcon>
             <SwapHorizOutlinedIcon fontSize="small" />

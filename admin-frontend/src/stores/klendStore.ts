@@ -2,14 +2,13 @@
 
 import { create } from "zustand";
 import { apiPost } from "@/lib/api";
+import { parseTokenAmount } from "@/lib/tokenAmount";
 import { actionErr, actionOk, type ActionResult } from "./types";
 import { useVaultStore } from "./vaultStore";
 
 export type KlendBusy =
   | "deploy"
-  | "deployAll"
   | "recall"
-  | "recallAll"
   | "harvest"
   | "sweep"
   | "withdrawTreasury"
@@ -36,9 +35,7 @@ type KlendState = {
     patch: Partial<KlendState["drafts"][string]>,
   ) => void;
   submitDeploy: (mint: string) => Promise<ActionResult<{ signature: string }>>;
-  submitDeployAll: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitRecall: (mint: string) => Promise<ActionResult<{ signature: string }>>;
-  submitRecallAll: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitHarvest: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitSweep: (mint: string) => Promise<ActionResult<{ signature: string }>>;
   submitWithdrawTreasury: (mint: string) => Promise<ActionResult<{ signature: string }>>;
@@ -53,11 +50,15 @@ const emptyDraft = {
   destination: "",
 };
 
-function parsePositiveInt(raw: string, label: string): ActionResult<number> {
-  const amount = Number(raw);
-  if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
-    return actionErr(`invalid ${label}`);
-  }
+function assetDecimals(mint: string): number {
+  return (
+    useVaultStore.getState().summary?.assets.find((a) => a.mint === mint)?.tokenDecimals ?? 6
+  );
+}
+
+function parseHumanAtoms(raw: string, mint: string, label: string): ActionResult<number> {
+  const amount = parseTokenAmount(raw, assetDecimals(mint));
+  if (amount == null) return actionErr(`invalid ${label}`);
   return actionOk(amount);
 }
 
@@ -88,7 +89,7 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
 
   submitDeploy: async (mint) => {
     const draft = get().drafts[mint] ?? emptyDraft;
-    const parsed = parsePositiveInt(draft.deployAmount, "deploy amount");
+    const parsed = parseHumanAtoms(draft.deployAmount, mint, "deploy amount");
     if (!parsed.ok) return parsed;
     set({ busy: "deploy", busyMint: mint });
     try {
@@ -101,18 +102,9 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
     }
   },
 
-  submitDeployAll: async (mint) => {
-    set({ busy: "deployAll", busyMint: mint });
-    try {
-      return await postAndRefresh("/v1/admin/deposit-all-to-klend", { assetMint: mint });
-    } finally {
-      set({ busy: null, busyMint: null });
-    }
-  },
-
   submitRecall: async (mint) => {
     const draft = get().drafts[mint] ?? emptyDraft;
-    const parsed = parsePositiveInt(draft.recallAmount, "recall amount");
+    const parsed = parseHumanAtoms(draft.recallAmount, mint, "recall amount");
     if (!parsed.ok) return parsed;
     set({ busy: "recall", busyMint: mint });
     try {
@@ -125,18 +117,9 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
     }
   },
 
-  submitRecallAll: async (mint) => {
-    set({ busy: "recallAll", busyMint: mint });
-    try {
-      return await postAndRefresh("/v1/admin/withdraw-all-from-klend", { assetMint: mint });
-    } finally {
-      set({ busy: null, busyMint: null });
-    }
-  },
-
   submitHarvest: async (mint) => {
     const draft = get().drafts[mint] ?? emptyDraft;
-    const parsed = parsePositiveInt(draft.harvestAmount, "harvest amount");
+    const parsed = parseHumanAtoms(draft.harvestAmount, mint, "harvest amount");
     if (!parsed.ok) return parsed;
     set({ busy: "harvest", busyMint: mint });
     try {
@@ -151,7 +134,7 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
 
   submitSweep: async (mint) => {
     const draft = get().drafts[mint] ?? emptyDraft;
-    const parsed = parsePositiveInt(draft.sweepAmount, "sweep amount");
+    const parsed = parseHumanAtoms(draft.sweepAmount, mint, "sweep amount");
     if (!parsed.ok) return parsed;
     set({ busy: "sweep", busyMint: mint });
     try {
@@ -166,7 +149,7 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
 
   submitWithdrawTreasury: async (mint) => {
     const draft = get().drafts[mint] ?? emptyDraft;
-    const parsed = parsePositiveInt(draft.treasuryAmount, "treasury amount");
+    const parsed = parseHumanAtoms(draft.treasuryAmount, mint, "treasury amount");
     if (!parsed.ok) return parsed;
     const destination = draft.destination.trim();
     if (destination.length < 32) {

@@ -13,7 +13,7 @@ import Typography from "@mui/material/Typography";
 import { BRANDING } from "@/branding";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
 import { adminCopy } from "@/theme/copy";
-import { ledgerInk, textMuted } from "@/theme/tokens";
+import { ledgerInk, pageColumnSx, textMuted } from "@/theme/tokens";
 
 const navSx = (active: boolean) => ({
   color: active ? ledgerInk : textMuted,
@@ -25,19 +25,21 @@ export default function AppHeader() {
   const pathname = usePathname();
   const config = useClientConfig();
 
-  const subtitle = pathname.startsWith("/policy")
+  const subtitle = pathname.startsWith("/reserves") || pathname.startsWith("/policy")
     ? adminCopy.reserveGovernanceSubtitle
-    : pathname.startsWith("/stats")
-      ? adminCopy.tokenStatsSubtitle
-      : pathname.startsWith("/klend")
-        ? adminCopy.klendSubtitle
-        : adminCopy.treasuryOperations;
+    : pathname.startsWith("/controls") || pathname.startsWith("/vault")
+      ? adminCopy.vaultNav
+      : pathname.startsWith("/stats")
+        ? adminCopy.tokenStatsSubtitle
+        : pathname.startsWith("/yield") || pathname.startsWith("/klend")
+          ? adminCopy.klendSubtitle
+          : adminCopy.treasuryOperations;
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
-      <Container maxWidth="lg" disableGutters sx={{ px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth={false} disableGutters sx={pageColumnSx}>
         <Toolbar disableGutters sx={{ minHeight: 60, gap: 2 }}>
-          <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
             <Box
               component={Link}
               href="/"
@@ -59,7 +61,6 @@ export default function AppHeader() {
                 variant="h6"
                 component="span"
                 sx={{
-                  fontFamily: 'var(--font-eb-garamond), "EB Garamond", Georgia, serif',
                   fontWeight: 400,
                   letterSpacing: "0.18em",
                   fontSize: "1.35rem",
@@ -82,31 +83,31 @@ export default function AppHeader() {
               {subtitle}
             </Typography>
           </Box>
-          <Chip
-            size="small"
-            label={`${config.solana.network} · ${config.deploymentId}`}
-            variant="outlined"
-            sx={{ display: { xs: "none", md: "flex" }, borderRadius: "1px" }}
-          />
-          <Stack direction="row" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <Chip
+              size="small"
+              label={`${config.solana.network} · ${config.deploymentId}`}
+              variant="outlined"
+              sx={{ display: { xs: "none", md: "flex" }, borderRadius: "1px" }}
+            />
             <Button component={Link} href="/" size="small" variant="text" sx={navSx(pathname === "/")}>
               {adminCopy.treasury}
             </Button>
             <Button
               component={Link}
-              href="/policy"
+              href="/reserves"
               size="small"
               variant="text"
-              sx={navSx(pathname.startsWith("/policy"))}
+              sx={navSx(pathname.startsWith("/reserves") || pathname.startsWith("/policy"))}
             >
-              {adminCopy.chamber}
+              {adminCopy.reserves}
             </Button>
             <Button
               component={Link}
-              href="/klend"
+              href="/yield"
               size="small"
               variant="text"
-              sx={navSx(pathname.startsWith("/klend"))}
+              sx={navSx(pathname.startsWith("/yield") || pathname.startsWith("/klend"))}
             >
               {adminCopy.klendNav}
             </Button>
@@ -118,6 +119,15 @@ export default function AppHeader() {
               sx={navSx(pathname.startsWith("/stats"))}
             >
               {adminCopy.tokenStats}
+            </Button>
+            <Button
+              component={Link}
+              href="/controls"
+              size="small"
+              variant="text"
+              sx={navSx(pathname.startsWith("/controls") || pathname.startsWith("/vault"))}
+            >
+              {adminCopy.vaultNav}
             </Button>
           </Stack>
         </Toolbar>

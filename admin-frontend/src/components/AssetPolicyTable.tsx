@@ -18,14 +18,22 @@ import Alert from "@mui/material/Alert";
 import Paper from "@mui/material/Paper";
 import { Fragment } from "react";
 import { useSnackbar } from "notistack";
+import AddCollateralPanel from "@/components/AddCollateralPanel";
+import EnableKlendExpander from "@/components/EnableKlendExpander";
 import PageHeading from "@/components/layout/PageHeading";
 import { mintLabel, shortMint } from "@/lib/mints";
+import ExplorerLink from "@/components/ExplorerLink";
+import { useClientConfig } from "@/providers/ClientConfigProvider";
 import { selectRowMints } from "@/stores/selectors";
 import { useGovernanceStore } from "@/stores/governanceStore";
 import { usePolicyStore } from "@/stores/policyStore";
 import type { AssetStatus } from "@/types/vault";
+import { wrappedTokenSymbol } from "@/types/vault";
+import { monoSx, pageColumnSx } from "@/theme/tokens";
 import { useVaultStore } from "@/stores/vaultStore";
-import { adminCopy } from "@/theme/copy";
+import { adminCopy, metricHints } from "@/theme/copy";
+import HintLabel from "@/components/HintLabel";
+import VaultAccountingPanel from "@/components/VaultAccountingPanel";
 
 const STATUS_OPTIONS: AssetStatus[] = [
   "active",
@@ -35,15 +43,10 @@ const STATUS_OPTIONS: AssetStatus[] = [
   "deprecated",
 ];
 
-const LOCALNET_KLEND_PLACEHOLDERS = {
-  lendingMarket: "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
-  reserve: "D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
-  reserveLiquiditySupply: "Bgq7trRgVMeq33yt235zM2onQ4bRDBsY5EWiTetF4qw6",
-  collateralMint: "B8V6WVjPxW1UGwVDfxH2d2r8SyT4cqn7dQRK6XneVa7D",
-};
-
 export default function AssetPolicyTable() {
   const { enqueueSnackbar } = useSnackbar();
+  const config = useClientConfig();
+  const includeCatalog = config.solana.network === "localnet";
 
   const summary = useVaultStore((s) => s.summary);
   const meta = useVaultStore((s) => s.meta);
@@ -55,13 +58,11 @@ export default function AssetPolicyTable() {
   const registerAsset = usePolicyStore((s) => s.registerAsset);
   const savePolicy = usePolicyStore((s) => s.savePolicy);
 
-  const enableDrafts = useGovernanceStore((s) => s.enableKlendDrafts);
-  const setEnableKlendDraft = useGovernanceStore((s) => s.setEnableKlendDraft);
   const enableKlend = useGovernanceStore((s) => s.enableKlend);
   const govBusy = useGovernanceStore((s) => s.busy);
   const govBusyMint = useGovernanceStore((s) => s.busyMint);
 
-  const rowMints = selectRowMints(summary);
+  const rowMints = selectRowMints(summary, { includeCatalog });
   const paused = meta?.paused ?? false;
 
   const onRegister = async (mint: string) => {
@@ -98,12 +99,12 @@ export default function AssetPolicyTable() {
   };
 
   return (
-    <Box sx={{ maxWidth: 1280, mx: "auto", pt: 3, pb: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ ...pageColumnSx, py: { xs: 3, md: 5 } }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3, gap: 2 }}>
         <PageHeading
-          label={adminCopy.chamber}
+          label={adminCopy.reserves}
           title={adminCopy.reserveGovernance}
-          description="Register collateral reserves and configure issue/redeem flags, haircuts, caps, and status. The treasury signer signs and submits transactions via the backend."
+          description="Register collateral reserves and configure issue/redeem flags, haircuts, caps, and status. The admin signs and submits transactions via the backend."
         />
         <Button variant="outlined" size="small" onClick={() => refresh()} disabled={busyMint != null}>
           {adminCopy.refreshLedger}
@@ -116,20 +117,50 @@ export default function AssetPolicyTable() {
         </Alert>
       )}
 
+      {summary && summary.assets.length > 0 && (
+        <VaultAccountingPanel
+          assets={summary.assets}
+          wrappedDecimals={summary.wrappedDecimals}
+          wrappedSymbol={wrappedTokenSymbol(summary)}
+        />
+      )}
+
+      <AddCollateralPanel />
+
       <TableContainer component={Paper} variant="outlined" sx={{ overflowX: "auto" }}>
-        <Table size="small" sx={{ minWidth: 1100 }}>
+        <Table size="small" sx={{ width: "100%", minWidth: 1100 }}>
           <TableHead>
             <TableRow>
-              <TableCell>Asset</TableCell>
-              <TableCell align="center">Mint</TableCell>
-              <TableCell align="center">Redeem</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Mint haircut (bps)</TableCell>
-              <TableCell align="right">Redeem haircut (bps)</TableCell>
-              <TableCell align="right">Mint cap</TableCell>
-              <TableCell align="right">Exposure cap</TableCell>
-              <TableCell align="right">Min liquidity</TableCell>
-              <TableCell align="right">Actions</TableCell>
+              <TableCell>
+                <HintLabel metric={metricHints.asset} />
+              </TableCell>
+              <TableCell align="center">
+                <HintLabel metric={metricHints.mintEnabled} align="center" />
+              </TableCell>
+              <TableCell align="center">
+                <HintLabel metric={metricHints.redeemEnabled} align="center" />
+              </TableCell>
+              <TableCell>
+                <HintLabel metric={metricHints.assetStatus} />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.mintHaircutBps} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.redeemHaircutBps} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.mintCap} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.exposureCap} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.cushion} align="right" />
+              </TableCell>
+              <TableCell align="right">
+                <HintLabel metric={metricHints.policyActions} align="right" />
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -139,12 +170,6 @@ export default function AssetPolicyTable() {
               const isBusy = busyMint === mint;
               const asset = summary?.assets.find((a) => a.mint === mint);
               const showEnableKlend = draft.registered && asset != null && !asset.klendEnabled;
-              const enableDraft = enableDrafts[mint] ?? {
-                lendingMarket: "",
-                reserve: "",
-                reserveLiquiditySupply: "",
-                collateralMint: "",
-              };
               const enableBusy = govBusy === "enableKlend" && govBusyMint === mint;
               return (
                 <Fragment key={mint}>
@@ -154,8 +179,10 @@ export default function AssetPolicyTable() {
                         <Typography variant="body2" fontWeight={600}>
                           {mintLabel(mint)}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}>
-                          {shortMint(mint)}
+                        <Typography variant="caption" color="text.secondary" sx={monoSx}>
+                          <ExplorerLink address={mint} type="token">
+                            {shortMint(mint)}
+                          </ExplorerLink>
                         </Typography>
                         <Stack direction="row" spacing={0.5} flexWrap="wrap">
                           <Chip
@@ -252,10 +279,8 @@ export default function AssetPolicyTable() {
                       <TextField
                         size="small"
                         type="number"
-                        value={draft.minLiquidityTarget}
-                        onChange={(e) =>
-                          updateDraft(mint, { minLiquidityTarget: e.target.value })
-                        }
+                        value={draft.cushion}
+                        onChange={(e) => updateDraft(mint, { cushion: e.target.value })}
                         disabled={isBusy || !draft.registered}
                         inputProps={{ min: 0, style: { textAlign: "right" } }}
                         sx={{ width: 120 }}
@@ -285,74 +310,11 @@ export default function AssetPolicyTable() {
                     </TableCell>
                   </TableRow>
                   {showEnableKlend && (
-                    <TableRow>
-                      <TableCell colSpan={10} sx={{ bgcolor: "action.hover" }}>
-                        <Stack spacing={1} sx={{ py: 1 }}>
-                          <Typography variant="body2" fontWeight={600}>
-                            {adminCopy.enableKlend}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {adminCopy.enableKlendHint}
-                          </Typography>
-                          <Stack direction={{ xs: "column", md: "row" }} spacing={1} flexWrap="wrap">
-                            <TextField
-                              size="small"
-                              label={adminCopy.lendingMarket}
-                              placeholder={LOCALNET_KLEND_PLACEHOLDERS.lendingMarket}
-                              value={enableDraft.lendingMarket}
-                              onChange={(e) =>
-                                setEnableKlendDraft(mint, { lendingMarket: e.target.value })
-                              }
-                              disabled={enableBusy}
-                              sx={{ minWidth: 220, flex: 1 }}
-                            />
-                            <TextField
-                              size="small"
-                              label={adminCopy.klendReserve}
-                              placeholder={LOCALNET_KLEND_PLACEHOLDERS.reserve}
-                              value={enableDraft.reserve}
-                              onChange={(e) =>
-                                setEnableKlendDraft(mint, { reserve: e.target.value })
-                              }
-                              disabled={enableBusy}
-                              sx={{ minWidth: 220, flex: 1 }}
-                            />
-                            <TextField
-                              size="small"
-                              label={adminCopy.reserveLiquiditySupply}
-                              placeholder={LOCALNET_KLEND_PLACEHOLDERS.reserveLiquiditySupply}
-                              value={enableDraft.reserveLiquiditySupply}
-                              onChange={(e) =>
-                                setEnableKlendDraft(mint, {
-                                  reserveLiquiditySupply: e.target.value,
-                                })
-                              }
-                              disabled={enableBusy}
-                              sx={{ minWidth: 220, flex: 1 }}
-                            />
-                            <TextField
-                              size="small"
-                              label={adminCopy.collateralMint}
-                              placeholder={LOCALNET_KLEND_PLACEHOLDERS.collateralMint}
-                              value={enableDraft.collateralMint}
-                              onChange={(e) =>
-                                setEnableKlendDraft(mint, { collateralMint: e.target.value })
-                              }
-                              disabled={enableBusy}
-                              sx={{ minWidth: 220, flex: 1 }}
-                            />
-                            <Button
-                              size="small"
-                              variant="contained"
-                              disabled={enableBusy}
-                              onClick={() => onEnableKlend(mint)}
-                            >
-                              {enableBusy ? "…" : adminCopy.enableKlend}
-                            </Button>
-                          </Stack>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
+                    <EnableKlendExpander
+                      mint={mint}
+                      enableBusy={enableBusy}
+                      onEnable={() => void onEnableKlend(mint)}
+                    />
                   )}
                 </Fragment>
               );

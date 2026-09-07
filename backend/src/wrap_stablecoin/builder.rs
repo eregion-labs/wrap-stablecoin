@@ -246,6 +246,135 @@ fn get_token_account_amount(rpc: &RpcClient, ata: &Pubkey) -> Result<u64> {
     Ok(u64::from_le_bytes(acc.data[64..72].try_into().unwrap()))
 }
 
+/// KLend Reserve liquidity/collateral snapshot (account size 8624).
+/// Offsets: liquidity.availableAmount u64 @224, borrowedAmountSf u128 @232,
+/// accumulatedProtocolFeesSf u128 @344 (both /2^60), collateral.mintTotalSupply u64 @2592.
+/// Config (disc + header + liquidity + pads + collateral + pads): take rate u8 @4870,
+/// borrow curve 11×(util u32, rate u32) @4920. Checked against fixtures/klend/reserve.json.
+const KLEND_CURVE_POINTS: usize = 11;
+const KLEND_TAKE_RATE_PCT: usize = 4870;
+const KLEND_CURVE: usize = 4920;
+
+struct KlendReserveMark {
+    available: u128,
+    total_liq: u128,
+    coll_supply: u128,
+    /// Current Kamino supply APY in bps, if the reserve config bytes are present.
+    supply_apy_bps: Option<u64>,
+}
+
+fn curve_borrow_apr_bps(util_bps: u64, points: &[(u32, u32)]) -> u64 {
+    if points.is_empty() {
+        return 0;
+    }
+    let u = util_bps.min(10_000);
+    let mut prev = points[0];
+    if u <= u64::from(prev.0) {
+        return u64::from(prev.1);
+    }
+    for &p in &points[1..] {
+        if u <= u64::from(p.0) {
+            let (u0, r0) = (u64::from(prev.0), u64::from(prev.1));
+            let (u1, r1) = (u64::from(p.0), u64::from(p.1));
+            if u1 == u0 {
+                return r1;
+            }
+            return r0 + (r1.saturating_sub(r0)) * (u - u0) / (u1 - u0);
+        }
+        prev = p;
+    }
+    u64::from(prev.1)
+}
+
+fn supply_apr_bps(util_bps: u64, borrow_apr_bps: u64, take_rate_pct: u8) -> u64 {
+    let keep = 100u64.saturating_sub(u64::from(take_rate_pct.min(100)));
+    borrow_apr_bps.saturating_mul(util_bps.min(10_000)) * keep / 10_000 / 100
+}
+
+/// Slot compounding ≈ e^apr − 1 (Kamino N is ~7.8e7 slots/year).
+fn apr_bps_to_apy_bps(apr_bps: u64) -> u64 {
+    let apr = apr_bps as f64 / 10_000.0;
+    let apy = apr.exp() - 1.0;
+    if !apy.is_finite() || apy < 0.0 {
+        return 0;
+    }
+    (apy * 10_000.0).round() as u64
+}
+
+fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
+    let acc = rpc.get_account(reserve).ok()?;
+    let d = &acc.data;
+    if d.len() < 2600 {
+        return None;
+    }
+    let read_u64 = |o: usize| u64::from_le_bytes(d[o..o + 8].try_into().unwrap()) as u128;
+    let read_u128 = |o: usize| u128::from_le_bytes(d[o..o + 16].try_into().unwrap());
+    let sf: u128 = 1u128 << 60;
+    let available = read_u64(224);
+    let borrowed = read_u128(232) / sf;
+    let fees = read_u128(344) / sf;
+    let coll_supply = read_u64(2592);
+    if coll_supply == 0 {
+        return None;
+    }
+    let total_liq = available + borrowed - fees;
+    if total_liq == 0 {
+        return None;
+    }
+    let supply_apy_bps = (d.len() >= KLEND_CURVE + KLEND_CURVE_POINTS * 8).then(|| {
+        let take = d[KLEND_TAKE_RATE_PCT];
+        let mut points = [(0u32, 0u32); KLEND_CURVE_POINTS];
+        for (i, p) in points.iter_mut().enumerate() {
+            let o = KLEND_CURVE + i * 8;
+            *p = (
+                u32::from_le_bytes(d[o..o + 4].try_into().unwrap()),
+                u32::from_le_bytes(d[o + 4..o + 8].try_into().unwrap()),
+            );
+        }
+        let util_bps = (borrowed.saturating_mul(10_000) / total_liq).min(10_000) as u64;
+        let borrow = curve_borrow_apr_bps(util_bps, &points);
+        apr_bps_to_apy_bps(supply_apr_bps(util_bps, borrow, take))
+    });
+    Some(KlendReserveMark {
+        available,
+        total_liq,
+        coll_supply,
+        supply_apy_bps,
+    })
+}
+
+/// Convert underlying atoms → kTokens at the reserve exchange rate (floor).
+fn underlying_to_ktokens(underlying: u128, mark: &KlendReserveMark) -> u64 {
+    (underlying.saturating_mul(mark.coll_supply) / mark.total_liq).min(u64::MAX as u128) as u64
+}
+
+/// Caps for recall/harvest in kToken atoms, plus reserve free liquidity, surplus, and supply APY.
+/// Returns `(collateral_ktokens, kamino_available, max_recallable, max_harvestable, kamino_surplus, supply_apy_bps)`.
+fn klend_ktoken_caps(rpc: &RpcClient, klend: &KLendConfig) -> (u64, u64, u64, u64, u64, Option<u64>) {
+    let collateral_ktokens = get_token_account_amount(rpc, &klend.collateral_vault).unwrap_or(0);
+    let Some(mark) = decode_klend_reserve(rpc, &klend.reserve) else {
+        return (collateral_ktokens, 0, 0, 0, 0, None);
+    };
+    let available_u64 = mark.available.min(u64::MAX as u128) as u64;
+    let max_by_liquidity = underlying_to_ktokens(mark.available, &mark);
+    let max_recallable = collateral_ktokens.min(max_by_liquidity);
+
+    let ktokens = collateral_ktokens as u128;
+    let live_value = ktokens.saturating_mul(mark.total_liq) / mark.coll_supply;
+    let tracked = klend.total_liquidity_in_klend as u128;
+    let surplus = live_value.saturating_sub(tracked).min(u64::MAX as u128) as u64;
+    let max_harvestable = collateral_ktokens.min(underlying_to_ktokens(surplus as u128, &mark));
+
+    (
+        collateral_ktokens,
+        available_u64,
+        max_recallable,
+        max_harvestable,
+        surplus,
+        mark.supply_apy_bps,
+    )
+}
+
 pub fn build_versioned_tx(
     rpc: &RpcClient,
     payer: &Pubkey,
@@ -497,6 +626,20 @@ pub struct VaultAssetView {
     pub net_liability: u64,
     pub asset_status: String,
     pub klend_enabled: bool,
+    /// KLend lending market, present when Kamino is enabled for this asset.
+    pub lending_market: Option<String>,
+    /// KLend reserve, present when Kamino is enabled for this asset.
+    pub klend_reserve: Option<String>,
+    /// kTokens held in `collateral_vault` (0 if Kamino off).
+    pub collateral_ktokens: u64,
+    /// Reserve free liquidity available for redeem (0 if Kamino off).
+    pub kamino_available_liquidity: u64,
+    /// Max kTokens that can be recalled given vault holdings and reserve free liquidity.
+    pub max_recallable_ktokens: u64,
+    /// Max kTokens that can be harvested (surplus converted at exchange rate, capped by holdings).
+    pub max_harvestable_ktokens: u64,
+    /// Current Kamino supply APY in basis points (10000 = 100%). `null` if Kamino is off or the reserve could not be marked.
+    pub kamino_supply_apy_bps: Option<u64>,
 }
 
 fn optional_pubkey(pk: &Pubkey) -> Option<String> {
@@ -505,6 +648,20 @@ fn optional_pubkey(pk: &Pubkey) -> Option<String> {
     } else {
         Some(pk.to_string())
     }
+}
+
+/// Human-decimal supply string (`uiAmountString`), falling back to raw atoms.
+fn mint_supply_ui(rpc: &RpcClient, mint: &Pubkey) -> String {
+    rpc.get_token_supply(mint)
+        .ok()
+        .map(|s| {
+            if !s.ui_amount_string.is_empty() {
+                s.ui_amount_string
+            } else {
+                s.amount
+            }
+        })
+        .unwrap_or_default()
 }
 
 fn fetch_allowlist_keys(
@@ -548,6 +705,8 @@ pub struct VaultSummaryView {
     pub wrapped_mint: String,
     pub wrapped_decimals: u8,
     pub mint_metadata: Option<MintMetadata>,
+    /// Wrapped mint supply as a human decimal string (`uiAmountString`).
+    pub circulating_supply: String,
     pub assets: Vec<VaultAssetView>,
 }
 
@@ -568,6 +727,8 @@ pub struct VaultMetaView {
     pub wrapped_mint: String,
     pub wrapped_decimals: u8,
     pub mint_metadata: Option<MintMetadata>,
+    /// Wrapped mint supply as a human decimal string (`uiAmountString`).
+    pub circulating_supply: String,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -741,8 +902,18 @@ pub fn fetch_vault_assets(
             liability_to_underlying_amount(liability, cfg.token_decimals, vault.wrapped_decimals)
                 .unwrap_or(0);
         let cushion = cfg.min_liquidity_target;
-        // Live Kamino mark requires CPI; on-chain harvest_yield enforces kamino surplus.
-        let kamino_surplus = 0u64;
+        // Unharvested Kamino yield + kToken recall/harvest caps (single reserve decode).
+        let (
+            collateral_ktokens,
+            kamino_available_liquidity,
+            max_recallable_ktokens,
+            max_harvestable_ktokens,
+            kamino_surplus,
+            kamino_supply_apy_bps,
+        ) = klend
+            .as_ref()
+            .map(|k| klend_ktoken_caps(rpc, k))
+            .unwrap_or((0, 0, 0, 0, 0, None));
         let home_surplus = home_surplus_amount(
             free_liquidity,
             liability,
@@ -777,6 +948,13 @@ pub fn fetch_vault_assets(
             net_liability: liability,
             asset_status: asset_status_label(cfg.asset_status),
             klend_enabled: klend.is_some(),
+            lending_market: klend.as_ref().map(|k| k.lending_market.to_string()),
+            klend_reserve: klend.as_ref().map(|k| k.reserve.to_string()),
+            collateral_ktokens,
+            kamino_available_liquidity,
+            max_recallable_ktokens,
+            max_harvestable_ktokens,
+            kamino_supply_apy_bps,
         });
     }
     Ok(VaultSummaryView {
@@ -795,6 +973,7 @@ pub fn fetch_vault_assets(
         mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)
             .ok()
             .flatten(),
+        circulating_supply: mint_supply_ui(rpc, &vault.wrapped_mint),
         assets: out,
     })
 }
@@ -821,6 +1000,7 @@ pub fn fetch_vault_meta(
         mint_metadata: fetch_mint_metadata(rpc, &vault.wrapped_mint, vault.wrapped_decimals)
             .ok()
             .flatten(),
+        circulating_supply: mint_supply_ui(rpc, &vault.wrapped_mint),
     })
 }
 
@@ -830,7 +1010,9 @@ pub fn fetch_vault_meta(
 pub struct TokenHoldersView {
     pub wrapped_mint: String,
     pub decimals: u8,
-    /// Token-account address → raw amount (atoms) as a decimal string.
+    /// Mint supply as a human decimal string (`uiAmountString`).
+    pub supply: String,
+    /// Token-account address → human decimal amount (`uiAmountString`).
     pub holders: std::collections::BTreeMap<String, String>,
 }
 
@@ -845,11 +1027,17 @@ pub fn fetch_token_holders(
         .with_context(|| format!("getTokenLargestAccounts {}", vault.wrapped_mint))?;
     let mut holders = std::collections::BTreeMap::new();
     for account in accounts {
-        holders.insert(account.address, account.amount.amount);
+        let ui = if !account.amount.ui_amount_string.is_empty() {
+            account.amount.ui_amount_string
+        } else {
+            account.amount.amount
+        };
+        holders.insert(account.address, ui);
     }
     Ok(TokenHoldersView {
         wrapped_mint: vault.wrapped_mint.to_string(),
         decimals: vault.wrapped_decimals,
+        supply: mint_supply_ui(rpc, &vault.wrapped_mint),
         holders,
     })
 }
@@ -1528,6 +1716,23 @@ mod allowlist_slot_tests {
         assert_eq!(ix.accounts[9], sentinel);
         assert_eq!(ix.accounts[10].pubkey, collateral);
         assert_eq!(ix.accounts[11].pubkey, spl_token_program_id());
+    }
+
+    #[test]
+    fn klend_supply_apy_from_curve() {
+        // 0% util → 0; 50% of a flat 10% curve with 10% take → 4.5% APR → ~4.60% APY
+        let flat = [(0, 1_000), (10_000, 1_000)];
+        assert_eq!(curve_borrow_apr_bps(0, &flat), 1_000);
+        assert_eq!(curve_borrow_apr_bps(5_000, &flat), 1_000);
+        assert_eq!(supply_apr_bps(0, 1_000, 10), 0);
+        assert_eq!(supply_apr_bps(5_000, 1_000, 10), 450);
+        let apy = apr_bps_to_apy_bps(450);
+        assert!(apy > 450 && apy < 470, "apy={apy}");
+        // kink: 0→0, 9500→310, 10000→3040 (mainnet USDC-shaped)
+        let kink = [(0, 0), (9_500, 310), (10_000, 3_040)];
+        assert_eq!(curve_borrow_apr_bps(0, &kink), 0);
+        assert_eq!(curve_borrow_apr_bps(9_500, &kink), 310);
+        assert_eq!(curve_borrow_apr_bps(4_750, &kink), 155);
     }
 
     #[test]

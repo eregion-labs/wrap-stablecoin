@@ -5,21 +5,28 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import WalletBalancesPanel from "@/components/WalletBalancesPanel";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
 import Stack from "@mui/material/Stack";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
-import MenuItem from "@mui/material/MenuItem";
+import { ReserveCollateralSelect } from "@florin/ui";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { useSnackbar } from "notistack";
 import { apiGet, apiPost } from "@/lib/api";
 import { sendWithBlockhashRefresh } from "@/lib/sendWithRefresh";
 import { fetchWalletBalances } from "@/lib/walletBalances";
 import { mintLabel } from "@/lib/mints";
-import { formatTokenAmount, haircutPercent, parseTokenAmount } from "@/lib/tokenAmount";
+import {
+  atomsToInputAmount,
+  formatTokenAmount,
+  haircutPercent,
+  parseTokenAmount,
+} from "@/lib/tokenAmount";
 import PageHeading from "@/components/layout/PageHeading";
+import ExplorerLink from "@/components/ExplorerLink";
 import { actionCardSx } from "@/theme/tokens";
 import { publicCopy } from "@/theme/copy";
 import { useClientConfig } from "@/providers/ClientConfigProvider";
@@ -33,6 +40,50 @@ import {
 
 type TxResponse = { transactionB64: string };
 
+function TokenAmountField({
+  label,
+  value,
+  onChange,
+  availableAtoms,
+  decimals,
+  availableCaption,
+  maxDisabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  availableAtoms: number;
+  decimals: number;
+  availableCaption: string;
+  maxDisabled: boolean;
+}) {
+  return (
+    <TextField
+      label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      fullWidth
+      helperText={availableCaption}
+      slotProps={{
+        input: {
+          endAdornment: (
+            <InputAdornment position="end">
+              <Button
+                size="small"
+                onClick={() => onChange(atomsToInputAmount(availableAtoms, decimals))}
+                disabled={maxDisabled || availableAtoms <= 0}
+                sx={{ minWidth: 0, px: 1, fontWeight: 600 }}
+              >
+                {publicCopy.max}
+              </Button>
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
+  );
+}
+
 export default function WrapRedeemPanel() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, connected } = useWallet();
@@ -45,6 +96,7 @@ export default function WrapRedeemPanel() {
   const [assetMint, setAssetMint] = useState(config.assets.defaultAssetMint);
   const [vaultSummary, setVaultSummary] = useState<VaultSummary | null>(null);
   const [walletBalances, setWalletBalances] = useState<Map<string, number>>(new Map());
+  const [balanceStatus, setBalanceStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [redeemQuote, setRedeemQuote] = useState<RedeemQuote | null>(null);
   const [issueQuote, setIssueQuote] = useState<IssueQuote | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -89,8 +141,10 @@ export default function WrapRedeemPanel() {
   const loadWalletBalances = useCallback(async () => {
     if (!publicKey || !vaultSummary) {
       setWalletBalances(new Map());
+      setBalanceStatus("idle");
       return;
     }
+    setBalanceStatus("loading");
     try {
       const mints = [
         ...vaultSummary.assets.map((a) => new PublicKey(a.mint)),
@@ -98,14 +152,16 @@ export default function WrapRedeemPanel() {
       ];
       const balances = await fetchWalletBalances(connection, publicKey, mints);
       setWalletBalances(balances);
+      setBalanceStatus("ready");
     } catch {
-      setWalletBalances(new Map());
+      setBalanceStatus("error");
     }
   }, [connection, publicKey, vaultSummary]);
 
   const refreshAll = useCallback(async () => {
     await loadVaultSummary();
-  }, [loadVaultSummary]);
+    await loadWalletBalances();
+  }, [loadVaultSummary, loadWalletBalances]);
 
   useEffect(() => {
     loadVaultSummary();
@@ -278,6 +334,36 @@ export default function WrapRedeemPanel() {
     }
   };
 
+  const collateralWalletAtoms = walletBalances.get(assetMint) ?? 0;
+  const wrappedWalletAtoms = vaultSummary
+    ? (walletBalances.get(vaultSummary.wrappedMint) ?? 0)
+    : 0;
+  const poolRedeemableAtoms = selectedAsset?.maxRedeemable ?? redeemQuote?.maxRedeemable ?? 0;
+  const walletReady = connected && balanceStatus === "ready";
+  const redeemableAtoms = walletReady
+    ? Math.min(wrappedWalletAtoms, poolRedeemableAtoms)
+    : poolRedeemableAtoms;
+  const mintMaxDisabled =
+    !connected || busy !== null || balanceStatus !== "ready" || collateralWalletAtoms <= 0;
+  const redeemMaxDisabled = !connected || busy !== null || redeemableAtoms <= 0;
+
+  const mintAvailableCaption = !connected
+    ? publicCopy.connectForBalance
+    : balanceStatus === "loading"
+      ? publicCopy.loadingBalance
+      : balanceStatus === "error"
+        ? publicCopy.balanceUnavailable
+        : publicCopy.walletBalance(
+            formatTokenAmount(collateralWalletAtoms, collateralDecimals),
+            mintLabel(assetMint),
+          );
+  const redeemAvailableCaption = !connected
+    ? publicCopy.connectForBalance
+    : publicCopy.redeemableBalance(
+        formatTokenAmount(redeemableAtoms, wrappedDecimals),
+        wrappedSymbol,
+      );
+
   const redeemAmountNum = redeemAtoms ?? 0;
   const issueDisabled =
     !publicKey ||
@@ -346,46 +432,48 @@ export default function WrapRedeemPanel() {
           connected={connected}
         />
 
-        <TextField
-          select
-          label={publicCopy.reserveCollateral}
-          value={assetMint}
-          onChange={(e) => setAssetMint(e.target.value)}
-          fullWidth
-        >
-          {vaultAssets.length === 0 ? (
-            <MenuItem value={assetMint}>{mintLabel(assetMint)}</MenuItem>
-          ) : (
-            vaultAssets.map((a) => (
-              <MenuItem key={a.mint} value={a.mint}>
-                {mintLabel(a.mint)}
-              </MenuItem>
-            ))
-          )}
-        </TextField>
+        <Stack spacing={0.5}>
+          <ReserveCollateralSelect
+            label={publicCopy.reserveCollateral}
+            value={assetMint}
+            onChange={setAssetMint}
+            emptyLabel={mintLabel(assetMint)}
+            options={vaultAssets.map((a) => ({
+              value: a.mint,
+              label: mintLabel(a.mint),
+            }))}
+          />
+          <Typography variant="caption" color="text.secondary">
+            <ExplorerLink address={assetMint} type="token">
+              {assetMint}
+            </ExplorerLink>
+          </Typography>
+        </Stack>
 
         <Box sx={{ ...actionCardSx, mb: 0 }}>
           <Tabs
             value={tab}
             onChange={(_, value) => setTab(value)}
-            aria-label="Mint or redeem Florin"
+            aria-label={publicCopy.tabsAriaLabel}
             sx={{ mb: 2, minHeight: 40 }}
           >
-            <Tab label={publicCopy.tabMint} />
+            <Tab label={publicCopy.tabIssue} />
             <Tab label={publicCopy.tabRedeem} />
           </Tabs>
 
           {tab === 0 && (
-            <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabMint}>
+            <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabIssue}>
               {selectedAsset && !selectedAsset.mintAllowed && (
-                <Alert severity="warning">Minting is disabled for this asset pool.</Alert>
+                <Alert severity="warning">{publicCopy.issueDisabledAlert}</Alert>
               )}
-              <TextField
+              <TokenAmountField
                 label={publicCopy.collateralAmount}
                 value={issueAmount}
-                onChange={(e) => setIssueAmount(e.target.value)}
-                fullWidth
-                helperText={publicCopy.humanAmountHint}
+                onChange={setIssueAmount}
+                availableAtoms={collateralWalletAtoms}
+                decimals={collateralDecimals}
+                availableCaption={mintAvailableCaption}
+                maxDisabled={mintMaxDisabled}
               />
               {issueQuote && issueAtoms != null && (
                 <Typography variant="body2" color="text.secondary">
@@ -393,14 +481,16 @@ export default function WrapRedeemPanel() {
                   {mintLabel(assetMint)} → receive{" "}
                   {formatTokenAmount(issueQuote.output, wrappedDecimals)} {wrappedSymbol}
                   {issueQuote.haircutBps > 0
-                    ? ` (${haircutPercent(issueQuote.haircutBps)} mint haircut)`
+                    ? publicCopy.issueHaircut(haircutPercent(issueQuote.haircutBps))
                     : ""}
                 </Typography>
               )}
               {issueQuote && issueQuote.mintCapRemaining != null && (
                 <Typography variant="caption" color="text.secondary">
-                  Mint cap remaining:{" "}
-                  {formatTokenAmount(issueQuote.mintCapRemaining, wrappedDecimals)} {wrappedSymbol}
+                  {publicCopy.issueCapRemaining(
+                    formatTokenAmount(issueQuote.mintCapRemaining, wrappedDecimals),
+                    wrappedSymbol,
+                  )}
                 </Typography>
               )}
               <Stack direction="row" spacing={1}>
@@ -416,12 +506,14 @@ export default function WrapRedeemPanel() {
 
           {tab === 1 && (
             <Stack spacing={1} role="tabpanel" aria-label={publicCopy.tabRedeem}>
-              <TextField
+              <TokenAmountField
                 label={publicCopy.redeemAmount(wrappedSymbol)}
                 value={redeemAmount}
-                onChange={(e) => setRedeemAmount(e.target.value)}
-                fullWidth
-                helperText={publicCopy.humanAmountHint}
+                onChange={setRedeemAmount}
+                availableAtoms={redeemableAtoms}
+                decimals={wrappedDecimals}
+                availableCaption={redeemAvailableCaption}
+                maxDisabled={redeemMaxDisabled}
               />
               {redeemQuote && redeemAtoms != null && (
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
@@ -429,18 +521,12 @@ export default function WrapRedeemPanel() {
                   receive {formatTokenAmount(redeemQuote.output, collateralDecimals)}{" "}
                   {mintLabel(assetMint)}
                   {redeemQuote.haircutBps > 0
-                    ? ` (${haircutPercent(redeemQuote.haircutBps)} redemption haircut)`
+                    ? publicCopy.redeemHaircut(haircutPercent(redeemQuote.haircutBps))
                     : ""}
                 </Typography>
               )}
-              {redeemQuote && redeemQuote.maxRedeemable > 0 && (
-                <Typography variant="caption" color="text.secondary">
-                  Max redeemable from this pool:{" "}
-                  {formatTokenAmount(redeemQuote.maxRedeemable, wrappedDecimals)} {wrappedSymbol}
-                </Typography>
-              )}
               {redeemQuote && !redeemQuote.redeemAllowed && (
-                <Alert severity="warning">Redemption is disabled for this asset pool.</Alert>
+                <Alert severity="warning">{publicCopy.redeemDisabledAlert}</Alert>
               )}
               {redeemQuote && redeemQuote.liabilityShortfall > 0 && (
                 <Alert severity="warning">

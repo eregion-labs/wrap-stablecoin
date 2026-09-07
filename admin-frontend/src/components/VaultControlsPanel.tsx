@@ -19,7 +19,7 @@ import type { ActionResult } from "@/stores/types";
 import { useVaultStore } from "@/stores/vaultStore";
 import PageHeading from "@/components/layout/PageHeading";
 import { adminCopy } from "@/theme/copy";
-import { cardSx } from "@/theme/tokens";
+import { actPageSx, cardSx, monoSx } from "@/theme/tokens";
 
 const DISABLE_WRAP = adminCopy.disableWrapPhrase;
 
@@ -150,10 +150,10 @@ export default function VaultControlsPanel() {
   const allowlistReady = meta.allowlist != null;
 
   return (
-    <Box sx={{ maxWidth: 1280, mx: "auto", pt: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ ...actPageSx, py: { xs: 3, md: 5 } }}>
       <Box sx={{ mb: 2 }}>
         <PageHeading
-          label={adminCopy.chamber}
+          label={adminCopy.vaultNav}
           title={adminCopy.vaultControls}
           description={adminCopy.vaultControlsSubtitle}
         />
@@ -234,6 +234,14 @@ export default function VaultControlsPanel() {
             Admin
           </Typography>
           <AddressCell address={meta.admin} />
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 0.5 }}>
+            {adminCopy.vaultConfig}
+          </Typography>
+          <AddressCell address={meta.vaultConfig} />
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, mb: 0.5 }}>
+            {adminCopy.programId}
+          </Typography>
+          <AddressCell address={meta.programId} />
         </Section>
 
         <Section title={adminCopy.allowlistTitle}>
@@ -303,7 +311,7 @@ export default function VaultControlsPanel() {
                   fullWidth
                   multiline
                   minRows={3}
-                  sx={{ fontFamily: 'var(--font-dm-mono), "DM Mono", monospace' }}
+                  sx={monoSx}
                 />
                 <Button
                   size="small"

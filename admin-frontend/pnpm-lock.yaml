@@ -17,6 +17,9 @@ importers:
       '@florin/client-config':
         specifier: file:../shared/client-config
         version: file:../shared/client-config
+      '@florin/ui':
+        specifier: file:../shared/ui
+        version: file:../shared/ui(@mui/material@7.3.11(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.4))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.4))(@types/react@19.2.17)(react@19.2.4))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@fontsource/dm-mono':
         specifier: ^5.3.0
         version: 5.3.0
@@ -268,6 +271,13 @@ packages:
 
   '@florin/client-config@file:../shared/client-config':
     resolution: {directory: ../shared/client-config, type: directory}
+
+  '@florin/ui@file:../shared/ui':
+    resolution: {directory: ../shared/ui, type: directory}
+    peerDependencies:
+      '@mui/material': ^7.0.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
 
   '@fontsource/dm-mono@5.3.0':
     resolution: {integrity: sha512-OINjI8C1S/wpchhQxl7njZdMn4+hnDCpQ4YtvvOpKNARo+0J8O1x1IcrChxNjHOhfVv1by8C/FQoy3hXK+C1Ug==}
@@ -2922,6 +2932,12 @@ snapshots:
   '@florin/client-config@file:../shared/client-config':
     dependencies:
       zod: 3.25.76
+
+  '@florin/ui@file:../shared/ui(@mui/material@7.3.11(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.4))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.4))(@types/react@19.2.17)(react@19.2.4))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@mui/material': 7.3.11(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.4))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.4))(@types/react@19.2.17)(react@19.2.4))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   '@fontsource/dm-mono@5.3.0': {}
 

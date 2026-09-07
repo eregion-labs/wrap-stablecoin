@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { apiPost } from "@/lib/api";
+import { requirePubkey } from "@/lib/pubkey";
 import { signAndSendUnsignedTx } from "@/lib/signLocalTx";
 import { actionErr, actionOk, type ActionResult } from "./types";
 import { useVaultStore } from "./vaultStore";
@@ -43,6 +44,7 @@ type GovernanceState = {
   setNewAdmin: (value: string) => void;
   setNewMintAuthority: (value: string) => void;
   setEnableKlendDraft: (mint: string, patch: Partial<EnableKlendDraft>) => void;
+  prefillEnableKlendIfEmpty: (mint: string, draft: EnableKlendDraft) => void;
 
   setPaused: (value: boolean) => Promise<ActionResult<{ signature: string }>>;
   setWrapPublic: (value: boolean) => Promise<ActionResult<{ signature: string }>>;
@@ -65,12 +67,21 @@ type GovernanceState = {
   enableKlend: (mint: string) => Promise<ActionResult<{ signature: string }>>;
 };
 
-const emptyEnableDraft: EnableKlendDraft = {
+export const emptyEnableDraft: EnableKlendDraft = {
   lendingMarket: "",
   reserve: "",
   reserveLiquiditySupply: "",
   collateralMint: "",
 };
+
+function draftIsEmpty(draft: EnableKlendDraft): boolean {
+  return (
+    !draft.lendingMarket.trim() &&
+    !draft.reserve.trim() &&
+    !draft.reserveLiquiditySupply.trim() &&
+    !draft.collateralMint.trim()
+  );
+}
 
 async function postAndRefresh<TBody extends object>(
   path: string,
@@ -83,14 +94,6 @@ async function postAndRefresh<TBody extends object>(
   } catch (e) {
     return actionErr((e as Error).message);
   }
-}
-
-function requirePubkey(raw: string, label: string): ActionResult<string> {
-  const pubkey = raw.trim();
-  if (pubkey.length < 32) {
-    return actionErr(`${label} pubkey is required`);
-  }
-  return actionOk(pubkey);
 }
 
 export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
@@ -122,6 +125,17 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
       enableKlendDrafts: {
         ...get().enableKlendDrafts,
         [mint]: { ...current, ...patch },
+      },
+    });
+  },
+
+  prefillEnableKlendIfEmpty: (mint, draft) => {
+    const current = get().enableKlendDrafts[mint] ?? emptyEnableDraft;
+    if (!draftIsEmpty(current)) return;
+    set({
+      enableKlendDrafts: {
+        ...get().enableKlendDrafts,
+        [mint]: draft,
       },
     });
   },

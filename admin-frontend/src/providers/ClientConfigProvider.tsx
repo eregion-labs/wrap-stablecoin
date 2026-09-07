@@ -12,9 +12,6 @@ import {
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import {
   parseClientConfig,
   type ClientConfig,
@@ -25,6 +22,7 @@ import {
   createApplicationServices,
   type ApplicationServices,
 } from "@/lib/bootstrap/createApplicationServices";
+import { sansStack } from "@/theme/tokens";
 
 type ReadyState = {
   status: "ready";
@@ -77,6 +75,7 @@ function formatBootstrapError(err: unknown, backendUrl: string): string {
 }
 
 export default function ClientConfigProvider({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<BootstrapState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -121,24 +120,28 @@ export default function ClientConfigProvider({ children }: { children: ReactNode
   }, [backendUrl]);
 
   useEffect(() => {
-    void load();
-  }, [load, attempt]);
+    setMounted(true);
+  }, []);
 
-  if (state.status === "loading") {
+  useEffect(() => {
+    if (!mounted) return;
+    void load();
+  }, [load, attempt, mounted]);
+
+  if (!mounted || state.status === "loading") {
     return (
-      <Box
-        sx={{
+      <div
+        style={{
           minHeight: "100vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          color: "#6b7280",
+          fontFamily: sansStack,
         }}
       >
-        <Stack spacing={2} alignItems="center">
-          <CircularProgress size={32} />
-          <Typography color="text.secondary">Loading deployment config…</Typography>
-        </Stack>
-      </Box>
+        Loading deployment config…
+      </div>
     );
   }
 

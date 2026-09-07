@@ -14,9 +14,16 @@ export const textMuted = "#6B6B6B";
 export const textDisabled = "#AFAFAF";
 
 export const colorSuccess = "#2E9E5B";
-export const colorWarning = accentBrown;
+export const colorWarning = florentineRed;
 export const colorError = florentineRed;
 export const colorInfo = civicBlue;
+
+/** Titles, wordmark, italic descriptions. */
+export const serifStack = 'var(--font-eb-garamond), "EB Garamond", Georgia, serif';
+/** Body, tables, figures, amounts, forms, nav. */
+export const sansStack = "var(--font-inter), system-ui, sans-serif";
+/** Addresses, mint IDs, signatures, code — not amounts. */
+export const monoStack = 'var(--font-dm-mono), "DM Mono", ui-monospace, monospace';
 
 export const border = `1px solid ${hairline}`;
 export const borderSubtle = `1px solid ${hairline}`;
@@ -37,20 +44,25 @@ export const cardSx = {
   overflowX: "auto",
 };
 
-/** Mint / redeem action card — 3px Florentine red top bar. */
+/** Issue / redeem action card — 3px Florentine red top bar. */
 export const actionCardSx = {
   ...cardSx,
   borderTop: `3px solid ${florentineRed}`,
 };
 
 export const sectionLabelSx = {
-  fontFamily: 'var(--font-inter), system-ui, sans-serif',
+  fontFamily: sansStack,
   fontSize: "10px",
   letterSpacing: "0.22em",
   color: florentineRed,
   textTransform: "uppercase" as const,
   mb: "10px",
 };
+
+/** Addresses, mint IDs, signatures — not amounts or buttons. */
+export const monoSx = {
+  fontFamily: monoStack,
+} as const;
 
 export const redRuleSx = {
   height: "1px",

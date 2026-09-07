@@ -48,7 +48,7 @@ RPC endpoint comes from frozen client-config (`solana.rpcUrl`), not from fronten
 
 1. User connects wallet via **AppHeader** → `WalletNavButton` (top right)
 2. Panel loads `GET /v1/vault/assets` (per-pool liability, liquidity, surplus, wrap/unwrap public flags, allowlist, haircuts)
-3. Amounts are entered in human units (default `1.0`); submit still posts atoms
+3. Amounts are entered in human units (default `1.0`); submit still posts atoms. The admin treasury mint/redeem, policy caps, and Kamino amount fields use the same convention.
 4. Mint polls `GET /v1/quote/issue`; redeem polls `GET /v1/quote/redeem` (both pass `user=` when connected for `accessAllowed`)
 5. Banners cover pause, mint-authority transfer, and allowlist-only wrap/unwrap
 6. Redeem shows a prominent discount line (burn FLRN → receive collateral, haircut as percent)
@@ -88,6 +88,8 @@ pnpm run dev
 - `SolanaWalletProviders` (public only) — `ConnectionProvider` + Wallet Standard `WalletProvider`
 - `AppShell` / `AppHeader` — sticky navbar (read-only deployment chip)
 - `providers.tsx` — theme, snackbar, bootstrap
+
+Admin console pages (`admin-frontend`, port 3002): **Swap Window** `/`, **Reserves** `/reserves`, **Controls** `/controls`, **Yield** `/yield`, **Token Stats** `/stats`. Legacy `/vault` and `/klend` redirect. Copy lives in `admin-frontend/src/theme/copy.ts`. **Treasury** in the UI means `treasury_vault` only (not the Swap Window). See [Operations.md](Operations.md).
 
 ## Design language
 

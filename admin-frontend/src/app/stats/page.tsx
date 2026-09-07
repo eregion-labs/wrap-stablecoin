@@ -13,6 +13,7 @@ import { selectVaultLoading } from "@/stores/selectors";
 import { useTokenHoldersStore } from "@/stores/tokenHoldersStore";
 import { useVaultStore } from "@/stores/vaultStore";
 import { adminCopy } from "@/theme/copy";
+import { actPageSx } from "@/theme/tokens";
 import { wrappedTokenName, wrappedTokenSymbol } from "@/types/vault";
 
 export default function TokenStatsPage() {
@@ -32,7 +33,7 @@ export default function TokenStatsPage() {
     void hydrateHolders();
   }, [hydrateHolders]);
 
-  const vaultLoading = selectVaultLoading(vaultStatus);
+  const vaultLoading = selectVaultLoading(vaultStatus, summary);
   const holdersLoading = holdersStatus === "idle" || holdersStatus === "loading";
 
   const source = meta ?? summary;
@@ -49,7 +50,7 @@ export default function TokenStatsPage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <Box sx={{ maxWidth: 960, mx: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, sm: 3 }, width: "100%" }}>
+      <Box sx={{ ...actPageSx, py: { xs: 3, md: 5 } }}>
         <Stack
           direction="row"
           justifyContent="space-between"
@@ -88,6 +89,7 @@ export default function TokenStatsPage() {
               wrappedMint={source.wrappedMint}
               wrappedDecimals={source.wrappedDecimals}
               mintMetadata={source.mintMetadata}
+              circulatingSupply={holdersData?.supply ?? source.circulatingSupply}
             />
           </Box>
         )}
