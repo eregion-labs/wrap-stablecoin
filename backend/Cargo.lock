@@ -7072,6 +7072,7 @@ dependencies = [
  "solana-account-decoder-client-types",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status-client-types",
  "spl-associated-token-account",
  "spl-token",
  "thiserror 2.0.18",

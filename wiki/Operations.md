@@ -15,7 +15,7 @@ Operator runbook for deposit/redemption decoupling and per-pool surplus manageme
 | `maxRedeemable` | Max Florin (FLRN) burnable from this pool now |
 | `collateralKtokens` | kTokens held in `collateral_vault` |
 | `kaminoAvailableLiquidity` | Reserve free liquidity (underlying) available for redeem |
-| `maxRecallableKtokens` | Max kTokens for `withdraw-from-klend` (holdings ∩ reserve liquidity) |
+| `maxRecallableKtokens` | Max kTokens for a raw kToken withdraw (holdings ∩ reserve liquidity); admin Yield Max uses underlying `min(deployedToKamino + kaminoSurplus, kaminoAvailableLiquidity)` instead |
 | `maxHarvestableKtokens` | Max kTokens for `harvest-yield` (surplus converted at exchange rate) |
 | `kaminoSupplyApyBps` | Current Kamino supply APY in bps (`null` if Kamino off) |
 
@@ -85,9 +85,9 @@ The operator console (`admin-frontend`) calls `/v1/admin/*`. See [Backend-API.md
 | **Swap Window** (`/`) | Issue / redeem via the admin wallet |
 | **Reserves** (`/reserves`) | Collateral policy and backing |
 | **Controls** (`/controls`) | Pause, wrap/unwrap, allowlist, admin / mint-authority handoff |
-| **Yield** (`/yield`) | Kamino deploy / recall / harvest / sweep / withdraw treasury |
+| **Yield** (`/yield`) | Kamino deploy / recall / harvest / sweep |
+| **Treasury** (`/treasury`) | Withdraw treasury vault to an operator wallet + history |
 | **Token Stats** (`/stats`) | Mint metadata and holders |
-| **Treasury** | `treasury_vault` only — admin-owned, unencumbered, not liable, not reserves |
 | **Admin** | Vault admin pubkey / signing wallet |
 
 Legacy paths `/vault` and `/klend` redirect to `/controls` and `/yield`.
@@ -115,7 +115,7 @@ Mint-authority accept requires typing `DISABLE WRAP` in the UI. Remaining accoun
 
 ### Reserves (`/reserves`) — collateral policy
 
-Register assets, haircuts, caps, status, and Enable Kamino. The Accounts ledger sits under the heading on Swap Window, Reserves, and Yield; actions follow below it.
+Register assets, haircuts, caps, status, and Enable Kamino. The Accounts ledger sits under the heading on Swap Window, Reserves, Yield, and Treasury; actions follow below it.
 
 Enable Kamino (per asset, one-shot) is `POST /v1/admin/enable-klend`.
 
@@ -129,9 +129,17 @@ Enable Kamino (per asset, one-shot) is `POST /v1/admin/enable-klend`.
 | Recall all | `POST /v1/admin/withdraw-all-from-klend` |
 | Harvest | `POST /v1/admin/harvest-yield` |
 | Sweep home surplus | `POST /v1/admin/sweep-home-surplus` |
-| Withdraw treasury | `POST /v1/admin/withdraw-treasury` |
 
-Server-signed routes require `ADMIN_KEYPAIR_PATH` on the backend.
+**Harvestable** is live Kamino surplus (`kaminoSurplus` from `GET /v1/vault/assets`, marked after a simulated `refresh_reserve`). Harvest skims that yield into `treasury_vault` while principal stays in Kamino.
+
+### Treasury (`/treasury`) — operator exit
+
+| Action | Route |
+|---|---|
+| Withdraw treasury | `POST /v1/admin/withdraw-treasury` |
+| Withdrawal history | `GET /v1/admin/withdraw-treasury/history` |
+
+Pays tokens already in `treasury_vault` out of the protocol. Server-signed routes require `ADMIN_KEYPAIR_PATH` on the backend.
 
 ## Related
 

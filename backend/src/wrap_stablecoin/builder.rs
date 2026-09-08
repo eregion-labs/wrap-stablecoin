@@ -301,9 +301,7 @@ fn apr_bps_to_apy_bps(apr_bps: u64) -> u64 {
     (apy * 10_000.0).round() as u64
 }
 
-fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
-    let acc = rpc.get_account(reserve).ok()?;
-    let d = &acc.data;
+fn decode_klend_reserve_bytes(d: &[u8]) -> Option<KlendReserveMark> {
     if d.len() < 2600 {
         return None;
     }
@@ -343,26 +341,94 @@ fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserv
     })
 }
 
+fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
+    let acc = rpc.get_account(reserve).ok()?;
+    decode_klend_reserve_bytes(&acc.data)
+}
+
+/// Live mark: simulate `refresh_reserve` and decode the post-sim reserve (Kamino accrues lazily).
+/// Falls back to the stored account when the oracle is missing or simulation fails.
+fn decode_klend_reserve_live(
+    rpc: &RpcClient,
+    klend: &KLendConfig,
+    fee_payer: &Pubkey,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Option<KlendReserveMark> {
+    let stored = decode_klend_reserve(rpc, &klend.reserve);
+    let Ok(oracle) = super::klend::scope_prices_for_reserve(scope_prices, &klend.reserve) else {
+        return stored;
+    };
+    let refresh =
+        super::klend::build_refresh_reserve_ix(&klend.reserve, &klend.lending_market, &oracle);
+    let Ok(tx) = build_versioned_tx(rpc, fee_payer, vec![refresh], None) else {
+        return stored;
+    };
+    use solana_account_decoder_client_types::UiAccountEncoding;
+    use solana_client::rpc_config::{
+        RpcSimulateTransactionAccountsConfig, RpcSimulateTransactionConfig,
+    };
+    let config = RpcSimulateTransactionConfig {
+        sig_verify: false,
+        replace_recent_blockhash: true,
+        accounts: Some(RpcSimulateTransactionAccountsConfig {
+            encoding: Some(UiAccountEncoding::Base64),
+            addresses: vec![klend.reserve.to_string()],
+        }),
+        ..RpcSimulateTransactionConfig::default()
+    };
+    let Ok(sim) = rpc.simulate_transaction_with_config(&tx, config) else {
+        return stored;
+    };
+    if sim.value.err.is_some() {
+        return stored;
+    }
+    let Some(accounts) = sim.value.accounts else {
+        return stored;
+    };
+    let Some(Some(ui)) = accounts.into_iter().next() else {
+        return stored;
+    };
+    let Some(data) = ui.data.decode() else {
+        return stored;
+    };
+    decode_klend_reserve_bytes(&data).or(stored)
+}
+
 /// Convert underlying atoms → kTokens at the reserve exchange rate (floor).
 fn underlying_to_ktokens(underlying: u128, mark: &KlendReserveMark) -> u64 {
     (underlying.saturating_mul(mark.coll_supply) / mark.total_liq).min(u64::MAX as u128) as u64
 }
 
+/// `max(0, kTokens × total_liq / coll_supply − tracked)` in underlying atoms.
+fn kamino_surplus_atoms(ktokens: u128, mark: &KlendReserveMark, tracked: u128) -> u64 {
+    if mark.coll_supply == 0 {
+        return 0;
+    }
+    let live_value = ktokens.saturating_mul(mark.total_liq) / mark.coll_supply;
+    live_value.saturating_sub(tracked).min(u64::MAX as u128) as u64
+}
+
 /// Caps for recall/harvest in kToken atoms, plus reserve free liquidity, surplus, and supply APY.
 /// Returns `(collateral_ktokens, kamino_available, max_recallable, max_harvestable, kamino_surplus, supply_apy_bps)`.
-fn klend_ktoken_caps(rpc: &RpcClient, klend: &KLendConfig) -> (u64, u64, u64, u64, u64, Option<u64>) {
+fn klend_ktoken_caps(
+    rpc: &RpcClient,
+    klend: &KLendConfig,
+    fee_payer: &Pubkey,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> (u64, u64, u64, u64, u64, Option<u64>) {
     let collateral_ktokens = get_token_account_amount(rpc, &klend.collateral_vault).unwrap_or(0);
-    let Some(mark) = decode_klend_reserve(rpc, &klend.reserve) else {
+    let Some(mark) = decode_klend_reserve_live(rpc, klend, fee_payer, scope_prices) else {
         return (collateral_ktokens, 0, 0, 0, 0, None);
     };
     let available_u64 = mark.available.min(u64::MAX as u128) as u64;
     let max_by_liquidity = underlying_to_ktokens(mark.available, &mark);
     let max_recallable = collateral_ktokens.min(max_by_liquidity);
 
-    let ktokens = collateral_ktokens as u128;
-    let live_value = ktokens.saturating_mul(mark.total_liq) / mark.coll_supply;
-    let tracked = klend.total_liquidity_in_klend as u128;
-    let surplus = live_value.saturating_sub(tracked).min(u64::MAX as u128) as u64;
+    let surplus = kamino_surplus_atoms(
+        collateral_ktokens as u128,
+        &mark,
+        klend.total_liquidity_in_klend as u128,
+    );
     let max_harvestable = collateral_ktokens.min(underlying_to_ktokens(surplus as u128, &mark));
 
     (
@@ -880,6 +946,7 @@ pub fn fetch_vault_assets(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_authority_seed: &Pubkey,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
 ) -> Result<VaultSummaryView> {
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
     let mut out = Vec::new();
@@ -902,7 +969,7 @@ pub fn fetch_vault_assets(
             liability_to_underlying_amount(liability, cfg.token_decimals, vault.wrapped_decimals)
                 .unwrap_or(0);
         let cushion = cfg.min_liquidity_target;
-        // Unharvested Kamino yield + kToken recall/harvest caps (single reserve decode).
+        // Live Kamino mark (simulated refresh) + kToken recall/harvest caps.
         let (
             collateral_ktokens,
             kamino_available_liquidity,
@@ -912,7 +979,7 @@ pub fn fetch_vault_assets(
             kamino_supply_apy_bps,
         ) = klend
             .as_ref()
-            .map(|k| klend_ktoken_caps(rpc, k))
+            .map(|k| klend_ktoken_caps(rpc, k, &vault.admin, scope_prices))
             .unwrap_or((0, 0, 0, 0, 0, None));
         let home_surplus = home_surplus_amount(
             free_liquidity,
@@ -1308,13 +1375,16 @@ pub fn unsigned_deposit_all_to_klend_tx_bytes(
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
+/// Build withdraw-from-klend. `underlying_amount` is liquidity atoms; converted to kTokens
+/// at the live (simulated refresh) reserve exchange rate (floor), then capped by the vault's
+/// kToken balance so a Max recall cannot overshoot after Kamino interest accrual.
 pub fn unsigned_withdraw_from_klend_tx_bytes(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_authority_seed: &Pubkey,
     admin: &Pubkey,
     underlying_mint: &Pubkey,
-    collateral_amount: u64,
+    underlying_amount: u64,
     scope_prices: &HashMap<Pubkey, Pubkey>,
 ) -> Result<Vec<u8>> {
     let (vault_config_key, _, vault_authority_key, asset_config_key, asset_cfg) =
@@ -1328,6 +1398,14 @@ pub fn unsigned_withdraw_from_klend_tx_bytes(
         )?;
     let (cpi, refresh) =
         klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
+    let mark = decode_klend_reserve_live(rpc, &cpi.klend, admin, scope_prices)
+        .ok_or_else(|| anyhow!("could not decode KLend reserve for exchange rate"))?;
+    let vault_ktokens = get_token_account_amount(rpc, &cpi.collateral_vault).unwrap_or(0);
+    let collateral_amount =
+        underlying_to_ktokens(underlying_amount as u128, &mark).min(vault_ktokens);
+    if collateral_amount == 0 {
+        return Err(anyhow!("underlying amount too small to redeem any kTokens"));
+    }
     let ix = super::klend::build_withdraw_from_klend_instruction(
         program_id,
         admin,
@@ -1733,6 +1811,47 @@ mod allowlist_slot_tests {
         assert_eq!(curve_borrow_apr_bps(0, &kink), 0);
         assert_eq!(curve_borrow_apr_bps(9_500, &kink), 310);
         assert_eq!(curve_borrow_apr_bps(4_750, &kink), 155);
+    }
+
+    #[test]
+    fn kamino_surplus_is_live_minus_tracked() {
+        let mark = KlendReserveMark {
+            available: 0,
+            total_liq: 103,
+            coll_supply: 100,
+            supply_apy_bps: None,
+        };
+        // 100 kTokens at 1.03 → live 103; tracked principal 100 → surplus 3
+        assert_eq!(kamino_surplus_atoms(100, &mark, 100), 3);
+        assert_eq!(kamino_surplus_atoms(100, &mark, 103), 0);
+        assert_eq!(kamino_surplus_atoms(100, &mark, 200), 0);
+        // Floor division: 50 × 103 / 100 = 51
+        assert_eq!(kamino_surplus_atoms(50, &mark, 50), 1);
+    }
+
+    #[test]
+    fn recall_ktokens_cap_avoids_stale_mark_overshoot() {
+        // Vault holds 100 kTokens. Live mark: each kToken worth more (accrued yield).
+        let vault_ktokens = 100u64;
+        let live = KlendReserveMark {
+            available: 0,
+            total_liq: 103,
+            coll_supply: 100,
+            supply_apy_bps: None,
+        };
+        let stale = KlendReserveMark {
+            available: 0,
+            total_liq: 100,
+            coll_supply: 100,
+            supply_apy_bps: None,
+        };
+        let live_value = kamino_surplus_atoms(vault_ktokens as u128, &live, 0) as u128;
+        assert_eq!(live_value, 103);
+        // Stale mark undervalues kTokens → Max recall asks for more shares than the vault holds.
+        assert!(underlying_to_ktokens(live_value, &stale) > vault_ktokens);
+        // Live mark + vault cap stays within balance (and redeems the full position).
+        let capped = underlying_to_ktokens(live_value, &live).min(vault_ktokens);
+        assert_eq!(capped, vault_ktokens);
     }
 
     #[test]

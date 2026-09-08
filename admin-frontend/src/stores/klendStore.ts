@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { apiPost } from "@/lib/api";
+import { requirePubkey } from "@/lib/pubkey";
 import { parseTokenAmount } from "@/lib/tokenAmount";
 import { actionErr, actionOk, type ActionResult } from "./types";
 import { useVaultStore } from "./vaultStore";
@@ -110,7 +111,7 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
     try {
       return await postAndRefresh("/v1/admin/withdraw-from-klend", {
         assetMint: mint,
-        collateralAmount: parsed.data,
+        amount: parsed.data,
       });
     } finally {
       set({ busy: null, busyMint: null });
@@ -121,11 +122,24 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
     const draft = get().drafts[mint] ?? emptyDraft;
     const parsed = parseHumanAtoms(draft.harvestAmount, mint, "harvest amount");
     if (!parsed.ok) return parsed;
+    const asset = useVaultStore.getState().summary?.assets.find((a) => a.mint === mint);
+    const collateralKtokens = asset?.collateralKtokens ?? 0;
+    const liveValue = (asset?.deployedToKamino ?? 0) + (asset?.kaminoSurplus ?? 0);
+    if (collateralKtokens <= 0 || liveValue <= 0) {
+      return actionErr("no Kamino position to harvest");
+    }
+    // API still wants kToken atoms; convert at the vault mark used for surplus.
+    const collateralAmount = Math.floor(
+      (parsed.data * collateralKtokens) / liveValue,
+    );
+    if (collateralAmount <= 0) {
+      return actionErr("harvest amount too small to redeem any collateral");
+    }
     set({ busy: "harvest", busyMint: mint });
     try {
       return await postAndRefresh("/v1/admin/harvest-yield", {
         assetMint: mint,
-        collateralAmount: parsed.data,
+        collateralAmount,
       });
     } finally {
       set({ busy: null, busyMint: null });
@@ -151,16 +165,14 @@ export const useKlendStore = create<KlendState>()((set, get) => ({
     const draft = get().drafts[mint] ?? emptyDraft;
     const parsed = parseHumanAtoms(draft.treasuryAmount, mint, "treasury amount");
     if (!parsed.ok) return parsed;
-    const destination = draft.destination.trim();
-    if (destination.length < 32) {
-      return actionErr("destination wallet pubkey is required");
-    }
+    const dest = requirePubkey(draft.destination, "destination");
+    if (!dest.ok) return dest;
     set({ busy: "withdrawTreasury", busyMint: mint });
     try {
       return await postAndRefresh("/v1/admin/withdraw-treasury", {
         assetMint: mint,
         amount: parsed.data,
-        destination,
+        destination: dest.data,
       });
     } finally {
       set({ busy: null, busyMint: null });

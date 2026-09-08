@@ -68,6 +68,7 @@ pub async fn vault_assets(
         ctx.rpc.as_ref(),
         &ctx.program_id,
         &ctx.vault_authority_seed,
+        &state.klend_scope_prices,
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     Ok(Json(summary))

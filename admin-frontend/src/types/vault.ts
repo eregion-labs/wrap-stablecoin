@@ -33,7 +33,7 @@ export type VaultAsset = {
   collateralKtokens?: number;
   /** Reserve free liquidity (underlying atoms). */
   kaminoAvailableLiquidity?: number;
-  /** Max kTokens for withdraw-from-klend. */
+  /** Max kTokens for a raw kToken withdraw (admin Yield Max uses underlying). */
   maxRecallableKtokens?: number;
   /** Max kTokens for harvest-yield. */
   maxHarvestableKtokens?: number;

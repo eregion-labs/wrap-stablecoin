@@ -26,11 +26,12 @@ One process serves **exactly one** Solana network. Frontends discover public dep
 | `POST` | `/v1/admin/redeem` | Server-signed unwrap from admin wallet |
 | `POST` | `/v1/admin/deposit-to-klend` | Deploy `amount` to Kamino |
 | `POST` | `/v1/admin/deposit-all-to-klend` | Deploy `vault − cushion` to Kamino |
-| `POST` | `/v1/admin/withdraw-from-klend` | Recall `collateralAmount` kTokens |
+| `POST` | `/v1/admin/withdraw-from-klend` | Recall underlying `amount` (backend converts to kTokens) |
 | `POST` | `/v1/admin/withdraw-all-from-klend` | Recall full Kamino position |
 | `POST` | `/v1/admin/harvest-yield` | Harvest kToken surplus to treasury |
 | `POST` | `/v1/admin/sweep-home-surplus` | Sweep home-vault surplus to treasury |
 | `POST` | `/v1/admin/withdraw-treasury` | Send treasury tokens to a destination wallet |
+| `GET` | `/v1/admin/withdraw-treasury/history` | Indexed treasury withdrawals for a mint |
 | `POST` | `/v1/admin/set-paused` | Global pause flag |
 | `POST` | `/v1/admin/set-wrap-public` | Public wrap (false requires allowlist) |
 | `POST` | `/v1/admin/set-unwrap-public` | Public unwrap (false requires allowlist) |
@@ -165,9 +166,9 @@ Optional `user=<wallet>` on both quotes sets `accessAllowed` (`true` if the flag
 
 ## Vault assets and meta
 
-**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino kToken caps when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`, `kaminoSupplyApyBps`. See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
+**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino fields when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`, `kaminoSupplyApyBps`, `kaminoSurplus`. When Kamino is on, `kaminoSurplus` / harvest caps use a **simulated** `refresh_reserve` mark (falls back to the raw reserve account if the sim fails). See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
 
-`withdraw-from-klend` and `harvest-yield` take **kToken** atoms (`collateralAmount`). Use `maxRecallableKtokens` / `maxHarvestableKtokens` for Max — not `deployedToKamino` / `kaminoSurplus` (those are underlying).
+`withdraw-from-klend` takes **underlying** atoms (`amount`). Max recallable underlying is `min(deployedToKamino + kaminoSurplus, kaminoAvailableLiquidity)`. The backend converts to kTokens at the reserve exchange rate before building the on-chain ix. `harvest-yield` still takes **kToken** atoms (`collateralAmount`); use `maxHarvestableKtokens` for Max.
 
 Both **`GET /v1/vault/meta`** and **`GET /v1/vault/assets`** include vault governance:
 
@@ -187,13 +188,13 @@ Optional `assetMint` defaults to `DEFAULT_ASSET_MINT`.
 { "assetMint": "...", "amount": 1000000 }
 ```
 
-Used by `deposit-to-klend` and `sweep-home-surplus`.
+Used by `deposit-to-klend`, `sweep-home-surplus`, and `withdraw-from-klend` (underlying atoms; recall converts to kTokens server-side).
 
 ```json
 { "assetMint": "...", "collateralAmount": 1000000 }
 ```
 
-Used by `withdraw-from-klend` and `harvest-yield` (kToken atoms).
+Used by `harvest-yield` (kToken atoms).
 
 ```json
 { "assetMint": "...", "amount": 1000000, "destination": "<wallet base58>" }
@@ -202,6 +203,24 @@ Used by `withdraw-from-klend` and `harvest-yield` (kToken atoms).
 `withdraw-treasury` treats `destination` as a wallet and creates the ATA if missing.
 
 Response: `{ "signature": "..." }`.
+
+**`GET /v1/admin/withdraw-treasury/history?assetMint=`** returns indexed `TreasuryWithdrawn` rows for that mint (newest first):
+
+```json
+{
+  "withdrawals": [
+    {
+      "signature": "...",
+      "amount": 77601165,
+      "destination": "<wallet owner>",
+      "initiator": "<fee payer>",
+      "blockTime": 1710000000
+    }
+  ]
+}
+```
+
+Source: txs that touch the per-asset `treasury_vault` PDA whose logs decode as `TreasuryWithdrawn`. Event `destination` is the ATA; the API resolves the wallet owner. Incremental in-process cache; a successful `POST /withdraw-treasury` prepends immediately.
 
 ## Admin governance bodies
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -14,18 +14,19 @@ use crate::routes::network::RequestNetwork;
 use crate::tx_submit::sign_and_send_versioned_tx;
 use crate::routes::tx::TxResponse;
 use crate::wrap_stablecoin::{
-    parse_asset_status, unsigned_accept_authority_tx_bytes, unsigned_accept_mint_authority_tx_bytes,
-    unsigned_add_asset_tx_bytes, unsigned_add_to_allowlist_tx_bytes,
-    unsigned_cancel_propose_mint_authority_tx_bytes, unsigned_cancel_transfer_authority_tx_bytes,
-    unsigned_deposit_all_to_klend_tx_bytes, unsigned_deposit_to_klend_tx_bytes,
-    unsigned_enable_klend_tx_bytes, unsigned_harvest_yield_tx_bytes,
-    unsigned_init_allowlist_tx_bytes, unsigned_propose_mint_authority_tx_bytes,
-    unsigned_remove_from_allowlist_tx_bytes, unsigned_set_paused_tx_bytes,
-    unsigned_set_unwrap_public_tx_bytes, unsigned_set_wrap_public_tx_bytes,
-    unsigned_sweep_home_surplus_tx_bytes, unsigned_transfer_authority_tx_bytes,
-    unsigned_unwrap_tx_bytes, unsigned_update_asset_policy_tx_bytes,
-    unsigned_withdraw_all_from_klend_tx_bytes, unsigned_withdraw_from_klend_tx_bytes,
-    unsigned_withdraw_treasury_tx_bytes, unsigned_wrap_tx_bytes,
+    fetch_treasury_withdrawal_history, parse_asset_status, unsigned_accept_authority_tx_bytes,
+    unsigned_accept_mint_authority_tx_bytes, unsigned_add_asset_tx_bytes,
+    unsigned_add_to_allowlist_tx_bytes, unsigned_cancel_propose_mint_authority_tx_bytes,
+    unsigned_cancel_transfer_authority_tx_bytes, unsigned_deposit_all_to_klend_tx_bytes,
+    unsigned_deposit_to_klend_tx_bytes, unsigned_enable_klend_tx_bytes,
+    unsigned_harvest_yield_tx_bytes, unsigned_init_allowlist_tx_bytes,
+    unsigned_propose_mint_authority_tx_bytes, unsigned_remove_from_allowlist_tx_bytes,
+    unsigned_set_paused_tx_bytes, unsigned_set_unwrap_public_tx_bytes,
+    unsigned_set_wrap_public_tx_bytes, unsigned_sweep_home_surplus_tx_bytes,
+    unsigned_transfer_authority_tx_bytes, unsigned_unwrap_tx_bytes,
+    unsigned_update_asset_policy_tx_bytes, unsigned_withdraw_all_from_klend_tx_bytes,
+    unsigned_withdraw_from_klend_tx_bytes, unsigned_withdraw_treasury_tx_bytes,
+    unsigned_wrap_tx_bytes, TreasuryWithdrawalHistory, TreasuryWithdrawalRow,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -432,17 +433,18 @@ pub async fn deposit_all_to_klend(
     }))
 }
 
-/// Recall `collateralAmount` kTokens from Kamino into the home vault.
+/// Recall underlying liquidity from Kamino into the home vault. `amount` is underlying
+/// atoms; the backend converts to kTokens at the reserve exchange rate.
 #[utoipa::path(
     post,
     path = "/v1/admin/withdraw-from-klend",
-    request_body = CollateralAmountBody,
+    request_body = AmountAssetBody,
     responses((status = 200, body = ExecuteResponse), (status = 400), (status = 503))
 )]
 pub async fn withdraw_from_klend(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
-    Json(body): Json<CollateralAmountBody>,
+    Json(body): Json<AmountAssetBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
     let (kp, ctx) = require_admin_keypair(&state, network)?;
     let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
@@ -452,7 +454,7 @@ pub async fn withdraw_from_klend(
         &ctx.vault_authority_seed,
         &kp.pubkey(),
         &asset_mint,
-        body.collateral_amount,
+        body.amount,
         &state.klend_scope_prices,
     )
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
@@ -581,9 +583,62 @@ pub async fn withdraw_treasury(
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
         .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    state.treasury_history.prepend(
+        &asset_mint,
+        TreasuryWithdrawalRow {
+            signature: sig.to_string(),
+            amount: body.amount,
+            destination: destination.to_string(),
+            initiator: kp.pubkey().to_string(),
+            block_time: Some(chrono_now_unix()),
+        },
+    );
     Ok(Json(ExecuteResponse {
         signature: sig.to_string(),
     }))
+}
+
+fn chrono_now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WithdrawTreasuryHistoryQuery {
+    #[serde(default)]
+    pub asset_mint: Option<String>,
+}
+
+/// Indexed `TreasuryWithdrawn` history for one collateral mint (RPC walk + in-process cache).
+#[utoipa::path(
+    get,
+    path = "/v1/admin/withdraw-treasury/history",
+    params(
+        ("assetMint" = Option<String>, Query, description = "Collateral mint; defaults to server DEFAULT_ASSET_MINT"),
+    ),
+    responses((status = 200, body = TreasuryWithdrawalHistory), (status = 400))
+)]
+pub async fn withdraw_treasury_history(
+    State(state): State<Arc<AppState>>,
+    RequestNetwork(network): RequestNetwork,
+    Query(query): Query<WithdrawTreasuryHistoryQuery>,
+) -> Result<Json<TreasuryWithdrawalHistory>, (axum::http::StatusCode, String)> {
+    let ctx = state
+        .require_network(network)
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+    let asset_mint = resolve_mint(ctx, query.asset_mint.as_deref())?;
+    let history = fetch_treasury_withdrawal_history(
+        ctx.rpc.as_ref(),
+        &ctx.program_id,
+        &ctx.vault_authority_seed,
+        &asset_mint,
+        &state.treasury_history,
+    )
+    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(Json(history))
 }
 
 /// Set the global vault pause flag.

@@ -41,6 +41,7 @@ use crate::routes::{admin, admin_ops, client_config, guard, klend_lookup, ping, 
         admin_ops::harvest_yield,
         admin_ops::sweep_home_surplus,
         admin_ops::withdraw_treasury,
+        admin_ops::withdraw_treasury_history,
         admin_ops::set_paused,
         admin_ops::set_wrap_public,
         admin_ops::set_unwrap_public,
@@ -87,6 +88,9 @@ use crate::routes::{admin, admin_ops, client_config, guard, klend_lookup, ping, 
         admin_ops::AmountAssetBody,
         admin_ops::CollateralAmountBody,
         admin_ops::WithdrawTreasuryBody,
+        admin_ops::WithdrawTreasuryHistoryQuery,
+        crate::wrap_stablecoin::TreasuryWithdrawalHistory,
+        crate::wrap_stablecoin::TreasuryWithdrawalRow,
         admin_ops::BoolFlagBody,
         admin_ops::PubkeyBody,
         admin_ops::AddToAllowlistBody,
@@ -148,6 +152,10 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/harvest-yield", post(admin_ops::harvest_yield))
         .route("/sweep-home-surplus", post(admin_ops::sweep_home_surplus))
         .route("/withdraw-treasury", post(admin_ops::withdraw_treasury))
+        .route(
+            "/withdraw-treasury/history",
+            axum::routing::get(admin_ops::withdraw_treasury_history),
+        )
         .route("/set-paused", post(admin_ops::set_paused))
         .route("/set-wrap-public", post(admin_ops::set_wrap_public))
         .route("/set-unwrap-public", post(admin_ops::set_unwrap_public))

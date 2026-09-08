@@ -94,6 +94,8 @@ pub struct AppState {
     pub public_client_config: Arc<PublicClientConfig>,
     /// KLend reserve pubkey → Scope oracle, used for `refresh_reserve`.
     pub klend_scope_prices: HashMap<Pubkey, Pubkey>,
+    /// Incremental RPC index of treasury withdrawals (in-process).
+    pub treasury_history: crate::wrap_stablecoin::TreasuryHistoryCache,
 }
 
 impl AppState {
@@ -129,6 +131,7 @@ impl AppState {
             network: ctx,
             public_client_config,
             klend_scope_prices: load_klend_scope_prices_from_env(),
+            treasury_history: crate::wrap_stablecoin::TreasuryHistoryCache::default(),
         })
     }
 

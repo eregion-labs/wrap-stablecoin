@@ -161,8 +161,9 @@ export default function YieldEarnedSummary({ assets }: { assets: VaultAsset[] })
         </Stack>
 
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-          Harvestable = unharvested Kamino yield (press Harvest to move it to the treasury). Percent is yield so far
-          against the deployed principal; the figure advances each time a Kamino op refreshes the reserve.
+          Harvestable = live unharvested Kamino yield (press Harvest to move it to the treasury). Percent is
+          yield so far against the deployed principal; the assets API simulates a Kamino reserve refresh so the
+          figure does not wait for a deploy/recall.
         </Typography>
       </CardContent>
     </Card>

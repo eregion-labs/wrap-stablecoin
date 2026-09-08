@@ -89,7 +89,7 @@ pnpm run dev
 - `AppShell` / `AppHeader` — sticky navbar (read-only deployment chip)
 - `providers.tsx` — theme, snackbar, bootstrap
 
-Admin console pages (`admin-frontend`, port 3002): **Swap Window** `/`, **Reserves** `/reserves`, **Controls** `/controls`, **Yield** `/yield`, **Token Stats** `/stats`. Legacy `/vault` and `/klend` redirect. Copy lives in `admin-frontend/src/theme/copy.ts`. **Treasury** in the UI means `treasury_vault` only (not the Swap Window). See [Operations.md](Operations.md).
+Admin console pages (`admin-frontend`, port 3002): **Swap Window** `/`, **Reserves** `/reserves`, **Controls** `/controls`, **Yield** `/yield`, **Treasury** `/treasury`, **Token Stats** `/stats`. Legacy `/vault` and `/klend` redirect. Copy lives in `admin-frontend/src/theme/copy.ts`. **Treasury** in the UI means the `/treasury` page and `treasury_vault` (not the Swap Window). See [Operations.md](Operations.md).
 
 ## Design language
 

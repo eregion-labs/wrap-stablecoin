@@ -31,9 +31,11 @@ export default function AppHeader() {
       ? adminCopy.vaultNav
       : pathname.startsWith("/stats")
         ? adminCopy.tokenStatsSubtitle
-        : pathname.startsWith("/yield") || pathname.startsWith("/klend")
-          ? adminCopy.klendSubtitle
-          : adminCopy.treasuryOperations;
+        : pathname.startsWith("/treasury")
+          ? adminCopy.treasuryVaultSubtitle
+          : pathname.startsWith("/yield") || pathname.startsWith("/klend")
+            ? adminCopy.klendSubtitle
+            : adminCopy.treasuryOperations;
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0}>
@@ -110,6 +112,15 @@ export default function AppHeader() {
               sx={navSx(pathname.startsWith("/yield") || pathname.startsWith("/klend"))}
             >
               {adminCopy.klendNav}
+            </Button>
+            <Button
+              component={Link}
+              href="/treasury"
+              size="small"
+              variant="text"
+              sx={navSx(pathname.startsWith("/treasury"))}
+            >
+              {adminCopy.treasuryVaultNav}
             </Button>
             <Button
               component={Link}

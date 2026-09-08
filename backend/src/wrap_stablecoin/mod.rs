@@ -5,6 +5,7 @@ mod governance;
 mod klend;
 mod klend_lookup;
 mod pda;
+mod treasury_history;
 mod verify;
 
 pub use builder::{
@@ -33,4 +34,8 @@ pub use klend_lookup::{
     KAMINO_MAIN_MARKET,
 };
 pub use pda::*;
+pub use treasury_history::{
+    fetch_treasury_withdrawal_history, TreasuryHistoryCache, TreasuryWithdrawalHistory,
+    TreasuryWithdrawalRow,
+};
 pub use verify::{ensure_tx_targets_program, tx_targets_program};

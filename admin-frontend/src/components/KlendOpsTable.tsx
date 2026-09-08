@@ -4,16 +4,15 @@ import { useState } from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { ReserveCollateralSelect } from "@florin/ui";
 import { useSnackbar } from "notistack";
 import AmountActionRow from "@/components/AmountActionRow";
+import HintLabel from "@/components/HintLabel";
 import { mintLabel } from "@/lib/mints";
 import { formatTokenAmount } from "@/lib/tokenAmount";
 import { actBlockSx, cardSx } from "@/theme/tokens";
 import { adminCopy, metricHints, type MetricHint } from "@/theme/copy";
-import HintLabel from "@/components/HintLabel";
 import type { VaultAsset } from "@/types/vault";
 import { useKlendStore } from "@/stores/klendStore";
 import type { ActionResult } from "@/stores/types";
@@ -61,7 +60,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
   const submitRecall = useKlendStore((s) => s.submitRecall);
   const submitHarvest = useKlendStore((s) => s.submitHarvest);
   const submitSweep = useKlendStore((s) => s.submitSweep);
-  const submitWithdrawTreasury = useKlendStore((s) => s.submitWithdrawTreasury);
 
   const notify = (result: ActionResult<{ signature: string }>, okLabel: string) => {
     if (result.ok) {
@@ -81,8 +79,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
     );
   }
 
-  const asset =
-    assets.find((a) => a.mint === selectedMint) ?? assets[0];
+  const asset = assets.find((a) => a.mint === selectedMint) ?? assets[0];
   const mint = asset.mint;
   const d = asset.tokenDecimals;
   const symbol = mintLabel(mint);
@@ -99,9 +96,14 @@ export default function KlendOpsTable({ assets, paused }: Props) {
   const locked = rowBusy;
   const deployLocked = paused || locked;
   const deployable = Math.max(0, asset.freeLiquidity - asset.cushion);
-  const collateralKtokens = asset.collateralKtokens ?? 0;
-  const maxRecallable = asset.maxRecallableKtokens ?? 0;
-  const maxHarvestable = asset.maxHarvestableKtokens ?? 0;
+  const maxRecallable = Math.min(
+    asset.deployedToKamino + asset.kaminoSurplus,
+    asset.kaminoAvailableLiquidity ?? 0,
+  );
+  const maxHarvestable = Math.min(
+    asset.kaminoSurplus,
+    asset.kaminoAvailableLiquidity ?? 0,
+  );
   const kaminoAvailable = asset.kaminoAvailableLiquidity ?? 0;
 
   return (
@@ -134,10 +136,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           value={formatTokenAmount(asset.deployedToKamino, d)}
         />
         <Stat
-          label={adminCopy.klendKtokensHeld}
-          value={formatTokenAmount(collateralKtokens, d)}
-        />
-        <Stat
           label={adminCopy.klendKaminoAvailable}
           value={formatTokenAmount(kaminoAvailable, d)}
         />
@@ -146,26 +144,10 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           label={metricHints.cushion.label}
           value={formatTokenAmount(asset.cushion, d)}
         />
-        <Stat label="Deployable" value={formatTokenAmount(deployable, d)} />
         <Stat
           metric={metricHints.backing}
           label={metricHints.backing.label}
           value={formatTokenAmount(asset.backing, d)}
-        />
-        <Stat
-          metric={metricHints.kaminoSurplus}
-          label={adminCopy.klendHarvestable}
-          value={formatTokenAmount(asset.kaminoSurplus, d)}
-        />
-        <Stat
-          metric={metricHints.homeSurplus}
-          label={metricHints.homeSurplus.label}
-          value={formatTokenAmount(asset.homeSurplus, d)}
-        />
-        <Stat
-          metric={metricHints.treasury}
-          label={metricHints.treasury.label}
-          value={formatTokenAmount(asset.treasuryBalance, d)}
         />
       </Stack>
 
@@ -197,7 +179,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           availableAtoms={maxRecallable}
           decimals={d}
           availableLabel={adminCopy.klendAvailableRecall}
-          symbol={adminCopy.klendKtokenUnit}
+          symbol={symbol}
           disabled={locked || klendOff}
           executeLabel={adminCopy.klendRecall}
           executeBusy={rowBusy && busy === "recall"}
@@ -212,7 +194,7 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           availableAtoms={maxHarvestable}
           decimals={d}
           availableLabel={adminCopy.klendAvailableHarvest}
-          symbol={adminCopy.klendKtokenUnit}
+          symbol={symbol}
           helperExtra={adminCopy.klendHarvestHint}
           disabled={deployLocked || klendOff}
           executeLabel={adminCopy.klendHarvest}
@@ -235,34 +217,6 @@ export default function KlendOpsTable({ assets, paused }: Props) {
           executeVariant="outlined"
           executeDisabled={asset.homeSurplus <= 0}
           onExecute={async () => notify(await submitSweep(mint), "Swept surplus")}
-        />
-
-        <AmountActionRow
-          label={adminCopy.klendTreasuryAmount}
-          value={draft.treasuryAmount}
-          onChange={(v) => setDraft(mint, { treasuryAmount: v })}
-          availableAtoms={asset.treasuryBalance}
-          decimals={d}
-          availableMetric={metricHints.treasury}
-          symbol={symbol}
-          disabled={locked}
-          executeLabel={adminCopy.klendWithdrawTreasury}
-          executeBusy={rowBusy && busy === "withdrawTreasury"}
-          executeVariant="outlined"
-          executeDisabled={asset.treasuryBalance <= 0}
-          onExecute={async () =>
-            notify(await submitWithdrawTreasury(mint), "Treasury withdrawn")
-          }
-          extraField={
-            <TextField
-              size="small"
-              label={adminCopy.klendDestination}
-              value={draft.destination}
-              onChange={(e) => setDraft(mint, { destination: e.target.value })}
-              disabled={locked}
-              fullWidth
-            />
-          }
         />
       </Stack>
     </Box>
