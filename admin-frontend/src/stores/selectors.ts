@@ -2,9 +2,6 @@ import { ADMIN_COLLATERAL_MINTS } from "@/lib/mints";
 import type { VaultAsset, VaultSummary } from "@/types/vault";
 import type { LoadStatus } from "./types";
 
-/** On-chain vault asset slot cap (`MAX_REGISTERED_ASSETS`). */
-export const MAX_REGISTERED_ASSETS = 8;
-
 export function selectVaultLoading(
   status: LoadStatus,
   summary: VaultSummary | null | undefined = undefined,

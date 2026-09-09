@@ -110,15 +110,6 @@ pub enum ErrorCode {
     #[msg("Exposure cap exceeded for this asset")]
     ExposureCapExceeded,
 
-    #[msg("Asset registry is full")]
-    AssetRegistryFull,
-
-    #[msg("Asset already registered")]
-    AssetAlreadyRegistered,
-
-    #[msg("Asset not registered in vault")]
-    AssetNotRegistered,
-
     #[msg("Wrapped token cannot back itself as collateral")]
     ReflexiveCollateralForbidden,
 
@@ -148,9 +139,6 @@ pub enum ErrorCode {
 
     #[msg("Mint authority transfer already completed")]
     MintAuthorityAlreadyTransferred,
-
-    #[msg("Remaining asset config accounts do not match registered assets")]
-    InvalidAssetConfigAccounts,
 
     #[msg("KLend Reserve account layout, discriminator, or version is invalid")]
     InvalidKlendReserve,

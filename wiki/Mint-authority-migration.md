@@ -18,7 +18,7 @@ After `accept_mint_authority` completes:
 |-------------|--------|--------|
 | `propose_mint_authority` | `admin` | Sets `VaultConfig.pending_mint_authority` |
 | `cancel_propose_mint_authority` | `admin` | Clears pending proposal |
-| `accept_mint_authority` | `pending_mint_authority` | CPI `SetAuthority`; sets `mint_authority_transferred = true`; disables `mint_enabled` on all registered assets |
+| `accept_mint_authority` | `pending_mint_authority` | CPI `SetAuthority`; sets `mint_authority_transferred = true` (wrap permanently disabled) |
 
 The destination authority is an **explicit admin choice** at proposal time. No on-chain allowlist or registry is enforced.
 
@@ -26,14 +26,14 @@ The destination authority is an **explicit admin choice** at proposal time. No o
 
 Core accounts: `vault_config`, `wrapped_mint`, `vault_authority`, `new_mint_authority` (signer), `token_program`.
 
-**Remaining accounts:** one writable `AssetConfig` PDA per registered asset (same order as `registered_assets`). Each asset has `mint_enabled` set to `false`.
+No remaining accounts. Per-pool `mint_enabled` is unchanged; wrap still fails because `mint_authority_transferred` is true.
 
 ## Recommended operator sequence
 
 ```text
 1. Admin calls propose_mint_authority(new_authority)
 2. Operators verify destination off-chain (program ID, PDA seeds, multisig members)
-3. Destination calls accept_mint_authority (with asset config remaining accounts)
+3. Destination calls accept_mint_authority
 4. New monetary policy engine enables wrap against its own collateral vaults
 5. Old wrapper serves legacy unwrap until per-pool liability reaches zero
 6. Admin sweeps surplus and decommissions legacy vaults when complete

@@ -166,7 +166,7 @@ Optional `user=<wallet>` on both quotes sets `accessAllowed` (`true` if the flag
 
 ## Vault assets and meta
 
-**`GET /v1/vault/assets`** returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino fields when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`, `kaminoSupplyApyBps`, `kaminoSurplus`. When Kamino is on, `kaminoSurplus` / harvest caps use a **simulated** `refresh_reserve` mark (falls back to the raw reserve account if the sim fails). See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
+**`GET /v1/vault/assets`** lists pools via `getProgramAccounts` on `AssetConfig` PDAs for the vault (no on-chain mint directory). It returns per-pool vectors: `backing`, `liability`, `liabilityUnderlying`, `cushion`, `homeSurplus`, `maxRedeemable`, `mintAllowed`, `redeemAllowed`, plus Kamino fields when enabled: `collateralKtokens`, `kaminoAvailableLiquidity`, `maxRecallableKtokens`, `maxHarvestableKtokens`, `kaminoSupplyApyBps`, `kaminoSurplus`. When Kamino is on, `kaminoSurplus` / harvest caps use a **simulated** `refresh_reserve` mark (falls back to the raw reserve account if the sim fails). See [Accounting.md](Accounting.md) and [Operations.md](Operations.md).
 
 `withdraw-from-klend` takes **underlying** atoms (`amount`). Max recallable underlying is `min(deployedToKamino + kaminoSurplus, kaminoAvailableLiquidity)`. The backend converts to kTokens at the reserve exchange rate before building the on-chain ix. `harvest-yield` still takes **kToken** atoms (`collateralAmount`); use `maxHarvestableKtokens` for Max.
 
@@ -278,7 +278,7 @@ Enable Kamino (one-shot per asset):
 
 `POST /v1/admin/accept-authority/tx` and `POST /v1/admin/accept-mint-authority/tx` return `{ "transactionB64": "..." }` (bincode `VersionedTransaction`). The fee payer / signer is the on-chain pending destination. The Controls UI signs in the browser from a keypair JSON file; the secret never hits the backend.
 
-`accept_mint_authority` remaining accounts are every registered `AssetConfig` PDA in vault order. Accepting **permanently disables wrap**.
+`accept_mint_authority` permanently disables wrap via `mint_authority_transferred` (no per-asset remaining accounts).
 
 If `ADMIN_KEYPAIR` equals the pending destination, `POST /v1/admin/accept-authority` and `POST /v1/admin/accept-mint-authority` will execute server-side; otherwise they return 400 and the `/tx` route must be used.
 

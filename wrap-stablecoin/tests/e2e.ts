@@ -252,7 +252,7 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       );
       expect(vaultData.admin.toBase58()).to.equal(wallet.publicKey.toBase58());
       console.log(
-        `vault already initialized (assetCount=${vaultData.assetCount}, e.g. from cross_asset)`,
+        `vault already initialized (e.g. from cross_asset)`,
       );
       return;
     }
@@ -275,7 +275,6 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       vaultConfig,
     );
     expect(vaultData.admin.toBase58()).to.equal(wallet.publicKey.toBase58());
-    expect(vaultData.assetCount).to.equal(0);
   });
 
   it("registers USDC via add_asset", async () => {
@@ -300,16 +299,10 @@ describe("e2e: wrap/unwrap + KLend against cloned mainnet state", () => {
       console.log("USDC asset_config already exists (skip add_asset)");
     }
 
-    const vaultData = await (program.account as any).vaultConfig.fetch(
-      vaultConfig,
-    );
-    const registered = vaultData.registeredAssets.map((m: PublicKey) =>
-      m.toBase58(),
-    );
-    expect(registered).to.include(USDC_MINT.toBase58());
     const assetData = await (program.account as any).assetConfig.fetch(
       tokenConfig,
     );
+    expect(assetData.tokenMint.toBase58()).to.equal(USDC_MINT.toBase58());
     expect(assetData.treasuryVault.toBase58()).to.equal(
       treasuryVault.toBase58(),
     );

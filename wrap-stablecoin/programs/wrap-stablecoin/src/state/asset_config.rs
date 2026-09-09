@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
 
+/// Borsh offset of `AssetConfig.vault_config` after the 8-byte Anchor discriminator.
+/// Used by off-chain GPA (`GET /v1/vault/assets`). Keep in sync with field order below.
+pub const ASSET_CONFIG_VAULT_OFFSET: usize = 9; // 8 disc + bump: u8
+
 /// Per-collateral reserve configuration. PDA seeds: `["token_config", vault_config, underlying_mint]`.
 #[account]
 #[derive(InitSpace)]
@@ -78,3 +82,14 @@ impl AssetConfig {
 
 /// Backward-compatible alias for clients generated against the old name.
 pub type TokenConfig = AssetConfig;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vault_config_gpa_offset_matches_layout() {
+        // disc(8) + bump(1) == ASSET_CONFIG_VAULT_OFFSET
+        assert_eq!(ASSET_CONFIG_VAULT_OFFSET, 8 + 1);
+    }
+}

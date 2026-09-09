@@ -3,7 +3,6 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
-use crate::state::VaultConfig;
 
 pub mod constants;
 pub mod errors;
@@ -72,41 +71,6 @@ fn check_mint_cap(asset_config: &crate::state::AssetConfig, mint_amount: u64) ->
     Ok(())
 }
 
-fn disable_all_asset_minting<'info>(
-    vault_config: &VaultConfig,
-    vault_config_key: Pubkey,
-    remaining_accounts: &'info [AccountInfo<'info>],
-    program_id: &Pubkey,
-) -> Result<()> {
-    let count = vault_config.asset_count as usize;
-    require!(
-        remaining_accounts.len() == count,
-        ErrorCode::InvalidAssetConfigAccounts
-    );
-
-    for (i, asset_mint) in vault_config.registered_assets[..count].iter().enumerate() {
-        let asset_config_info = &remaining_accounts[i];
-        let (expected, _bump) = Pubkey::find_program_address(
-            &[
-                crate::pda_seeds::ASSET_CONFIG_SEED,
-                vault_config_key.as_ref(),
-                asset_mint.as_ref(),
-            ],
-            program_id,
-        );
-        require!(
-            asset_config_info.key() == expected,
-            ErrorCode::InvalidAssetConfigAccounts
-        );
-
-        let mut asset_config: Account<crate::state::AssetConfig> =
-            Account::try_from(asset_config_info)?;
-        asset_config.mint_enabled = false;
-        asset_config.exit(program_id)?;
-    }
-    Ok(())
-}
-
 #[program]
 pub mod wrap_stablecoin {
     use super::*;
@@ -135,8 +99,6 @@ pub mod wrap_stablecoin {
         vault_config.wrapped_decimals = ctx.accounts.decimals_mint.decimals;
         crate::utils::validate_token_decimals(vault_config.wrapped_decimals)?;
         vault_config.vault_authority_bump = ctx.bumps.vault_authority;
-        vault_config.asset_count = 0;
-        vault_config.registered_assets = [Pubkey::default(); crate::state::MAX_REGISTERED_ASSETS];
         vault_config.total_stable_deposited = 0;
         vault_config.paused = false;
         vault_config.wrap_public = true;
@@ -165,7 +127,7 @@ pub mod wrap_stablecoin {
         crate::utils::assert_plain_collateral_mint(
             &ctx.accounts.underlying_mint.to_account_info(),
         )?;
-        let vault_config = &mut ctx.accounts.vault_config;
+        let vault_config = &ctx.accounts.vault_config;
         let asset_config = &mut ctx.accounts.asset_config;
         let mint = ctx.accounts.underlying_mint.key();
 
@@ -191,8 +153,6 @@ pub mod wrap_stablecoin {
         asset_config.exposure_cap = 0;
         asset_config.min_liquidity_target = 0;
         asset_config.asset_status = AssetStatus::Active;
-
-        vault_config.register_asset(mint)?;
 
         emit!(AssetAdded { token_mint: mint });
         Ok(())
@@ -1043,13 +1003,6 @@ pub mod wrap_stablecoin {
             ),
             AuthorityType::MintTokens,
             Some(new_mint_authority),
-        )?;
-
-        disable_all_asset_minting(
-            vault_config,
-            vault_config_key,
-            ctx.remaining_accounts,
-            ctx.program_id,
         )?;
 
         vault_config.mint_authority_transferred = true;

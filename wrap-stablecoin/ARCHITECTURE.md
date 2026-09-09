@@ -55,7 +55,7 @@ Florin (FLRN) supply tracks deposited collateral 1:1. Lending yield accumulates 
 
 Related types: `VaultConfig`, `AssetConfig`, `KLendConfig`, `Allowlist`.
 
-`VaultConfig` carries immutable `authority`, rotatable `admin`/`pending_admin`, wrapped mint, registered assets, `total_stable_deposited`, and policy flags. Four `flash_*` fields are **reserved layout** (initialized to safe defaults; unused in shipped build).
+`VaultConfig` carries immutable `authority`, rotatable `admin`/`pending_admin`, wrapped mint, `total_stable_deposited`, and policy flags. Registered collateral is discovered via `AssetConfig` PDAs (no mint list on the vault). Four `flash_*` fields are **reserved layout** (initialized to safe defaults; unused in shipped build).
 
 `AssetConfig` (seed `token_config`) pins per-asset mint, vaults, treasury, decimals, caps, and KLend enablement.
 

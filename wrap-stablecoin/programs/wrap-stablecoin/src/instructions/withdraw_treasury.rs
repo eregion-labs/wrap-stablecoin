@@ -30,8 +30,7 @@ pub struct WithdrawTreasury<'info> {
 
     #[account(
         seeds = [crate::pda_seeds::ASSET_CONFIG_SEED, vault_config.key().as_ref(), asset_config.token_mint.as_ref()],
-        bump = asset_config.bump,
-        constraint = vault_config.has_asset(&asset_config.token_mint) @ ErrorCode::AssetNotRegistered
+        bump = asset_config.bump
     )]
     pub asset_config: Box<Account<'info, AssetConfig>>,
 

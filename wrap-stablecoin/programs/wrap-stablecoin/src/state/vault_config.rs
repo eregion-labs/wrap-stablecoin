@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
 
-pub const MAX_REGISTERED_ASSETS: usize = 8;
-
 #[account]
 #[derive(InitSpace)]
 pub struct VaultConfig {
@@ -17,10 +15,6 @@ pub struct VaultConfig {
     /// Decimal precision of `wrapped_mint` (fixed at initialize).
     pub wrapped_decimals: u8,
     pub vault_authority_bump: u8,
-    /// Number of entries in `registered_assets`.
-    pub asset_count: u8,
-    /// Mints with an `AssetConfig` PDA under this vault.
-    pub registered_assets: [Pubkey; MAX_REGISTERED_ASSETS],
     /// Global wrapped token liability counter (wraps − unwraps).
     pub total_stable_deposited: u64,
     pub paused: bool,
@@ -38,30 +32,4 @@ pub struct VaultConfig {
     pub pending_mint_authority: Pubkey,
     /// When true, SPL mint authority has left this vault and `wrap` is permanently disabled.
     pub mint_authority_transferred: bool,
-}
-
-impl VaultConfig {
-    pub fn register_asset(&mut self, mint: Pubkey) -> Result<()> {
-        require!(
-            (self.asset_count as usize) < MAX_REGISTERED_ASSETS,
-            crate::errors::ErrorCode::AssetRegistryFull
-        );
-        require!(
-            !self.has_asset(&mint),
-            crate::errors::ErrorCode::AssetAlreadyRegistered
-        );
-        let idx = self.asset_count as usize;
-        self.registered_assets[idx] = mint;
-        self.asset_count = self
-            .asset_count
-            .checked_add(1)
-            .ok_or(crate::errors::ErrorCode::MathOverflow)?;
-        Ok(())
-    }
-
-    pub fn has_asset(&self, mint: &Pubkey) -> bool {
-        self.registered_assets[..self.asset_count as usize]
-            .iter()
-            .any(|m| m == mint)
-    }
 }

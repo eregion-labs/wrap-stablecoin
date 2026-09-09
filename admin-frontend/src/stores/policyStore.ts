@@ -6,7 +6,7 @@ import { atomsToInputAmount, parseTokenAmountOrZero } from "@/lib/tokenAmount";
 import { requirePubkey } from "@/lib/pubkey";
 import { getApplicationServices } from "@/providers/ClientConfigProvider";
 import type { AssetStatus, VaultAsset, VaultSummary } from "@/types/vault";
-import { MAX_REGISTERED_ASSETS, selectAssetByMint, selectRowMints } from "./selectors";
+import { selectAssetByMint, selectRowMints } from "./selectors";
 import { actionErr, actionOk, type ActionResult } from "./types";
 import { useVaultStore } from "./vaultStore";
 
@@ -120,9 +120,6 @@ export const usePolicyStore = create<PolicyState>()((set, get) => ({
     }
     if (summary.wrappedMint === assetMint) {
       return actionErr("cannot register the wrapped mint as collateral");
-    }
-    if (summary.assets.length >= MAX_REGISTERED_ASSETS) {
-      return actionErr(`vault already has the maximum of ${MAX_REGISTERED_ASSETS} assets`);
     }
 
     const draft = get().drafts[assetMint];

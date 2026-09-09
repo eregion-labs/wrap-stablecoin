@@ -40,7 +40,7 @@ The design splits user-facing flows from KLend interaction. `wrap` and `unwrap` 
 
 ## Accounts
 
-- **VaultConfig** — global config (authority, admin, pending_admin, wrapped mint, registered assets, flags). Four `flash_*` fields are reserved layout (unused in shipped build).
+- **VaultConfig** — global config (authority, admin, pending_admin, wrapped mint, flags). Collateral membership is per-`AssetConfig` PDA (no mint list on the vault). Four `flash_*` fields are reserved layout (unused in shipped build).
 - **AssetConfig** — per-collateral registry (seed `token_config`): vaults, treasury, caps, KLend wiring, and deposit/liquidity totals.
 - **Allowlist** — optional list of pubkeys permitted to wrap/unwrap when the vault is private.
 

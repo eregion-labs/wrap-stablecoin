@@ -7,10 +7,10 @@ use solana_client::rpc_client::RpcClient;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 
-use super::builder::{build_versioned_tx, fetch_asset_config, fetch_vault_config};
+use super::builder::{build_versioned_tx, fetch_vault_config, require_registered_asset};
 use super::pda::{
-    allowlist, asset_config, collateral_vault, klend_config, klend_program_id,
-    lending_market_authority, vault_authority,
+    allowlist, collateral_vault, klend_config, klend_program_id, lending_market_authority,
+    vault_authority,
 };
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
@@ -264,12 +264,9 @@ pub fn unsigned_enable_klend_tx_bytes(
     reserve_liquidity_supply: &Pubkey,
     collateral_mint: &Pubkey,
 ) -> Result<Vec<u8>> {
-    let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
-    if !vault.has_asset(asset_mint) {
-        return Err(anyhow!("asset not registered: {asset_mint}"));
-    }
+    let (vault_config_key, _vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
     let (asset_config_key, _) =
-        fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+        require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     let (klend_config_key, _) = klend_config(program_id, &asset_config_key);
     if let Ok(acc) = rpc.get_account(&klend_config_key) {
         if !acc.data.is_empty() {
@@ -362,17 +359,13 @@ pub fn unsigned_accept_mint_authority_tx_bytes(
     let new_mint_authority = vault.pending_mint_authority;
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let token_program = mint_owner(rpc, &vault.wrapped_mint)?;
-    let mut accounts = vec![
+    let accounts = vec![
         AccountMeta::new(new_mint_authority, true),
         AccountMeta::new(vault_config_key, false),
         AccountMeta::new(vault.wrapped_mint, false),
         AccountMeta::new_readonly(vault_authority_key, false),
         AccountMeta::new_readonly(token_program, false),
     ];
-    for mint in vault.registered_assets[..vault.asset_count as usize].iter() {
-        let (asset_config_key, _) = asset_config(program_id, &vault_config_key, mint);
-        accounts.push(AccountMeta::new(asset_config_key, false));
-    }
     let ix = Instruction {
         program_id: *program_id,
         accounts,

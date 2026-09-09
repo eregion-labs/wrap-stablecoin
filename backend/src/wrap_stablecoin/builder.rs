@@ -4,7 +4,11 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
 use sha2::{Digest, Sha256};
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_client::rpc_client::RpcClient;
+use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
+use solana_client::rpc_filter::{Memcmp, RpcFilterType};
+use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::legacy::Message as LegacyMessage;
@@ -17,7 +21,9 @@ use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::id as spl_token_program_id;
 use utoipa::ToSchema;
-use wrap_stablecoin::state::{Allowlist, AssetConfig, AssetStatus, KLendConfig, VaultConfig};
+use wrap_stablecoin::state::{
+    Allowlist, AssetConfig, AssetStatus, KLendConfig, VaultConfig, ASSET_CONFIG_VAULT_OFFSET,
+};
 use wrap_stablecoin::utils::{
     home_surplus_amount, liability_to_underlying_amount, underlying_to_wrapped_amount,
     wrapped_to_underlying_amount,
@@ -27,6 +33,80 @@ use wrap_stablecoin::{AddAssetArgs, UnwrapArgs, UpdateAssetPolicyArgs, WrapArgs}
 use crate::metaplex::{fetch_mint_metadata, MintMetadata};
 
 use super::{allowlist, asset_config, vault_authority, vault_config};
+
+fn asset_config_discriminator() -> [u8; 8] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"account:AssetConfig");
+    let hash = hasher.finalize();
+    let mut out = [0u8; 8];
+    out.copy_from_slice(&hash[..8]);
+    out
+}
+
+/// AssetConfig PDAs for a vault via GPA (no on-chain mint directory).
+fn list_asset_configs_for_vault(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_config_key: &Pubkey,
+) -> Result<Vec<(Pubkey, AssetConfig)>> {
+    let disc = asset_config_discriminator();
+    let accounts = rpc
+        .get_program_accounts_with_config(
+            program_id,
+            RpcProgramAccountsConfig {
+                filters: Some(vec![
+                    RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &disc)),
+                    RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                        ASSET_CONFIG_VAULT_OFFSET,
+                        vault_config_key.as_ref(),
+                    )),
+                ]),
+                account_config: RpcAccountInfoConfig {
+                    encoding: Some(UiAccountEncoding::Base64),
+                    data_slice: None,
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    min_context_slot: None,
+                },
+                with_context: Some(false),
+                sort_results: Some(false),
+            },
+        )
+        .context("GPA AssetConfig for vault")?;
+    let mut out = Vec::with_capacity(accounts.len());
+    for (addr, acc) in accounts {
+        let mut data: &[u8] = &acc.data;
+        match AssetConfig::try_deserialize(&mut data) {
+            Ok(cfg) => out.push((addr, cfg)),
+            Err(e) => {
+                tracing::warn!("skip AssetConfig {addr}: decode {e}");
+            }
+        }
+    }
+    out.sort_by(|a, b| a.1.token_mint.to_bytes().cmp(&b.1.token_mint.to_bytes()));
+    Ok(out)
+}
+
+pub(crate) fn require_registered_asset(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_config_key: &Pubkey,
+    asset_mint: &Pubkey,
+) -> Result<(Pubkey, AssetConfig)> {
+    fetch_asset_config(rpc, program_id, vault_config_key, asset_mint)
+        .map_err(|_| anyhow!("asset not registered: {asset_mint}"))
+}
+
+fn asset_config_exists(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    vault_config_key: &Pubkey,
+    asset_mint: &Pubkey,
+) -> bool {
+    let (addr, _) = asset_config(program_id, vault_config_key, asset_mint);
+    rpc.get_account(&addr)
+        .map(|a| !a.data.is_empty())
+        .unwrap_or(false)
+}
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
     let mut hasher = Sha256::new();
@@ -475,9 +555,6 @@ pub fn unsigned_wrap_tx_bytes(
     if vault.mint_authority_transferred {
         return Err(anyhow!("mint authority transferred"));
     }
-    if !vault.has_asset(asset_mint) {
-        return Err(anyhow!("asset not registered: {asset_mint}"));
-    }
     let members = fetch_allowlist_keys(rpc, program_id, &vault_config_key);
     require_user_access(
         vault.wrap_public,
@@ -488,7 +565,7 @@ pub fn unsigned_wrap_tx_bytes(
     )?;
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, asset_cfg) =
-        fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+        require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     if !asset_cfg.mint_allowed() {
         return Err(anyhow!("mint disabled for asset"));
     }
@@ -618,9 +695,6 @@ pub fn unsigned_unwrap_tx_bytes(
     if vault.paused {
         return Err(anyhow!("vault is paused"));
     }
-    if !vault.has_asset(asset_mint) {
-        return Err(anyhow!("asset not registered: {asset_mint}"));
-    }
     let members = fetch_allowlist_keys(rpc, program_id, &vault_config_key);
     require_user_access(
         vault.unwrap_public,
@@ -631,7 +705,7 @@ pub fn unsigned_unwrap_tx_bytes(
     )?;
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, asset_cfg) =
-        fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+        require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     let allowlist_meta = allowlist_slot_meta(
         rpc,
         program_id,
@@ -846,11 +920,8 @@ pub fn redeem_quote(
         return Err(anyhow!("amount must be positive"));
     }
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
-    if !vault.has_asset(asset_mint) {
-        return Err(anyhow!("asset not registered: {asset_mint}"));
-    }
     let (asset_config_key, cfg) =
-        fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+        require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
     let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
     let deployed = klend
@@ -904,10 +975,7 @@ pub fn issue_quote(
         return Err(anyhow!("amount must be positive"));
     }
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
-    if !vault.has_asset(asset_mint) {
-        return Err(anyhow!("asset not registered: {asset_mint}"));
-    }
-    let (_, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, asset_mint)?;
+    let (_, cfg) = require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     let output = underlying_to_wrapped_amount(
         amount,
         cfg.token_decimals,
@@ -950,13 +1018,8 @@ pub fn fetch_vault_assets(
 ) -> Result<VaultSummaryView> {
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
     let mut out = Vec::new();
-    for mint in vault.registered_assets[..vault.asset_count as usize].iter() {
-        if *mint == Pubkey::default() {
-            continue;
-        }
-        let (_, cfg) = fetch_asset_config(rpc, program_id, &vault_config_key, mint)?;
-        let (asset_config_key, _) =
-            crate::wrap_stablecoin::pda::asset_config(program_id, &vault_config_key, mint);
+    for (asset_config_key, cfg) in list_asset_configs_for_vault(rpc, program_id, &vault_config_key)? {
+        let mint = cfg.token_mint;
         let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
         let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
         let treasury_balance = get_token_account_amount(rpc, &cfg.treasury_vault).unwrap_or(0);
@@ -1160,7 +1223,7 @@ pub fn build_add_asset_instruction(
         program_id: *program_id,
         accounts: vec![
             AccountMeta::new(*admin, true),
-            AccountMeta::new(*vault_config_key, false),
+            AccountMeta::new_readonly(*vault_config_key, false),
             AccountMeta::new_readonly(*vault_authority_key, false),
             AccountMeta::new_readonly(*underlying_mint, false),
             AccountMeta::new(*asset_config_key, false),
@@ -1205,7 +1268,7 @@ pub fn unsigned_add_asset_tx_bytes(
     if vault.admin != *admin {
         return Err(anyhow!("signer is not vault admin"));
     }
-    if vault.has_asset(underlying_mint) {
+    if asset_config_exists(rpc, program_id, &vault_config_key, underlying_mint) {
         return Err(anyhow!("asset already registered: {underlying_mint}"));
     }
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
@@ -1246,10 +1309,8 @@ pub fn unsigned_update_asset_policy_tx_bytes(
     if vault.admin != *admin {
         return Err(anyhow!("signer is not vault admin"));
     }
-    if !vault.has_asset(underlying_mint) {
-        return Err(anyhow!("asset not registered: {underlying_mint}"));
-    }
-    let (asset_config_key, _) = asset_config(program_id, &vault_config_key, underlying_mint);
+    let (asset_config_key, _) =
+        require_registered_asset(rpc, program_id, &vault_config_key, underlying_mint)?;
     let ix = build_update_asset_policy_instruction(
         program_id,
         admin,
@@ -1276,12 +1337,9 @@ fn require_admin_asset(
     if pause_blocks && vault.paused {
         return Err(anyhow!("vault is paused"));
     }
-    if !vault.has_asset(underlying_mint) {
-        return Err(anyhow!("asset not registered: {underlying_mint}"));
-    }
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let (asset_config_key, asset_cfg) =
-        fetch_asset_config(rpc, program_id, &vault_config_key, underlying_mint)?;
+        require_registered_asset(rpc, program_id, &vault_config_key, underlying_mint)?;
     Ok((
         vault_config_key,
         vault,
@@ -1727,8 +1785,6 @@ mod allowlist_slot_tests {
             wrapped_mint_bump: 1,
             wrapped_decimals: 6,
             vault_authority_bump: 1,
-            asset_count: 1,
-            registered_assets: [Pubkey::default(); 8],
             total_stable_deposited: 0,
             paused: false,
             wrap_public: true,

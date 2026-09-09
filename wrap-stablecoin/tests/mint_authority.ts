@@ -244,7 +244,6 @@ describe("mint authority extraction", () => {
           vaultAuthority,
           tokenProgram: TOKEN_PROGRAM_ID,
         } as any)
-        .remainingAccounts([])
         .signers([newMintAuthority])
         .rpc();
     } catch (err: any) {
@@ -283,9 +282,6 @@ describe("mint authority extraction", () => {
         vaultAuthority,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
-      .remainingAccounts([
-        { pubkey: assetConfig, isWritable: true, isSigner: false },
-      ])
       .signers([newMintAuthority])
       .rpc();
 
@@ -294,9 +290,6 @@ describe("mint authority extraction", () => {
     expect(cfg.pendingMintAuthority.toBase58()).to.equal(
       PublicKey.default.toBase58(),
     );
-
-    const asset = await (program.account as any).assetConfig.fetch(assetConfig);
-    expect(asset.mintEnabled).to.equal(false);
 
     const mintInfo = await getMint(connection, wrappedMint);
     expect(mintInfo.mintAuthority?.toBase58()).to.equal(

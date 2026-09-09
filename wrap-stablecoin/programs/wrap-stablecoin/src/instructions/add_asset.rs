@@ -16,7 +16,6 @@ pub struct AddAsset<'info> {
     pub admin: Signer<'info>,
 
     #[account(
-        mut,
         seeds = [crate::pda_seeds::VAULT_CONFIG_SEED, vault_config.authority.as_ref()],
         bump = vault_config.bump,
         has_one = admin @ ErrorCode::Unauthorized

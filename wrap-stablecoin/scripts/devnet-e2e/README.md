@@ -70,8 +70,9 @@ All addresses land in `devnet-state.json`; every step is idempotent and reads it
 
 Add more homemade stables on the **existing** market (`42AN7L6…` once live). Does **not**
 run `20_seed_vault` — you Register / Enable Kamino on the admin **Reserves** page with the
-printed mint. Vault on-chain max is 8 assets (A+B already use 2 → at most 6 numbered mints
-on this vault).
+printed mint. There is no on-chain vault asset-count cap (membership is the
+`AssetConfig` PDA). Kamino per-market reserve limits still apply if you pin
+many reserves to one market.
 
 ```bash
 npx ts-node scripts/devnet-e2e/10_setup_market.ts 1 2 3
