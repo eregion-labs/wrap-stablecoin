@@ -284,6 +284,14 @@ If `ADMIN_KEYPAIR` equals the pending destination, `POST /v1/admin/accept-author
 
 ## Configuration
 
+### RPC provider requirements
+
+`SOLANA_RPC_URL` must point at a node that serves **`getProgramAccounts`** with `memcmp` filters. Since the on-chain asset registry was dropped, `GET /v1/vault/assets` discovers collateral by scanning `AssetConfig` PDAs, and there is no fallback path — on a provider that disables or throttles GPA the endpoint fails, taking the admin dashboard and the public asset list with it. Several managed providers restrict GPA on their cheaper tiers, so check before repointing `SOLANA_RPC_URL` at one.
+
+`getMultipleAccounts` is also required and is called with up to 100 keys per request.
+
+Every read behind `GET /v1/vault/assets` uses the client's configured commitment (`confirmed`): the GPA, the batched account sweeps, and the simulated `refresh_reserve` that produces the Kamino marks. The simulation has to set it explicitly — `RpcSimulateTransactionConfig` defaults to no commitment, which the RPC serves at `finalized` — so the asset list, the balances joined onto it, and the harvest/recall caps all come from one bank.
+
 Set in `.env` (see `.env.example`):
 
 - `SOLANA_RPC_URL`, `SOLANA_NETWORK`, `PROGRAM_ID`, `VAULT_AUTHORITY`, `DEFAULT_ASSET_MINT`
