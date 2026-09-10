@@ -20,6 +20,20 @@ if rg -n 'wStable' "$MONO/frontend/src" "$MONO/admin-frontend/src" "$MONO/backen
   exit 1
 fi
 
+echo "== tracked IDL matches build output =="
+idl_drift() {
+  echo "FAIL: idl/$1 has drifted from the program source"
+  echo "      regenerate and commit it, see wiki/Monorepo.md"
+  exit 1
+}
+cmp -s target/idl/wrap_stablecoin.json idl/wrap_stablecoin.json \
+  || idl_drift wrap_stablecoin.json
+# The tracked .ts differs from the build output only in the header comment,
+# which points at the tracked JSON instead of the gitignored one.
+sed 's#`target/idl/wrap_stablecoin.json`#`idl/wrap_stablecoin.json`#' target/types/wrap_stablecoin.ts \
+  | cmp -s - idl/wrap_stablecoin.ts \
+  || idl_drift wrap_stablecoin.ts
+
 echo "== IDL contains initialize_mint_metadata =="
 node -e "
 const idl = require('./target/idl/wrap_stablecoin.json');
