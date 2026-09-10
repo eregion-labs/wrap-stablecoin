@@ -5,16 +5,35 @@ import {
   metadataPda,
   TOKEN_METADATA_PROGRAM_ID,
 } from "../context";
+import { Network } from "../network";
 
-export async function metadataInitialize(from?: string): Promise<void> {
+export async function metadataInitialize(
+  network: Network,
+  dryRun: boolean,
+  from?: string,
+): Promise<void> {
   const branding = loadBranding(from);
-  const ctx = await loadCliContext();
+  const ctx = loadCliContext(network);
   const [metadata] = metadataPda(ctx.wrappedMint.toBase58());
   const metadataKey = new PublicKey(metadata);
 
   const existing = await ctx.connection.getAccountInfo(metadataKey);
   if (existing !== null && existing.data.length > 0) {
     console.log(`[metadata initialize] already exists at ${metadata}`);
+    return;
+  }
+
+  const describe = () => {
+    console.log(`  mint: ${ctx.wrappedMint.toBase58()}`);
+    console.log(`  metadata: ${metadata}`);
+    console.log(`  name: ${branding.name}`);
+    console.log(`  symbol: ${branding.symbol}`);
+    console.log(`  uri: ${branding.metadataUri}`);
+  };
+
+  if (dryRun) {
+    console.log("[dry-run] initialize_mint_metadata");
+    describe();
     return;
   }
 
@@ -32,15 +51,11 @@ export async function metadataInitialize(from?: string): Promise<void> {
     .rpc();
 
   console.log(`[metadata initialize] tx ${sig}`);
-  console.log(`  mint: ${ctx.wrappedMint.toBase58()}`);
-  console.log(`  metadata: ${metadata}`);
-  console.log(`  name: ${branding.name}`);
-  console.log(`  symbol: ${branding.symbol}`);
-  console.log(`  uri: ${branding.metadataUri}`);
+  describe();
 }
 
-export async function metadataShow(): Promise<void> {
-  const ctx = await loadCliContext();
+export async function metadataShow(network: Network): Promise<void> {
+  const ctx = loadCliContext(network);
   const [metadata] = metadataPda(ctx.wrappedMint.toBase58());
   const account = await ctx.connection.getAccountInfo(new PublicKey(metadata));
   if (!account) {
@@ -54,9 +69,9 @@ export async function metadataShow(): Promise<void> {
   console.log(JSON.stringify({ wrappedMint: ctx.wrappedMint.toBase58(), metadata, ...parsed }, null, 2));
 }
 
-export async function metadataVerify(from?: string, full = false): Promise<void> {
+export async function metadataVerify(network: Network, from?: string, full = false): Promise<void> {
   const branding = loadBranding(from);
-  const ctx = await loadCliContext();
+  const ctx = loadCliContext(network);
   const [metadata] = metadataPda(ctx.wrappedMint.toBase58());
   const metadataKey = new PublicKey(metadata);
   const account = await ctx.connection.getAccountInfo(metadataKey);
@@ -102,27 +117,39 @@ export async function metadataVerify(from?: string, full = false): Promise<void>
   console.log("metadata verify OK");
 }
 
-export async function metadataUpdateUri(uri: string): Promise<void> {
-  if (!uri) throw new Error("uri required");
-  const ctx = await loadCliContext();
+/** update_metadata_accounts_v2 against the Florin metadata account. */
+async function updateMetadata(
+  network: Network,
+  dryRun: boolean,
+  label: string,
+  change: string,
+  fields: { uri?: string; isMutable?: boolean },
+): Promise<void> {
+  const ctx = loadCliContext(network);
   const [metadata] = metadataPda(ctx.wrappedMint.toBase58());
-  const ix = buildUpdateMetadataV2Ix(new PublicKey(metadata), ctx.authority.publicKey, { uri });
-  const tx = new Transaction().add(ix);
-  const sig = await ctx.connection.sendTransaction(tx, [ctx.authority]);
+  if (dryRun) {
+    console.log(`[dry-run] ${label} ${change} on ${metadata}`);
+    return;
+  }
+  const ix = buildUpdateMetadataV2Ix(new PublicKey(metadata), ctx.authority.publicKey, fields);
+  const sig = await ctx.connection.sendTransaction(new Transaction().add(ix), [ctx.authority]);
   await ctx.connection.confirmTransaction(sig, "confirmed");
-  console.log(`[metadata update-uri] tx ${sig}`);
+  console.log(`[${label}] ${change} tx ${sig}`);
 }
 
-export async function metadataRevokeAuthority(): Promise<void> {
-  const ctx = await loadCliContext();
-  const [metadata] = metadataPda(ctx.wrappedMint.toBase58());
-  const ix = buildUpdateMetadataV2Ix(new PublicKey(metadata), ctx.authority.publicKey, {
+export async function metadataUpdateUri(
+  network: Network,
+  dryRun: boolean,
+  uri: string,
+): Promise<void> {
+  if (!uri) throw new Error("uri required");
+  await updateMetadata(network, dryRun, "metadata update-uri", `uri=${uri}`, { uri });
+}
+
+export async function metadataRevokeAuthority(network: Network, dryRun: boolean): Promise<void> {
+  await updateMetadata(network, dryRun, "metadata revoke-authority", "is_mutable=false", {
     isMutable: false,
   });
-  const tx = new Transaction().add(ix);
-  const sig = await ctx.connection.sendTransaction(tx, [ctx.authority]);
-  await ctx.connection.confirmTransaction(sig, "confirmed");
-  console.log(`[metadata revoke-authority] set is_mutable=false tx ${sig}`);
 }
 
 function buildUpdateMetadataV2Ix(

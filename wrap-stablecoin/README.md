@@ -88,6 +88,52 @@ The validator runs as a **background job** in that terminal (`&`); slot logs kee
 
 See [../wiki/Local-development.md](../wiki/Local-development.md) for full reference (Kamino fixtures, env vars, backend/frontend setup).
 
+## Deploying to devnet / mainnet
+
+One CLI ([`cli/`](cli/)) covers deploy, vault bootstrap, and env rendering. Every
+command takes `--network`; every write step is idempotent, so re-running is safe.
+
+```bash
+pnpm cli deploy   --network devnet
+pnpm cli init     --network devnet --decimals-mint <mint> --reserve <klend-reserve>
+pnpm cli sync-env --network devnet
+pnpm cli metadata initialize --network devnet
+```
+
+| Command | Does |
+|---------|------|
+| `deploy` | `anchor build`, then `anchor deploy` or `anchor upgrade` depending on whether the program id already exists on the cluster |
+| `init` | `initialize` → `add_asset` → `enable_klend`, skipping any step whose account exists, then writes `deployments/<network>.json` |
+| `sync-env` | Renders `backend/.env` + both `.env.local` files from that artifact |
+| `metadata` | Florin mint metadata (see [../branding](../branding)) |
+
+Further collateral is a second `init --asset <mint> --reserve <reserve>`, or the
+Reserves page in the admin console (`POST /v1/admin/register-asset`).
+
+`--reserve` is the only Kamino input: the reserve's market, liquidity supply, and
+kToken mint are read off the account ([`cli/klend.ts`](cli/klend.ts)) and
+re-validated on-chain by `enable_klend`.
+
+### Safety rails
+
+- `--dry-run` resolves every address and prints the steps without sending anything.
+- Mainnet writes need `--confirm`.
+- Mainnet refuses to fall back to the fixture wallet or a default RPC: set
+  `ANCHOR_WALLET_MAINNET` and `RPC_URL_MAINNET`. Env keys follow the backend
+  convention `{KEY}_{LOCALNET|DEVNET|MAINNET}` → `{KEY}`, except on mainnet,
+  which reads only its own scoped key so a stray `ANCHOR_WALLET` from a localnet
+  shell can never sign there.
+- `deploy` checks the right key for the path it takes. A **first deploy** aborts
+  unless `target/deploy/wrap_stablecoin-keypair.json` matches `declare_id!` —
+  `anchor build` mints a fresh keypair whenever that file is missing, and
+  publishing under it would move the program away from the address every PDA
+  derives from. An **upgrade** never reads that file; it aborts unless the
+  deployer wallet is the program's on-chain upgrade authority.
+- The program's **upgrade authority** is the `deploy` signer
+  (`DEPLOYER_WALLET_*`), never the vault admin that `init` signs with. Point it
+  at a multisig before mainnet; the vault admin rotates separately on-chain via
+  `transfer_authority` / `accept_authority`.
+
 ## Running E2E tests locally
 
 The e2e tests run against cloned mainnet KLend state, allowing full CPI integration without depending on live RPC at test time.

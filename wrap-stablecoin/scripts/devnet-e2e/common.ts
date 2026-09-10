@@ -13,25 +13,19 @@ import {
     TransactionInstruction,
     sendAndConfirmTransaction,
 } from '@solana/web3.js'
+import { KLEND_PROGRAM_ID, lendingMarketAuthority } from '../../cli/klend'
+import { loadKeypair, rpcUrl, walletPath } from '../../cli/network'
 
-export const RPC_URL = process.env.RPC_URL ?? 'https://api.devnet.solana.com'
-export const KLEND_PROGRAM = new PublicKey('KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD')
-/** wrap_stablecoin program deployed on devnet (fresh keypair, declare_id updated to match). */
-export const WRAP_PROGRAM = new PublicKey('DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ')
+export const RPC_URL = rpcUrl('devnet')
+export const KLEND_PROGRAM = KLEND_PROGRAM_ID
 /** Live devnet Pyth receiver USDC/USD price update account; both test stables peg ~$1. */
 export const PYTH_USDC_FEED = new PublicKey('Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX')
 
-const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
-export const SECRETS_DIR = process.env.SECRETS_DIR ?? path.join(PACKAGE_ROOT, '.secrets')
 export const STATE_FILE = path.join(__dirname, 'devnet-state.json')
-
-export function loadKeypair(file: string): Keypair {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, 'utf8'))))
-}
 
 /** Admin keypair: vault authority/admin, KLend market owner, mint authority of both test tokens. */
 export function adminKeypair(): Keypair {
-    return loadKeypair(path.join(SECRETS_DIR, 'admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json'))
+    return loadKeypair(walletPath('devnet'))
 }
 
 export interface AssetState {
@@ -153,9 +147,7 @@ export function refreshReserveIx(reserve: PublicKey, market: PublicKey): Transac
     })
 }
 
-export function lmaPda(market: PublicKey): PublicKey {
-    return PublicKey.findProgramAddressSync([Buffer.from('lma'), market.toBuffer()], KLEND_PROGRAM)[0]
-}
+export const lmaPda = lendingMarketAuthority
 
 /** Vault-seeded e2e assets only — numbered dummies are registered via the admin Reserves UI. */
 export const VAULT_ASSET_KEYS = ['A', 'B'] as const
