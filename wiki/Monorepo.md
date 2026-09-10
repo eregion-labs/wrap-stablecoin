@@ -49,7 +49,24 @@ anchor build
 anchor run local   # also syncs backend + frontend env files
 ```
 
-IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
+IDL build output lands in `wrap-stablecoin/target/`, which is gitignored, so a fresh checkout has no IDL until something builds. The **committed** copy under `wrap-stablecoin/idl/` removes that dependency for the consumers that read the IDL directly:
+
+- `scripts/devnet-e2e/20_seed_vault.ts` and `40_flow_test.ts` `require()` `idl/wrap_stablecoin.json` at runtime, so they run against a fresh checkout with no build.
+- The mocha tests, `cli/`, `scripts/backend_smoke.ts` and `scripts/seed_localnet.ts` import only the `WrapStablecoin` **type** from `idl/wrap_stablecoin.ts`. Their runtime `Program` still comes from `anchor.workspace.wrapStablecoin`, which Anchor resolves to `target/idl/`, so those still need `anchor build` first.
+
+After any change to program accounts, instructions or errors, regenerate the tracked copy and commit it:
+
+```bash
+cd wrap-stablecoin
+anchor idl build -o idl/wrap_stablecoin.json -t idl/wrap_stablecoin.ts
+# `anchor idl build -t` always writes `target/idl/...` into the .ts header
+# comment regardless of -o, so re-point it at the tracked JSON:
+sed -i 's#`target/idl/wrap_stablecoin.json`#`idl/wrap_stablecoin.json`#' idl/wrap_stablecoin.ts
+```
+
+Apart from that header comment the tracked files are byte-identical to the build output, so `cmp target/idl/wrap_stablecoin.json idl/wrap_stablecoin.json` after a build tells you whether the committed IDL has drifted from the program source. `scripts/verify_branding_release.sh` runs that check on both artifacts, normalizing the `.ts` header comment before comparing.
+
+Destinations are recorded in `wrap-stablecoin/.idl-sync.json`.
 
 ## Backend
 

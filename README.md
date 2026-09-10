@@ -40,7 +40,7 @@ anchor build
 anchor run local   # persistent localnet + KLend — see wiki/Local-development.md
 ```
 
-IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
+IDL build output: `wrap-stablecoin/target/idl/wrap_stablecoin.json` (gitignored). The copy TS consumers read is the committed `wrap-stablecoin/idl/` — regenerate and commit it after any program change, see [`wiki/Monorepo.md`](wiki/Monorepo.md#on-chain-program).
 
 ## Backend (Axum + utoipa + Solana)
 

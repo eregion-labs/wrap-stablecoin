@@ -61,7 +61,7 @@ User unwrap never recalls Kamino automatically.
 1. Generate a **new authority keypair** — this is what makes the `vault_config` PDA address different.
 2. Run `initialize` against it, then `add_asset` and `enable_klend` per collateral.
 3. Repoint the backend at the new authority: `VAULT_AUTHORITY_DEVNET` (or `VAULT_AUTHORITY_LOCALNET` / `VAULT_AUTHORITY_MAINNET`, falling back to the unsuffixed `VAULT_AUTHORITY`), then restart it.
-4. Rebuild and redistribute the IDL: `anchor idl build -o target/idl/wrap_stablecoin.json -t target/types/wrap_stablecoin.ts`, then the `sync-idl` flow. Both artifacts embed the discriminator and both are read by clients (`target/types` by the TS tests and scripts), so regenerating only one leaves a copy that cannot decode the new vault.
+4. Rebuild the IDL into the tracked copy and commit it — see [`Monorepo.md`](Monorepo.md#on-chain-program) for the exact commands. Both artifacts embed the discriminator: the JSON is what the devnet-e2e scripts decode with, the `.ts` is what the tests and CLI type against, so regenerating only one leaves a copy that cannot decode the new vault. The `anchor.workspace` consumers (mocha tests, `cli/`, the smoke scripts) take their runtime IDL from `target/idl/`, so they need a fresh `anchor build` on top of the tracked copy.
 
 Any future change that moves or removes an existing `VaultConfig` field must bump the trailing digit of the pinned discriminator, or the same silent-decode hazard returns.
 
