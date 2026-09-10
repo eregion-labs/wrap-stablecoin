@@ -10,7 +10,6 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_client::rpc_filter::{Memcmp, RpcFilterType};
 use solana_sdk::account::Account;
-use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::legacy::Message as LegacyMessage;
@@ -59,7 +58,9 @@ fn list_asset_configs_for_vault(
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
                     data_slice: None,
-                    commitment: Some(CommitmentConfig::confirmed()),
+                    // The client's level, not a fixed one: this list is joined against per-asset
+                    // reads that all use it, so a second source of truth would let the two drift.
+                    commitment: Some(rpc.commitment()),
                     min_context_slot: None,
                 },
                 with_context: Some(false),
@@ -497,6 +498,11 @@ fn klend_reserve_mark_live(
     let config = RpcSimulateTransactionConfig {
         sig_verify: false,
         replace_recent_blockhash: true,
+        // Explicit, because the field's default is `None` and the client then falls back to
+        // `CommitmentConfig::default()`, which is finalized. This mark drives the harvest and
+        // recall caps, so it has to come from the same bank as the `stored` fallback below and as
+        // the balances joined onto it in `fetch_vault_assets`.
+        commitment: Some(rpc.commitment()),
         accounts: Some(RpcSimulateTransactionAccountsConfig {
             encoding: Some(UiAccountEncoding::Base64),
             addresses: vec![klend.reserve.to_string()],

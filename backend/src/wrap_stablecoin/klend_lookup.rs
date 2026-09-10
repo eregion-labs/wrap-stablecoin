@@ -7,7 +7,6 @@ use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_client::rpc_filter::{Memcmp, RpcFilterType};
-use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use tracing::warn;
 use utoipa::ToSchema;
@@ -132,7 +131,7 @@ fn gpa_reserves(rpc: &RpcClient, mint: &Pubkey) -> Result<Vec<KlendReserveMatch>
                 // to encode accounts over 128 bytes, so the whole call errors out.
                 encoding: Some(UiAccountEncoding::Base64),
                 data_slice: None,
-                commitment: Some(CommitmentConfig::confirmed()),
+                commitment: Some(rpc.commitment()),
                 min_context_slot: None,
             },
             with_context: Some(false),
