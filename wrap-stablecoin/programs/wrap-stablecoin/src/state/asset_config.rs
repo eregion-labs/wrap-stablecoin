@@ -1,8 +1,11 @@
 use anchor_lang::prelude::*;
 
-/// Borsh offset of `AssetConfig.vault_config` after the 8-byte Anchor discriminator.
-/// Used by off-chain GPA (`GET /v1/vault/assets`). Keep in sync with field order below.
-pub const ASSET_CONFIG_VAULT_OFFSET: usize = 9; // 8 disc + bump: u8
+/// Byte offset of `AssetConfig.vault_config` from the START of the account data, discriminator
+/// included: 8 for the discriminator plus 1 for `bump`. This is the form a `memcmp` filter wants,
+/// so it is what the backend GPA in `GET /v1/vault/assets` passes. Reordering the fields below
+/// without updating it makes that filter match nothing and the vault report no collateral, so
+/// `gpa_offset_locates_vault_config` pins it against the real serialized layout.
+pub const ASSET_CONFIG_VAULT_OFFSET: usize = 9;
 
 /// Per-collateral reserve configuration. PDA seeds: `["token_config", vault_config, underlying_mint]`.
 #[account]
@@ -86,10 +89,48 @@ pub type TokenConfig = AssetConfig;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anchor_lang::{AccountSerialize, Discriminator};
 
+    fn sample(vault_config: Pubkey) -> AssetConfig {
+        AssetConfig {
+            bump: 255,
+            vault_config,
+            token_mint: Pubkey::new_unique(),
+            token_decimals: 6,
+            treasury_vault: Pubkey::new_unique(),
+            treasury_vault_bump: 254,
+            token_vault: Pubkey::new_unique(),
+            token_vault_bump: 253,
+            total_deposits: 1,
+            total_wrapped_minted: 2,
+            total_redemptions: 3,
+            mint_enabled: true,
+            redeem_enabled: true,
+            mint_haircut_bps: 4,
+            redemption_haircut_bps: 5,
+            mint_cap: 6,
+            exposure_cap: 7,
+            min_liquidity_target: 8,
+            asset_status: AssetStatus::Active,
+        }
+    }
+
+    /// Serializes a real `AssetConfig` and reads `vault_config` back out at the constant, so a
+    /// reordered field or a changed discriminator width fails here instead of silently emptying
+    /// the backend's GPA result.
     #[test]
-    fn vault_config_gpa_offset_matches_layout() {
-        // disc(8) + bump(1) == ASSET_CONFIG_VAULT_OFFSET
-        assert_eq!(ASSET_CONFIG_VAULT_OFFSET, 8 + 1);
+    fn gpa_offset_locates_vault_config() {
+        let vault_config = Pubkey::new_unique();
+        let mut data = Vec::new();
+        sample(vault_config).try_serialize(&mut data).unwrap();
+
+        assert_eq!(
+            &data[ASSET_CONFIG_VAULT_OFFSET..ASSET_CONFIG_VAULT_OFFSET + 32],
+            vault_config.as_ref()
+        );
+        assert_eq!(
+            ASSET_CONFIG_VAULT_OFFSET,
+            AssetConfig::DISCRIMINATOR.len() + 1
+        );
     }
 }
