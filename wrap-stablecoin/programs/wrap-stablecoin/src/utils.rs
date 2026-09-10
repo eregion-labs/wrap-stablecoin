@@ -77,9 +77,7 @@ pub fn convert_amount(amount: u64, from_decimals: u8, to_decimals: u8) -> Result
     let amount = amount as u128;
     let result = if from_decimals < to_decimals {
         let factor = pow10(to_decimals - from_decimals)?;
-        amount
-            .checked_mul(factor)
-            .ok_or(ErrorCode::MathOverflow)?
+        amount.checked_mul(factor).ok_or(ErrorCode::MathOverflow)?
     } else {
         let factor = pow10(from_decimals - to_decimals)?;
         amount.checked_div(factor).ok_or(ErrorCode::MathOverflow)?
@@ -111,11 +109,7 @@ pub fn underlying_to_wrapped_amount(
     wrapped_decimals: u8,
     mint_haircut_bps: u16,
 ) -> Result<u64> {
-    let scaled = convert_amount(
-        underlying_amount,
-        underlying_decimals,
-        wrapped_decimals,
-    )?;
+    let scaled = convert_amount(underlying_amount, underlying_decimals, wrapped_decimals)?;
     apply_mint_haircut(scaled, mint_haircut_bps)
 }
 
@@ -126,11 +120,7 @@ pub fn wrapped_to_underlying_amount(
     wrapped_decimals: u8,
     redemption_haircut_bps: u16,
 ) -> Result<u64> {
-    let scaled = convert_amount(
-        wrapped_amount,
-        wrapped_decimals,
-        underlying_decimals,
-    )?;
+    let scaled = convert_amount(wrapped_amount, wrapped_decimals, underlying_decimals)?;
     apply_redemption_haircut(scaled, redemption_haircut_bps)
 }
 
@@ -141,6 +131,34 @@ pub fn liability_to_underlying_amount(
     wrapped_decimals: u8,
 ) -> Result<u64> {
     convert_amount(liability_wstable, wrapped_decimals, underlying_decimals)
+}
+
+/// Tracked Kamino principal once `remaining` of `total_before` kTokens are left in the vault.
+///
+/// A redeem returns principal *and* accrued yield, so the liquidity received is not the amount
+/// of principal that left. Principal instead scales with the surviving kToken share:
+/// `principal * remaining / total_before`.
+///
+/// Rounds up so the retained principal is never understated — `harvest_yield` treats this value
+/// as the floor that must stay in Kamino, and an understated floor would let a harvest pull
+/// backing out as if it were yield. An empty pre-redeem balance is rejected rather than treated
+/// as a full exit, so a corrupt state can never silently erase that floor.
+pub fn remaining_klend_principal(principal: u64, remaining: u64, total_before: u64) -> Result<u64> {
+    require!(
+        total_before > 0,
+        ErrorCode::InconsistentKlendCollateralBalance
+    );
+    require!(
+        remaining <= total_before,
+        ErrorCode::InconsistentKlendCollateralBalance
+    );
+
+    let scaled = (principal as u128)
+        .checked_mul(remaining as u128)
+        .ok_or(ErrorCode::MathOverflow)?
+        .div_ceil(total_before as u128);
+
+    u64::try_from(scaled).map_err(|_| ErrorCode::MathOverflow.into())
 }
 
 /// Post-recall home vault surplus: `max(0, token_vault − liability_underlying − cushion)`.
@@ -271,11 +289,67 @@ mod tests {
 
     #[test]
     fn home_surplus_after_liability_and_cushion() {
-        let surplus =
-            home_surplus_amount(1_100_000, 1_000_000, 6, 6, 0).unwrap();
+        let surplus = home_surplus_amount(1_100_000, 1_000_000, 6, 6, 0).unwrap();
         assert_eq!(surplus, 100_000);
         let none = home_surplus_amount(900_000, 1_000_000, 6, 6, 0).unwrap();
         assert_eq!(none, 0);
+    }
+
+    #[test]
+    fn remaining_principal_scales_with_ktoken_share() {
+        // A quarter of the kTokens still held -> a quarter of the principal stays tracked.
+        assert_eq!(remaining_klend_principal(1_000, 250, 1_000).unwrap(), 250);
+    }
+
+    #[test]
+    fn remaining_principal_full_redeem_is_zero() {
+        assert_eq!(remaining_klend_principal(1_000, 0, 1_000).unwrap(), 0);
+    }
+
+    #[test]
+    fn remaining_principal_no_redeem_is_unchanged() {
+        assert_eq!(
+            remaining_klend_principal(1_000, 1_000, 1_000).unwrap(),
+            1_000
+        );
+    }
+
+    #[test]
+    fn remaining_principal_rounds_up() {
+        // 1000 * 2 / 3 == 666.67 -> 667, never 666.
+        assert_eq!(remaining_klend_principal(1_000, 2, 3).unwrap(), 667);
+    }
+
+    #[test]
+    fn remaining_principal_survives_u64_max() {
+        // The u128 intermediate exists for this: principal * remaining overflows u64.
+        assert_eq!(
+            remaining_klend_principal(u64::MAX, u64::MAX, u64::MAX).unwrap(),
+            u64::MAX
+        );
+        assert_eq!(
+            remaining_klend_principal(u64::MAX, u64::MAX / 2, u64::MAX).unwrap(),
+            u64::MAX / 2
+        );
+    }
+
+    #[test]
+    fn remaining_principal_ignores_accrued_yield() {
+        // Regression: deposit 1000, position grows to 1100, recall half the kTokens so 500
+        // remain. Subtracting liquidity_received (550) would leave 450 tracked while 500 is
+        // still deployed, handing harvest_yield a 50-token slice of user backing.
+        assert_eq!(remaining_klend_principal(1_000, 500, 1_000).unwrap(), 500);
+    }
+
+    #[test]
+    fn remaining_principal_rejects_remaining_above_total() {
+        assert!(remaining_klend_principal(1_000, 1_001, 1_000).is_err());
+    }
+
+    #[test]
+    fn remaining_principal_rejects_zero_total() {
+        // Zeroing the tracked principal here would hand harvest_yield an empty floor.
+        assert!(remaining_klend_principal(1_000, 0, 0).is_err());
     }
 
     #[test]
