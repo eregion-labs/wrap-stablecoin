@@ -1,5 +1,6 @@
 use anchor_lang::AccountDeserialize;
 use anchor_lang::AnchorSerialize;
+use anchor_lang::Discriminator;
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
@@ -35,28 +36,21 @@ use crate::metaplex::{fetch_mint_metadata, MintMetadata};
 
 use super::{allowlist, asset_config, vault_authority, vault_config};
 
-fn asset_config_discriminator() -> [u8; 8] {
-    let mut hasher = Sha256::new();
-    hasher.update(b"account:AssetConfig");
-    let hash = hasher.finalize();
-    let mut out = [0u8; 8];
-    out.copy_from_slice(&hash[..8]);
-    out
-}
-
 /// AssetConfig PDAs for a vault via GPA (no on-chain mint directory).
 fn list_asset_configs_for_vault(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_config_key: &Pubkey,
 ) -> Result<Vec<(Pubkey, AssetConfig)>> {
-    let disc = asset_config_discriminator();
     let accounts = rpc
         .get_program_accounts_with_config(
             program_id,
             RpcProgramAccountsConfig {
                 filters: Some(vec![
-                    RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &disc)),
+                    RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                        0,
+                        AssetConfig::DISCRIMINATOR,
+                    )),
                     RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                         ASSET_CONFIG_VAULT_OFFSET,
                         vault_config_key.as_ref(),
