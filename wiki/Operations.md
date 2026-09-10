@@ -52,6 +52,19 @@ User unwrap never recalls Kamino automatically.
 - **Public wrap/unwrap:** `set_wrap_public` / `set_unwrap_public`; when false, callers must be on the allowlist (or be admin). Init the allowlist PDA and add members **before** flipping a flag private.
 - **Cushion:** set the pool’s min liquidity (`min_liquidity_target`) to reserve home vault on Kamino deploy and home-surplus sweep.
 
+## Vault layout revisions
+
+`VaultConfig`'s discriminator is pinned to `b"vaultcf2"` (`VAULT_CONFIG_DISCRIMINATOR` in `state/vault_config.rs`), not derived from the type name. Dropping `asset_count`/`registered_assets` shifted every field from `total_stable_deposited` onward 257 bytes earlier (`admin` and everything before `total_stable_deposited` kept its offset, which is what made the break easy to miss). The pin is what turns a stale vault into a hard `AccountDiscriminatorMismatch` instead of a decode into garbage `total_stable_deposited`, `paused`, `wrap_public` and `mint_authority_transferred` — silent on a vault whose registry was still empty, and a misleading `AccountDidNotDeserialize` once assets were registered.
+
+**A vault initialized before that change cannot be read, repaired, or migrated.** Deploying this program against an existing devnet or mainnet vault will fail every instruction that touches `vault_config`. Because the PDA is seeded `["vault_config", authority]` and `initialize` uses `init`, the old address stays occupied — you cannot re-init over it. To bring up a working vault:
+
+1. Generate a **new authority keypair** — this is what makes the `vault_config` PDA address different.
+2. Run `initialize` against it, then `add_asset` and `enable_klend` per collateral.
+3. Repoint the backend at the new authority: `VAULT_AUTHORITY_DEVNET` (or `VAULT_AUTHORITY_LOCALNET` / `VAULT_AUTHORITY_MAINNET`, falling back to the unsuffixed `VAULT_AUTHORITY`), then restart it.
+4. Rebuild and redistribute the IDL: `anchor idl build -o target/idl/wrap_stablecoin.json -t target/types/wrap_stablecoin.ts`, then the `sync-idl` flow. Both artifacts embed the discriminator and both are read by clients (`target/types` by the TS tests and scripts), so regenerating only one leaves a copy that cannot decode the new vault.
+
+Any future change that moves or removes an existing `VaultConfig` field must bump the trailing digit of the pinned discriminator, or the same silent-decode hazard returns.
+
 ## Launch recipe (open wrap, discounted redeem)
 
 Init already defaults both flags to public and haircuts to 0. Launch posture is ops, not code defaults.
