@@ -14,7 +14,7 @@ backend/                  # Axum API (unsigned tx builder + public client-config
 frontend/                 # Next.js wallet UI
 admin-frontend/           # Next.js operator console (backend-signed admin txs)
 shared/client-config/     # Shared Zod schema for GET /v1/client-config
-deployments/              # Cluster artifacts (localnet.json from anchor run local)
+deployments/              # Per-cluster deploy artifacts written by `cli init`
 wiki/                     # This wiki
 ```
 
@@ -51,8 +51,9 @@ anchor run local   # also syncs backend + frontend env files
 
 IDL build output lands in `wrap-stablecoin/target/`, which is gitignored, so a fresh checkout has no IDL until something builds. The **committed** copy under `wrap-stablecoin/idl/` removes that dependency for the consumers that read the IDL directly:
 
-- `scripts/devnet-e2e/20_seed_vault.ts` and `40_flow_test.ts` `require()` `idl/wrap_stablecoin.json` at runtime, so they run against a fresh checkout with no build.
-- The mocha tests, `cli/`, `scripts/backend_smoke.ts` and `scripts/seed_localnet.ts` import only the `WrapStablecoin` **type** from `idl/wrap_stablecoin.ts`. Their runtime `Program` still comes from `anchor.workspace.wrapStablecoin`, which Anchor resolves to `target/idl/`, so those still need `anchor build` first.
+- `scripts/devnet-e2e/40_flow_test.ts` `require()`s `idl/wrap_stablecoin.json` at runtime, so it runs against a fresh checkout with no build.
+- `cli/` reads the same file for both the runtime `Program` and the program id (`cli/network.ts`), so every CLI command — and `20_seed_vault.ts` and `seed_localnet.ts`, which call `cli init` — works with no build. `scripts/local_env.sh` reads it too, so the localnet validator loads the program at `declare_id!` rather than at whatever keypair `anchor build` last wrote.
+- The mocha tests and `scripts/backend_smoke.ts` import only the `WrapStablecoin` **type** from `idl/wrap_stablecoin.ts`. Their runtime `Program` still comes from `anchor.workspace.wrapStablecoin`, which Anchor resolves to `target/idl/`, so those still need `anchor build` first.
 
 After any change to program accounts, instructions or errors, regenerate the tracked copy and commit it:
 

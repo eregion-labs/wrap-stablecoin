@@ -51,7 +51,6 @@ echo "═══ Phase B: stop prior validator + fetch KLend + build ═══"
 local_env_kill_prior_validators
 bash "$ROOT/scripts/local_stop.sh" 2>/dev/null || true
 bash "$ROOT/scripts/fetch_klend_so.sh"
-anchor keys sync 2>/dev/null || true
 anchor build
 local_env_resolve_program_id
 echo "PROGRAM_ID=$PROGRAM_ID"
