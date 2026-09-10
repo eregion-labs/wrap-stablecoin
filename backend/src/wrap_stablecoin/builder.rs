@@ -1607,7 +1607,7 @@ pub fn unsigned_withdraw_from_klend_tx_bytes(
         klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
     let mark = decode_klend_reserve_live(rpc, &cpi.klend, admin, scope_prices)
         .ok_or_else(|| anyhow!("could not decode KLend reserve for exchange rate"))?;
-    let vault_ktokens = token_amount_or_zero(rpc, &cpi.collateral_vault);
+    let vault_ktokens = get_token_account_amount(rpc, &cpi.collateral_vault)?;
     let collateral_amount =
         underlying_to_ktokens(underlying_amount as u128, &mark).min(vault_ktokens);
     if collateral_amount == 0 {
