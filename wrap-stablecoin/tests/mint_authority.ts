@@ -16,7 +16,7 @@ import {
 } from "@solana/spl-token";
 import * as fs from "node:fs";
 import { expect } from "chai";
-import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import { WrapStablecoin } from "../idl/wrap_stablecoin";
 import {
   ASSET_CONFIG_SEED,
   TOKEN_VAULT_SEED,

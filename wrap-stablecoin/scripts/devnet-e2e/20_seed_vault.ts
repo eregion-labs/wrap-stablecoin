@@ -11,7 +11,7 @@ import { PublicKey, SystemProgram } from '@solana/web3.js'
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { adminKeypair, connection, lmaPda, readState, VAULT_ASSET_KEYS, WRAP_PROGRAM, writeState } from './common'
 
-const IDL = require('../../target/idl/wrap_stablecoin.json')
+const IDL = require('../../idl/wrap_stablecoin.json')
 
 const S = {
     vaultConfig: Buffer.from('vault_config'),

@@ -10,7 +10,7 @@ import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAccount, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { adminKeypair, connection, KLEND_PROGRAM, lmaPda, readState, refreshReserveIx } from './common'
 
-const IDL = require('../../target/idl/wrap_stablecoin.json')
+const IDL = require('../../idl/wrap_stablecoin.json')
 const BN = anchor.BN
 
 const WRAP = new BN(100_000_000_000) // 100k

@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import { WrapStablecoin } from "../idl/wrap_stablecoin";
 
 describe("wrap-stablecoin", () => {
   // Configure the client to use the local cluster.

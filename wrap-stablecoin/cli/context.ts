@@ -2,7 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import * as fs from "node:fs";
-import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import { WrapStablecoin } from "../idl/wrap_stablecoin";
 import {
   VAULT_AUTHORITY_SEED,
   VAULT_CONFIG_SEED,

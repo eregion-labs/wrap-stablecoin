@@ -47,7 +47,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import * as fs from "node:fs";
-import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import { WrapStablecoin } from "../idl/wrap_stablecoin";
 import { seedLocalnet } from "./seed_localnet";
 
 const BACKEND_BASE = process.env.BACKEND_BASE || "http://127.0.0.1:8080";
