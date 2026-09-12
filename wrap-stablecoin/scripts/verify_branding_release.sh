@@ -28,10 +28,7 @@ idl_drift() {
 }
 cmp -s target/idl/wrap_stablecoin.json idl/wrap_stablecoin.json \
   || idl_drift wrap_stablecoin.json
-# The tracked .ts differs from the build output only in the header comment,
-# which points at the tracked JSON instead of the gitignored one.
-sed 's#`target/idl/wrap_stablecoin.json`#`idl/wrap_stablecoin.json`#' target/types/wrap_stablecoin.ts \
-  | cmp -s - idl/wrap_stablecoin.ts \
+cmp -s target/types/wrap_stablecoin.ts idl/wrap_stablecoin.ts \
   || idl_drift wrap_stablecoin.ts
 
 echo "== IDL contains initialize_mint_metadata =="

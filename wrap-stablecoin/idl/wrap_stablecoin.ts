@@ -2,7 +2,7 @@
  * Program IDL in camelCase format in order to be used in JS/TS.
  *
  * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `idl/wrap_stablecoin.json`.
+ * IDL can be found at `target/idl/wrap_stablecoin.json`.
  */
 export type WrapStablecoin = {
   "address": "DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ",

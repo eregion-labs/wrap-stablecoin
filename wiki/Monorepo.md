@@ -59,14 +59,11 @@ After any change to program accounts, instructions or errors, regenerate the tra
 ```bash
 cd wrap-stablecoin
 anchor idl build -o idl/wrap_stablecoin.json -t idl/wrap_stablecoin.ts
-# `anchor idl build -t` always writes `target/idl/...` into the .ts header
-# comment regardless of -o, so re-point it at the tracked JSON:
-sed -i 's#`target/idl/wrap_stablecoin.json`#`idl/wrap_stablecoin.json`#' idl/wrap_stablecoin.ts
 ```
 
-Apart from that header comment the tracked files are byte-identical to the build output, so `cmp target/idl/wrap_stablecoin.json idl/wrap_stablecoin.json` after a build tells you whether the committed IDL has drifted from the program source. `scripts/verify_branding_release.sh` runs that check on both artifacts, normalizing the `.ts` header comment before comparing.
+The tracked files are generated output, never hand-edited, so they are byte-identical to what a build produces and `cmp` against `target/` is the drift check. `scripts/verify_branding_release.sh` runs it on both artifacts. (The `.ts` header comment points at `target/idl/wrap_stablecoin.json` because Anchor writes it that way; the authoritative copy is the tracked one next to it.)
 
-Destinations are recorded in `wrap-stablecoin/.idl-sync.json`.
+Destinations are recorded in `wrap-stablecoin/.idl-sync.json`. Because nothing is edited after generation, copying `target/idl/wrap_stablecoin.json` and `target/types/wrap_stablecoin.ts` into `idl/` is equivalent to the command above.
 
 ## Backend
 
