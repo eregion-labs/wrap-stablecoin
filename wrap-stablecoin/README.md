@@ -4,7 +4,7 @@ A Solana program that mints a wrapped stablecoin (Florin (FLRN)) 1:1 against USD
 
 > New to Florin? Start with **[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)** — a plain-language explainer with flowcharts.
 
-Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
+Program ID: `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ`
 
 ## Flow
 

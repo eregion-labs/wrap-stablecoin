@@ -2,7 +2,7 @@
 
 Anchor program implementing Florin (FLRN) — a collateral-backed wrapped token with optional Kamino KLend yield. See [../../README.md](../../README.md) for the high-level flow and design.
 
-Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
+Program ID: `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ`
 
 **Shipped build:** default Cargo features (no flash mint). Flash mint code exists behind `--features flash-mint` only. See [../../../wiki/Flash-mint.md](../../../wiki/Flash-mint.md).
 
