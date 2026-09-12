@@ -40,6 +40,20 @@ export type Deployment = {
   dummyMints?: Record<string, string>;
 };
 
+/**
+ * Fields `cli sync-env` renders straight into env files. A missing one would be
+ * written as the literal string "undefined", so reject the artifact instead.
+ */
+const REQUIRED_FIELDS: (keyof Deployment)[] = [
+  "cluster",
+  "rpcUrl",
+  "wsUrl",
+  "backendUrl",
+  "programId",
+  "authority",
+  "defaultAssetMint",
+];
+
 export const DEPLOYMENTS_DIR = path.join(REPO_ROOT, "deployments");
 
 export function deploymentPath(network: Network): string {
@@ -52,8 +66,12 @@ export function readDeployment(network: Network): Deployment {
     throw new Error(`missing ${relative(file)} — run \`pnpm cli init --network ${network}\``);
   }
   const dep = JSON.parse(fs.readFileSync(file, "utf8")) as Deployment;
-  if (!dep.rpcUrl || !dep.programId) {
-    throw new Error(`invalid ${relative(file)}: rpcUrl and programId are required`);
+  const missing = REQUIRED_FIELDS.filter((field) => !dep[field]);
+  if (missing.length > 0) {
+    throw new Error(
+      `invalid ${relative(file)}: missing ${missing.join(", ")} — delete it and re-run ` +
+        `\`pnpm cli init --network ${network}\``,
+    );
   }
   if (!dep.assets) dep.assets = {};
   return dep;

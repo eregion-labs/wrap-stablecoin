@@ -18,6 +18,11 @@ deployments/              # Per-cluster deploy artifacts written by `cli init`
 wiki/                     # This wiki
 ```
 
+`deployments/` is gitignored for every cluster, so a fresh machine must re-run
+`pnpm cli init` against the deployed vault (idempotent: each step is skipped
+when its account already exists) or obtain `deployments/<network>.json` out of
+band before `pnpm cli sync-env` can run.
+
 ## Prerequisites
 
 - Rust toolchain, `cargo`

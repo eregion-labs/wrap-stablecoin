@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Deployment, readDeployment, relative } from "../deployments";
-import { Network, REPO_ROOT } from "../network";
+import { Network, NETWORKS, REPO_ROOT } from "../network";
 
 const BACKEND_ENV = path.join(REPO_ROOT, "backend/.env");
 const FRONTEND_ENV_LOCAL = path.join(REPO_ROOT, "frontend/.env.local");
@@ -87,6 +87,11 @@ export function syncEnv(dep: Deployment, dryRun = false): void {
     ? parseEnvFile(fs.readFileSync(BACKEND_ENV, "utf8"))
     : new Map<string, string>();
   for (const key of RETIRED_KEYS) env.delete(key);
+  // backend/src/config/env.rs resolves `{KEY}_{NETWORK}` before the bare key, so a
+  // leftover scoped override would silently win over the value written just below.
+  for (const key of MANAGED_KEYS) {
+    for (const network of NETWORKS) env.delete(`${key}_${network.toUpperCase()}`);
+  }
 
   const updates: Record<string, string> = {
     APP_ENV: APP_ENV[dep.cluster],
@@ -101,7 +106,10 @@ export function syncEnv(dep: Deployment, dryRun = false): void {
   for (const [key, value] of Object.entries(updates)) env.set(key, value);
 
   // Operator-owned keys: seed a working default, never overwrite.
-  if (!env.get("BIND_HOST")) env.set("BIND_HOST", "0.0.0.0");
+  // /v1/admin/* is unauthenticated, so a hosted cluster stays on loopback.
+  if (!env.get("BIND_HOST")) {
+    env.set("BIND_HOST", dep.cluster === "localnet" ? "0.0.0.0" : "127.0.0.1");
+  }
   if (!env.get("BIND_PORT")) env.set("BIND_PORT", "8080");
   if (dep.cluster === "localnet" && !env.get("ADMIN_KEYPAIR_PATH")) {
     env.set("ADMIN_KEYPAIR_PATH", ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json");
