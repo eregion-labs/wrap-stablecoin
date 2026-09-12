@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+NETWORK="${1:?usage: verify_branding_release.sh <localnet|devnet|mainnet>}"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MONO="$(cd "$ROOT/.." && pwd)"
 cd "$ROOT"
@@ -8,10 +10,8 @@ cd "$ROOT"
 echo "== anchor build =="
 anchor build
 
-echo "== metadata verify =="
-npm run cli -- metadata verify || {
-  echo "metadata verify skipped (vault may not be seeded yet)"
-}
+echo "== metadata verify ($NETWORK) =="
+npm run cli -- metadata verify --network "$NETWORK"
 
 echo "== grep audit (user-facing product names) =="
 if rg -n 'wStable' "$MONO/frontend/src" "$MONO/admin-frontend/src" "$MONO/backend/src" \
@@ -21,15 +21,7 @@ if rg -n 'wStable' "$MONO/frontend/src" "$MONO/admin-frontend/src" "$MONO/backen
 fi
 
 echo "== tracked IDL matches build output =="
-idl_drift() {
-  echo "FAIL: idl/$1 has drifted from the program source"
-  echo "      regenerate and commit it, see wiki/Monorepo.md"
-  exit 1
-}
-cmp -s target/idl/wrap_stablecoin.json idl/wrap_stablecoin.json \
-  || idl_drift wrap_stablecoin.json
-cmp -s target/types/wrap_stablecoin.ts idl/wrap_stablecoin.ts \
-  || idl_drift wrap_stablecoin.ts
+npm run cli -- check-idl
 
 echo "== IDL contains initialize_mint_metadata =="
 node -e "

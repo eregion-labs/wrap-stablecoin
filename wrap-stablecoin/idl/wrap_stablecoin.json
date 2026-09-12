@@ -3781,166 +3781,161 @@
     },
     {
       "code": 6021,
-      "name": "ExceedsHarvestableYield",
-      "msg": "Harvest amount exceeds available yield"
-    },
-    {
-      "code": 6022,
       "name": "ExceedsHomeSurplus",
       "msg": "Sweep amount exceeds home vault surplus"
     },
     {
-      "code": 6023,
+      "code": 6022,
       "name": "FlashMintAmountExceeded",
       "msg": "Flash mint amount exceeds configured maximum"
     },
     {
-      "code": 6024,
+      "code": 6023,
       "name": "NoPendingTransfer",
       "msg": "No pending authority transfer"
     },
     {
-      "code": 6025,
+      "code": 6024,
       "name": "InvalidTreasury",
       "msg": "Invalid treasury address"
     },
     {
-      "code": 6026,
+      "code": 6025,
       "name": "InvalidReserveOwner",
       "msg": "Reserve account not owned by KLend program"
     },
     {
-      "code": 6027,
+      "code": 6026,
       "name": "InvalidTokenAccountData",
       "msg": "Token account data invalid or unexpected owner"
     },
     {
-      "code": 6028,
+      "code": 6027,
       "name": "FlashMintScanLimit",
       "msg": "Flash mint introspection scan exceeded bound"
     },
     {
-      "code": 6029,
+      "code": 6028,
       "name": "HarvestLeavesUnderbacked",
       "msg": "Harvest would leave insufficient backing for tracked liability"
     },
     {
-      "code": 6030,
+      "code": 6029,
       "name": "HarvestRedeemedNothing",
       "msg": "Harvest redeem produced no collateral movement"
     },
     {
-      "code": 6031,
+      "code": 6030,
       "name": "FlashMintFeeReceiverUnset",
       "msg": "Flash mint fee receiver is not configured"
     },
     {
-      "code": 6032,
+      "code": 6031,
       "name": "MintDisabled",
       "msg": "Minting is disabled for this asset"
     },
     {
-      "code": 6033,
+      "code": 6032,
       "name": "RedeemDisabled",
       "msg": "Redemption is disabled for this asset"
     },
     {
-      "code": 6034,
+      "code": 6033,
       "name": "MintCapExceeded",
       "msg": "Mint cap exceeded for this asset"
     },
     {
-      "code": 6035,
+      "code": 6034,
       "name": "ExposureCapExceeded",
       "msg": "Exposure cap exceeded for this asset"
     },
     {
-      "code": 6036,
+      "code": 6035,
       "name": "ReflexiveCollateralForbidden",
       "msg": "Wrapped token cannot back itself as collateral"
     },
     {
-      "code": 6037,
+      "code": 6036,
       "name": "InvalidMetadata",
       "msg": "Invalid mint metadata"
     },
     {
-      "code": 6038,
+      "code": 6037,
       "name": "InvalidMetadataAccount",
       "msg": "Mint metadata account address mismatch"
     },
     {
-      "code": 6039,
+      "code": 6038,
       "name": "MetadataAlreadyInitialized",
       "msg": "Mint metadata already initialized"
     },
     {
-      "code": 6040,
+      "code": 6039,
       "name": "KlendNotEnabled",
       "msg": "KLend is not enabled for this asset"
     },
     {
-      "code": 6041,
+      "code": 6040,
       "name": "InvalidHaircut",
       "msg": "Invalid haircut bps"
     },
     {
-      "code": 6042,
+      "code": 6041,
       "name": "InvalidDecimals",
       "msg": "Token decimals must be between 1 and 18"
     },
     {
-      "code": 6043,
+      "code": 6042,
       "name": "MintAuthorityTransferred",
       "msg": "Mint authority has been transferred; wrapping is permanently disabled"
     },
     {
-      "code": 6044,
+      "code": 6043,
       "name": "NoPendingMintAuthorityTransfer",
       "msg": "No pending mint authority transfer"
     },
     {
-      "code": 6045,
+      "code": 6044,
       "name": "MintAuthorityAlreadyTransferred",
       "msg": "Mint authority transfer already completed"
     },
     {
-      "code": 6046,
+      "code": 6045,
       "name": "InvalidKlendReserve",
       "msg": "KLend Reserve account layout, discriminator, or version is invalid"
     },
     {
-      "code": 6047,
+      "code": 6046,
       "name": "KlendReserveMarketMismatch",
       "msg": "KLend Reserve lending_market does not match the supplied market"
     },
     {
-      "code": 6048,
+      "code": 6047,
       "name": "KlendReserveMintMismatch",
       "msg": "KLend Reserve liquidity mint does not match the registered asset"
     },
     {
-      "code": 6049,
+      "code": 6048,
       "name": "KlendReserveLiquiditySupplyMismatch",
       "msg": "KLend Reserve liquidity supply does not match the supplied account"
     },
     {
-      "code": 6050,
+      "code": 6049,
       "name": "KlendReserveCollateralMintMismatch",
       "msg": "KLend Reserve collateral mint does not match the supplied account"
     },
     {
-      "code": 6051,
+      "code": 6050,
       "name": "ZeroLiquidityDeposited",
       "msg": "Kamino deposit moved no liquidity from the vault"
     },
     {
-      "code": 6052,
+      "code": 6051,
       "name": "InconsistentKlendCollateralBalance",
       "msg": "KLend collateral vault balance is inconsistent across the redeem"
     },
     {
-      "code": 6053,
+      "code": 6052,
       "name": "UnsupportedTokenExtension",
       "msg": "Collateral mint must be classic SPL Token or Token-2022 with no extensions"
     }

@@ -67,7 +67,7 @@ cd wrap-stablecoin
 anchor idl build -o idl/wrap_stablecoin.json -t idl/wrap_stablecoin.ts
 ```
 
-The tracked files are generated output, never hand-edited, so they are byte-identical to what a build produces and `cmp` against `target/` is the drift check. `scripts/verify_branding_release.sh` runs it on both artifacts. (The `.ts` header comment points at `target/idl/wrap_stablecoin.json` because Anchor writes it that way; the authoritative copy is the tracked one next to it.)
+The tracked files are generated output, never hand-edited, so they are byte-identical to what a build produces and a byte comparison against `target/` is the drift check: `pnpm cli check-idl` runs it on both artifacts, and `pnpm cli deploy` and `scripts/verify_branding_release.sh` run it after `anchor build`. (The `.ts` header comment points at `target/idl/wrap_stablecoin.json` because Anchor writes it that way; the authoritative copy is the tracked one next to it.)
 
 Destinations are recorded in `wrap-stablecoin/.idl-sync.json`. Because nothing is edited after generation, copying `target/idl/wrap_stablecoin.json` and `target/types/wrap_stablecoin.ts` into `idl/` is equivalent to the command above.
 
@@ -106,8 +106,8 @@ pnpm run dev
 | Backend | `PROGRAM_ID` | `wrap_stablecoin` program id (or `PROGRAM_ID_{NETWORK}`) |
 | Backend | `VAULT_AUTHORITY` | Pubkey that seeds `vault_config` PDA |
 | Backend | `DEFAULT_ASSET_MINT` | Required; network-scoped override supported |
-| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (alias `PUBLIC_SOLANA_RPC_URL`) |
-| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (alias `PUBLIC_SOLANA_WS_URL`) |
+| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC |
+| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS |
 | Backend | `EXPLORER_BASE_URL` | Explorer base in client-config (default Solscan) |
 | Backend | `SECRET_NAME` | Optional AWS SM flat JSON |
 | Backend | `ADMIN_KEYPAIR_PATH` | Optional admin signer for `/v1/admin/*` |

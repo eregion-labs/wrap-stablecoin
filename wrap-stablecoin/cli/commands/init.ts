@@ -1,14 +1,18 @@
 /**
  * Vault bootstrap for any cluster: initialize -> add_asset -> enable_klend.
  *
- * Every step is skipped when its account already exists, so re-running is safe
- * and registering a second collateral is just another `init --asset`.
+ * A step whose account already exists is skipped after checking it against the
+ * requested parameters (a mismatch fails), and the artifact records the on-chain
+ * values, so re-running is safe and registering a second collateral is just
+ * another `init --asset`.
  */
 
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getMint, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
 import { CliContext, describeContext, loadCliContext } from "../context";
 import {
+  assertSameVault,
+  DeployedAsset,
   Deployment,
   deploymentPath,
   readDeploymentIfPresent,
@@ -16,7 +20,7 @@ import {
   writeDeployment,
 } from "../deployments";
 import { readReserveFields } from "../klend";
-import { Network } from "../network";
+import { clientRpcUrl, Network } from "../network";
 import { assetPdas } from "../pdas";
 
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:8080";
@@ -49,14 +53,36 @@ async function exists(connection: Connection, address: PublicKey): Promise<boole
   return (await connection.getAccountInfo(address)) !== null;
 }
 
+/**
+ * Florin precision is fixed at initialize, so an existing vault_config must
+ * already carry the decimals of an explicitly requested --decimals-mint.
+ */
 async function initializeVault(
   ctx: CliContext,
-  decimalsMint: PublicKey,
+  decimalsMint: PublicKey | undefined,
   dryRun: boolean,
 ): Promise<void> {
-  if (await exists(ctx.connection, ctx.vaultConfig)) {
+  const onChain = await ctx.program.account.vaultConfig.fetchNullable(ctx.vaultConfig);
+  if (onChain) {
+    if (decimalsMint) {
+      const { decimals } = await getMint(
+        ctx.connection,
+        decimalsMint,
+        undefined,
+        await tokenProgramOf(ctx.connection, decimalsMint),
+      );
+      if (decimals !== onChain.wrappedDecimals) {
+        throw new Error(
+          `vault_config already uses ${onChain.wrappedDecimals} decimals, but --decimals-mint ` +
+            `${decimalsMint.toBase58()} has ${decimals}`,
+        );
+      }
+    }
     console.log("[init] vault_config exists — skip initialize");
     return;
+  }
+  if (!decimalsMint) {
+    throw new Error("--decimals-mint is required on first init: it fixes Florin precision forever");
   }
   if (dryRun) {
     console.log(`[dry-run] initialize (decimals from ${decimalsMint.toBase58()})`);
@@ -109,28 +135,72 @@ async function addAsset(
   console.log(`[init] add_asset tx ${sig}`);
 }
 
+type KlendRecord = Required<
+  Pick<DeployedAsset, "klendConfig" | "collateralVault" | "reserve" | "lendingMarket">
+>;
+
+function klendRecord(
+  klendConfig: PublicKey,
+  collateralVault: PublicKey,
+  reserve: PublicKey,
+  lendingMarket: PublicKey,
+): KlendRecord {
+  return {
+    klendConfig: klendConfig.toBase58(),
+    collateralVault: collateralVault.toBase58(),
+    reserve: reserve.toBase58(),
+    lendingMarket: lendingMarket.toBase58(),
+  };
+}
+
+/**
+ * An existing klend_config is recorded as it is on chain; a requested --reserve
+ * must match it. Otherwise Kamino is enabled only when --reserve is given.
+ */
+async function reconcileKlend(
+  ctx: CliContext,
+  asset: PublicKey,
+  reserve: PublicKey | undefined,
+  pdas: ReturnType<typeof assetPdas>,
+  dryRun: boolean,
+): Promise<KlendRecord | undefined> {
+  const onChain = await ctx.program.account.kLendConfig.fetchNullable(pdas.klendConfig);
+  if (onChain) {
+    if (reserve && !onChain.reserve.equals(reserve)) {
+      throw new Error(
+        `klend_config already uses reserve ${onChain.reserve.toBase58()}, not ${reserve.toBase58()}`,
+      );
+    }
+    console.log("[init] klend_config exists — skip enable_klend");
+    return klendRecord(
+      pdas.klendConfig,
+      onChain.collateralVault,
+      onChain.reserve,
+      onChain.lendingMarket,
+    );
+  }
+  if (!reserve) {
+    console.log("[init] no --reserve — Kamino stays off for this asset");
+    return undefined;
+  }
+  return enableKlend(ctx, asset, reserve, pdas, dryRun);
+}
+
 async function enableKlend(
   ctx: CliContext,
   asset: PublicKey,
   reserve: PublicKey,
   pdas: ReturnType<typeof assetPdas>,
   dryRun: boolean,
-): Promise<{ reserve: string; lendingMarket: string }> {
+): Promise<KlendRecord> {
   const fields = await readReserveFields(ctx.connection, reserve);
   if (!fields.liquidityMint.equals(asset)) {
     throw new Error(
       `reserve ${reserve.toBase58()} lends ${fields.liquidityMint.toBase58()}, not ${asset.toBase58()}`,
     );
   }
-  const record = {
-    reserve: reserve.toBase58(),
-    lendingMarket: fields.lendingMarket.toBase58(),
-  };
+  const record = klendRecord(pdas.klendConfig, pdas.collateralVault, reserve, fields.lendingMarket);
 
-  if (await exists(ctx.connection, pdas.klendConfig)) {
-    console.log("[init] klend_config exists — skip enable_klend");
-    return record;
-  }
   if (dryRun) {
     console.log(`[dry-run] enable_klend(reserve ${record.reserve}, market ${record.lendingMarket})`);
     return record;
@@ -157,39 +227,19 @@ async function enableKlend(
   return record;
 }
 
-export async function init(opts: InitOptions): Promise<Deployment> {
-  const ctx = loadCliContext(opts.network);
-  const previous = readDeploymentIfPresent(opts.network);
-  console.log(`  ${describeContext(ctx)}`);
-  console.log("");
-
-  const assetMint = opts.asset ?? opts.decimalsMint;
-  if (!assetMint) {
-    throw new Error("--asset (or --decimals-mint) is required: init always registers one collateral");
-  }
-  const asset = new PublicKey(assetMint);
-  const decimalsMint = new PublicKey(opts.decimalsMint ?? assetMint);
-
-  if (!opts.decimalsMint && !(await exists(ctx.connection, ctx.vaultConfig))) {
-    throw new Error("--decimals-mint is required on first init: it fixes Florin precision forever");
-  }
-
-  await initializeVault(ctx, decimalsMint, opts.dryRun);
-
-  const pdas = assetPdas(ctx.programId, ctx.vaultConfig, asset);
-  await addAsset(ctx, asset, pdas, opts.dryRun);
-
-  const klend = opts.reserve
-    ? await enableKlend(ctx, asset, new PublicKey(opts.reserve), pdas, opts.dryRun)
-    : undefined;
-  if (!opts.reserve) {
-    console.log("[init] no --reserve — Kamino stays off for this asset");
-  }
-
-  const deployment: Deployment = {
+function buildDeployment(
+  ctx: CliContext,
+  opts: InitOptions,
+  previous: Deployment | undefined,
+  clientRpc: string,
+  asset: PublicKey,
+  pdas: ReturnType<typeof assetPdas>,
+  klend: KlendRecord | undefined,
+): Deployment {
+  return {
     cluster: opts.network,
     rpcUrl: ctx.rpcUrl,
-    wsUrl: ctx.wsUrl,
+    clientRpcUrl: clientRpc,
     backendUrl: opts.backendUrl ?? previous?.backendUrl ?? DEFAULT_BACKEND_URL,
     programId: ctx.programId.toBase58(),
     authority: ctx.authority.publicKey.toBase58(),
@@ -203,16 +253,49 @@ export async function init(opts: InitOptions): Promise<Deployment> {
         assetConfig: pdas.assetConfig.toBase58(),
         tokenVault: pdas.tokenVault.toBase58(),
         treasuryVault: pdas.treasuryVault.toBase58(),
-        ...(klend
-          ? {
-              klendConfig: pdas.klendConfig.toBase58(),
-              collateralVault: pdas.collateralVault.toBase58(),
-              ...klend,
-            }
-          : {}),
+        ...klend,
       },
     },
   };
+}
+
+export async function init(opts: InitOptions): Promise<Deployment> {
+  const ctx = loadCliContext(opts.network);
+  // Resolved before any transaction so a missing mainnet key fails up front.
+  const clientRpc = clientRpcUrl(opts.network);
+  const previous = readDeploymentIfPresent(opts.network);
+  assertSameVault(previous, {
+    cluster: opts.network,
+    programId: ctx.programId.toBase58(),
+    authority: ctx.authority.publicKey.toBase58(),
+  });
+  console.log(`  ${describeContext(ctx)}`);
+  console.log("");
+
+  const assetMint = opts.asset ?? opts.decimalsMint;
+  if (!assetMint) {
+    throw new Error("--asset (or --decimals-mint) is required: init always registers one collateral");
+  }
+  const asset = new PublicKey(assetMint);
+
+  await initializeVault(
+    ctx,
+    opts.decimalsMint ? new PublicKey(opts.decimalsMint) : undefined,
+    opts.dryRun,
+  );
+
+  const pdas = assetPdas(ctx.programId, ctx.vaultConfig, asset);
+  await addAsset(ctx, asset, pdas, opts.dryRun);
+
+  const klend = await reconcileKlend(
+    ctx,
+    asset,
+    opts.reserve ? new PublicKey(opts.reserve) : undefined,
+    pdas,
+    opts.dryRun,
+  );
+
+  const deployment = buildDeployment(ctx, opts, previous, clientRpc, asset, pdas, klend);
 
   if (opts.dryRun) {
     console.log("");

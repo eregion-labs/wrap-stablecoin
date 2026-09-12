@@ -11,7 +11,7 @@ import { readState, VAULT_ASSET_KEYS, writeState } from './common'
 
 async function main() {
     const state = readState()
-    /** Florin decimals come from the first collateral; ignored on later calls. */
+    /** Florin decimals come from the first collateral; later calls check it against vault_config. */
     const decimalsMint = state.assets[VAULT_ASSET_KEYS[0]]?.mint
     if (!decimalsMint) throw new Error('asset A has no mint; run 10_setup_market first')
 

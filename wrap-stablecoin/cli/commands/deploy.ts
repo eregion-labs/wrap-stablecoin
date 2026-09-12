@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { Connection, PublicKey } from "@solana/web3.js";
 import {
+  assertTrackedIdlMatchesBuild,
   deployerWalletPath,
   deployKeypairId,
   loadKeypair,
@@ -107,13 +108,14 @@ export async function deploy(opts: DeployOptions): Promise<void> {
   console.log(`deployer: ${deployer}`);
 
   run("anchor", ["build"], opts.dryRun);
+  if (!opts.dryRun) assertTrackedIdlMatchesBuild();
 
   let program: PublicKey;
   try {
     program = programId();
   } catch (e) {
     if (opts.dryRun) {
-      console.log("[dry-run] program id reads from the built IDL after anchor build");
+      console.log("[dry-run] program id reads from the tracked IDL (idl/wrap_stablecoin.json)");
       return;
     }
     throw e;

@@ -345,8 +345,9 @@ fn get_token_account_amount(rpc: &RpcClient, ata: &Pubkey) -> Result<u64> {
     Ok(token_amount_of(Some(&acc)))
 }
 
-/// Balance for callers that read an unreachable account as 0 rather than failing the request.
-/// Logged, so a quote built on a degraded read is visible instead of silently wrong.
+/// Balance for public read endpoints only: an unreachable account reads as 0 rather than failing
+/// the request. Logged, so a quote built on a degraded read is visible instead of silently wrong.
+/// Tx-building and admin paths use `get_token_account_amount(..)?` instead.
 fn token_amount_or_zero(rpc: &RpcClient, ata: &Pubkey) -> u64 {
     match get_token_account_amount(rpc, ata) {
         Ok(amount) => amount,
@@ -453,21 +454,32 @@ fn decode_klend_reserve_bytes(d: &[u8]) -> Option<KlendReserveMark> {
     })
 }
 
-fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
-    let acc = rpc.get_account(reserve).ok()?;
-    decode_klend_reserve_bytes(&acc.data)
+/// Errors when the reserve account cannot be fetched; `Ok(None)` when its bytes do not decode.
+fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Result<Option<KlendReserveMark>> {
+    let acc = rpc
+        .get_account(reserve)
+        .with_context(|| format!("klend reserve {reserve}"))?;
+    Ok(decode_klend_reserve_bytes(&acc.data))
 }
 
 /// Live mark: simulate `refresh_reserve` and decode the post-sim reserve (Kamino accrues lazily).
-/// Falls back to the stored account when the oracle is missing or simulation fails.
+/// Falls back to the stored account when the oracle is missing or simulation fails. Errors when
+/// the stored reserve account cannot be fetched.
 fn decode_klend_reserve_live(
     rpc: &RpcClient,
     klend: &KLendConfig,
     fee_payer: &Pubkey,
     scope_prices: &HashMap<Pubkey, Pubkey>,
-) -> Option<KlendReserveMark> {
-    let stored = decode_klend_reserve(rpc, &klend.reserve);
-    klend_reserve_mark_live(rpc, klend, fee_payer, scope_prices, stored, None)
+) -> Result<Option<KlendReserveMark>> {
+    let stored = decode_klend_reserve(rpc, &klend.reserve)?;
+    Ok(klend_reserve_mark_live(
+        rpc,
+        klend,
+        fee_payer,
+        scope_prices,
+        stored,
+        None,
+    ))
 }
 
 /// As `decode_klend_reserve_live`, but the stored mark and the simulation blockhash come from the
@@ -500,8 +512,8 @@ fn klend_reserve_mark_live(
         replace_recent_blockhash: true,
         // Explicit, because the field's default is `None` and the client then falls back to
         // `CommitmentConfig::default()`, which is finalized. This mark drives the harvest and
-        // recall caps, so it has to come from the same bank as the `stored` fallback below and as
-        // the balances joined onto it in `fetch_vault_assets`.
+        // recall caps, so it has to use the same commitment as the `stored` fallback below and
+        // as the balances joined onto it in `fetch_vault_assets`.
         commitment: Some(rpc.commitment()),
         accounts: Some(RpcSimulateTransactionAccountsConfig {
             encoding: Some(UiAccountEncoding::Base64),
@@ -781,7 +793,7 @@ pub fn unsigned_unwrap_tx_bytes(
         user == &vault.admin,
     )?;
 
-    let free_liquidity = token_amount_or_zero(rpc, &asset_cfg.token_vault);
+    let free_liquidity = get_token_account_amount(rpc, &asset_cfg.token_vault)?;
     validate_unwrap_amount(&asset_cfg, &vault, free_liquidity, amount)?;
 
     let collateral_program = collateral_token_program(rpc, asset_mint)?;
@@ -1100,9 +1112,10 @@ fn prefetch_asset_accounts(
     }
     let vault_accounts = get_accounts_batched(rpc, &keys).context("prefetch asset vaults")?;
 
-    let configs: Vec<Option<KLendConfig>> = vault_accounts
+    let configs: Vec<Option<KLendConfig>> = keys
         .chunks(3)
-        .map(|c| klend_config_of(c[0].as_ref()))
+        .zip(vault_accounts.chunks(3))
+        .map(|(k, c)| klend_config_of(&k[0], c[0].as_ref()))
         .collect();
     let mut klend_keys = Vec::with_capacity(configs.len() * 2);
     for config in configs.iter().flatten() {
@@ -1605,7 +1618,7 @@ pub fn unsigned_withdraw_from_klend_tx_bytes(
         )?;
     let (cpi, refresh) =
         klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
-    let mark = decode_klend_reserve_live(rpc, &cpi.klend, admin, scope_prices)
+    let mark = decode_klend_reserve_live(rpc, &cpi.klend, admin, scope_prices)?
         .ok_or_else(|| anyhow!("could not decode KLend reserve for exchange rate"))?;
     let vault_ktokens = get_token_account_amount(rpc, &cpi.collateral_vault)?;
     let collateral_amount =
@@ -1776,17 +1789,19 @@ pub fn unsigned_withdraw_treasury_tx_bytes(
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
-fn klend_config_of(account: Option<&Account>) -> Option<KLendConfig> {
-    let account = account?;
-    if account.data.is_empty() {
-        return None;
-    }
+fn klend_config_of(key: &Pubkey, account: Option<&Account>) -> Option<KLendConfig> {
+    let account = account.filter(|a| !a.data.is_empty())?;
     let mut data: &[u8] = &account.data;
-    KLendConfig::try_deserialize(&mut data).ok()
+    KLendConfig::try_deserialize(&mut data)
+        .inspect_err(|e| {
+            tracing::warn!("klend_config {key} decode failed, treating as disabled: {e}")
+        })
+        .ok()
 }
 
-/// `None` means KLend is not enabled for the asset. A failed lookup reads the same way, so it is
-/// logged: the caller would otherwise quote an unreachable reserve as zero deployed liquidity.
+/// `None` means KLend is not enabled for the asset. A failed lookup or decode reads the same way,
+/// so both are logged: the caller would otherwise quote an unreachable reserve as zero deployed
+/// liquidity.
 fn fetch_klend_config_optional(
     rpc: &RpcClient,
     program_id: &Pubkey,
@@ -1794,7 +1809,7 @@ fn fetch_klend_config_optional(
 ) -> Option<KLendConfig> {
     let (key, _) = crate::wrap_stablecoin::pda::klend_config(program_id, asset_config);
     match rpc.get_account_with_commitment(&key, rpc.commitment()) {
-        Ok(resp) => klend_config_of(resp.value.as_ref()),
+        Ok(resp) => klend_config_of(&key, resp.value.as_ref()),
         Err(e) => {
             tracing::warn!("klend_config {key} lookup failed, treating as disabled: {e}");
             None

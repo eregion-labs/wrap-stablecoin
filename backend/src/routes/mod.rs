@@ -1,6 +1,8 @@
 pub mod admin;
 pub mod admin_ops;
+pub mod blocking;
 pub mod client_config;
+pub mod errors;
 pub mod guard;
 pub mod klend_lookup;
 pub mod network;

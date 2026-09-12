@@ -3,7 +3,7 @@
  *
  * Env keys follow the backend convention (backend/src/config/env.rs):
  *   {KEY}_{LOCALNET|DEVNET|MAINNET} -> {KEY}
- * except on mainnet, which never reads the unscoped key (see envForNetwork).
+ * where only localnet reads the unscoped key (see envForNetwork).
  *
  * The program id always comes from the tracked IDL, i.e. `declare_id!` — the same
  * value Anchor.toml carries and the cluster already runs. The deploy keypair is
@@ -26,9 +26,13 @@ const PROGRAM_KEYPAIR = path.join(
   PACKAGE_ROOT,
   "target/deploy/wrap_stablecoin-keypair.json",
 );
-/** Fixture admin used by the localnet validator and the devnet e2e market. */
-const FIXTURE_WALLET = ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json";
-/** Fixture deployer — pays for the program account, holds upgrade authority. */
+/**
+ * Fixture admin used by the localnet validator and the devnet e2e market. Its
+ * secret key is committed (fixtures/user/wallet.json), so the CLI only falls
+ * back to it on localnet; devnet e2e opts in explicitly.
+ */
+export const FIXTURE_WALLET = ".secrets/admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json";
+/** Fixture deployer, localnet-only fallback: pays for the program account, holds upgrade authority. */
 const FIXTURE_DEPLOYER = ".secrets/depxPDoQBS9JXgwVumiJeuaaSU9b8FaCRwEVTaGD1v9.json";
 const DEVNET_RPC = "https://api.devnet.solana.com";
 const DEFAULT_LOCAL_RPC_PORT = 8901;
@@ -36,7 +40,6 @@ const DEFAULT_LOCAL_RPC_PORT = 8901;
 export type NetworkContext = {
   network: Network;
   rpcUrl: string;
-  wsUrl: string;
   walletPath: string;
   authority: Keypair;
   programId: PublicKey;
@@ -54,13 +57,13 @@ export function parseNetwork(value: string | undefined): Network {
 }
 
 /**
- * Mainnet reads only its own scoped key: an unscoped ANCHOR_WALLET or RPC_URL is
- * whatever the last localnet/devnet shell exported — `anchor` itself sets
- * ANCHOR_WALLET to the fixture admin — and must never become a mainnet default.
+ * Only localnet falls back to the unscoped key: `anchor run`/`anchor test` export
+ * ANCHOR_WALLET and ANCHOR_PROVIDER_URL for localnet, and an unscoped RPC_URL or
+ * ANCHOR_WALLET in any other shell carries no network of its own.
  */
 function envForNetwork(key: string, network: Network): string | undefined {
   const scoped = process.env[`${key}_${network.toUpperCase()}`]?.trim();
-  if (network === "mainnet") return scoped || undefined;
+  if (network !== "localnet") return scoped || undefined;
   return scoped || process.env[key]?.trim() || undefined;
 }
 
@@ -78,6 +81,32 @@ export function readIdl(): Record<string, any> {
     throw new Error(`missing ${PROGRAM_IDL} — regenerate it with anchor idl build`);
   }
   return JSON.parse(fs.readFileSync(PROGRAM_IDL, "utf8"));
+}
+
+const BUILT_ARTIFACTS = [
+  ["target/idl/wrap_stablecoin.json", "idl/wrap_stablecoin.json"],
+  ["target/types/wrap_stablecoin.ts", "idl/wrap_stablecoin.ts"],
+] as const;
+
+/**
+ * The tracked copies are generated output, so they must be byte-identical to
+ * the last `anchor build`. Drift means the program id and layout the CLI reads
+ * no longer describe the binary about to ship.
+ */
+export function assertTrackedIdlMatchesBuild(): void {
+  for (const [built, tracked] of BUILT_ARTIFACTS) {
+    const builtPath = path.join(PACKAGE_ROOT, built);
+    const trackedPath = path.join(PACKAGE_ROOT, tracked);
+    if (!fs.existsSync(builtPath)) {
+      throw new Error(`missing ${built}; run anchor build`);
+    }
+    if (!fs.existsSync(trackedPath)) {
+      throw new Error(`missing ${tracked}; regenerate and commit it (wiki/Monorepo.md)`);
+    }
+    if (!fs.readFileSync(builtPath).equals(fs.readFileSync(trackedPath))) {
+      throw new Error(`${tracked} has drifted from ${built}; regenerate and commit it (wiki/Monorepo.md)`);
+    }
+  }
 }
 
 /** Program id from `declare_id!`, via the committed IDL. */
@@ -118,6 +147,21 @@ export function rpcUrl(network: Network): string {
   }
 }
 
+/**
+ * RPC published to every browser via GET /v1/client-config. Kept apart from
+ * rpcUrl because a mainnet deploy RPC is a private provider URL with an API key.
+ */
+export function clientRpcUrl(network: Network): string {
+  const explicit = envForNetwork("CLIENT_RPC_URL", network);
+  if (explicit) return explicit;
+  if (network === "mainnet") {
+    throw new Error(
+      "mainnet needs a browser-safe RPC: set CLIENT_RPC_URL_MAINNET (RPC_URL_MAINNET is never published)",
+    );
+  }
+  return rpcUrl(network);
+}
+
 /** Local validator serves WS on RPC_PORT - 1; hosted RPCs use the same host. */
 export function wsUrl(rpc: string): string {
   const url = new URL(rpc);
@@ -131,9 +175,10 @@ export function wsUrl(rpc: string): string {
 function resolveWallet(network: Network, key: string, fixture: string): string {
   const explicit = envForNetwork(key, network);
   if (explicit) return path.resolve(PACKAGE_ROOT, explicit);
-  if (network === "mainnet") {
+  if (network !== "localnet") {
     throw new Error(
-      `mainnet needs an explicit signer: set ${key}_MAINNET (fixture keypairs are never used on mainnet)`,
+      `${network} needs an explicit signer: set ${key}_${network.toUpperCase()} ` +
+        "(fixture keypairs are localnet-only)",
     );
   }
   return path.join(PACKAGE_ROOT, fixture);
@@ -153,12 +198,10 @@ export function deployerWalletPath(network: Network): string {
 }
 
 export function resolveNetwork(network: Network): NetworkContext {
-  const rpc = rpcUrl(network);
   const wallet = walletPath(network);
   return {
     network,
-    rpcUrl: rpc,
-    wsUrl: wsUrl(rpc),
+    rpcUrl: rpcUrl(network),
     walletPath: wallet,
     authority: loadKeypair(wallet),
     programId: programId(),

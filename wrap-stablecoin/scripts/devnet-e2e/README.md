@@ -30,8 +30,11 @@ so measurable yield accrues in minutes. Price is the live devnet Pyth receiver U
 
 - `.secrets/` in this package (`wrap-stablecoin/.secrets/`) with the admin keypair
   (`admwu2g9...json`, a few devnet SOL) and deployer (`depxPDoQ...json`, ~6 SOL to deploy
-  the 831 KB program). Never committed. Same path Anchor.toml / local scripts use.
-  Override with `ANCHOR_WALLET_DEVNET` / `DEPLOYER_WALLET_DEVNET`.
+  the 831 KB program). Same path Anchor.toml / local scripts use. The admin's secret
+  is also committed as `fixtures/user/wallet.json`, so the CLI only defaults to it on
+  localnet: the e2e scripts opt in by defaulting `ANCHOR_WALLET_DEVNET` to it
+  (`common.ts`); set that variable to use another admin. `pnpm cli deploy` below has no
+  such default and needs `DEPLOYER_WALLET_DEVNET` set explicitly.
 - `yarn install` in `wrap-stablecoin/` and `anchor build`. The freshly generated program
   keypair means `declare_id!` + `Anchor.toml` are updated to the deployed id
   `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ` (the committed `BZQaR9Bc` had no keypair).

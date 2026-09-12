@@ -10,6 +10,8 @@ use utoipa::ToSchema;
 use wrap_stablecoin::UpdateAssetPolicyArgs;
 
 use crate::app_state::AppState;
+use crate::routes::blocking::run_blocking;
+use crate::routes::errors::public_error;
 use crate::routes::network::RequestNetwork;
 use crate::routes::tx::TxResponse;
 use crate::wrap_stablecoin::{
@@ -64,8 +66,7 @@ fn verify_tx_bytes(
             format!("tx decode: {e}"),
         )
     })?;
-    ensure_tx_targets_program(&vtx, program_id)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))
+    ensure_tx_targets_program(&vtx, program_id).map_err(public_error)
 }
 
 /// Build unsigned **add_asset** transaction (register collateral).
@@ -80,35 +81,38 @@ pub async fn add_asset_tx(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AddAssetRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let admin = Pubkey::from_str(&body.admin).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid admin: {e}"),
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let admin = Pubkey::from_str(&body.admin).map_err(|e| {
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("invalid admin: {e}"),
+            )
+        })?;
+        let asset_mint = Pubkey::from_str(&body.asset_mint).map_err(|e| {
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("invalid assetMint: {e}"),
+            )
+        })?;
+        let raw = unsigned_add_asset_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &admin,
+            &asset_mint,
+            body.mint_enabled,
+            body.redeem_enabled,
         )
-    })?;
-    let asset_mint = Pubkey::from_str(&body.asset_mint).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid assetMint: {e}"),
-        )
-    })?;
-    let raw = unsigned_add_asset_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &admin,
-        &asset_mint,
-        body.mint_enabled,
-        body.redeem_enabled,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    verify_tx_bytes(&raw, &ctx.program_id)?;
-    Ok(Json(TxResponse {
-        transaction_b64: b64_encode_tx(&raw),
-    }))
+        .map_err(public_error)?;
+        verify_tx_bytes(&raw, &ctx.program_id)?;
+        Ok(Json(TxResponse {
+            transaction_b64: b64_encode_tx(&raw),
+        }))
+    })
+    .await?
 }
 
 /// Build unsigned **update_asset_policy** transaction.
@@ -123,45 +127,46 @@ pub async fn update_asset_policy_tx(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<UpdateAssetPolicyRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let admin = Pubkey::from_str(&body.admin).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid admin: {e}"),
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let admin = Pubkey::from_str(&body.admin).map_err(|e| {
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("invalid admin: {e}"),
+            )
+        })?;
+        let asset_mint = Pubkey::from_str(&body.asset_mint).map_err(|e| {
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("invalid assetMint: {e}"),
+            )
+        })?;
+        let asset_status = parse_asset_status(&body.asset_status).map_err(public_error)?;
+        let args = UpdateAssetPolicyArgs {
+            mint_enabled: body.mint_enabled,
+            redeem_enabled: body.redeem_enabled,
+            mint_haircut_bps: body.mint_haircut_bps,
+            redemption_haircut_bps: body.redemption_haircut_bps,
+            mint_cap: body.mint_cap,
+            exposure_cap: body.exposure_cap,
+            min_liquidity_target: body.min_liquidity_target,
+            asset_status,
+        };
+        let raw = unsigned_update_asset_policy_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &admin,
+            &asset_mint,
+            &args,
         )
-    })?;
-    let asset_mint = Pubkey::from_str(&body.asset_mint).map_err(|e| {
-        (
-            axum::http::StatusCode::BAD_REQUEST,
-            format!("invalid assetMint: {e}"),
-        )
-    })?;
-    let asset_status = parse_asset_status(&body.asset_status).map_err(|e| {
-        (axum::http::StatusCode::BAD_REQUEST, e.to_string())
-    })?;
-    let args = UpdateAssetPolicyArgs {
-        mint_enabled: body.mint_enabled,
-        redeem_enabled: body.redeem_enabled,
-        mint_haircut_bps: body.mint_haircut_bps,
-        redemption_haircut_bps: body.redemption_haircut_bps,
-        mint_cap: body.mint_cap,
-        exposure_cap: body.exposure_cap,
-        min_liquidity_target: body.min_liquidity_target,
-        asset_status,
-    };
-    let raw = unsigned_update_asset_policy_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &admin,
-        &asset_mint,
-        &args,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    verify_tx_bytes(&raw, &ctx.program_id)?;
-    Ok(Json(TxResponse {
-        transaction_b64: b64_encode_tx(&raw),
-    }))
+        .map_err(public_error)?;
+        verify_tx_bytes(&raw, &ctx.program_id)?;
+        Ok(Json(TxResponse {
+            transaction_b64: b64_encode_tx(&raw),
+        }))
+    })
+    .await?
 }

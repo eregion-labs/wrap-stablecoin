@@ -11,7 +11,7 @@ import {
 } from "./commands/metadata";
 import { syncEnvCommand } from "./commands/sync-env";
 import { brandingPath } from "./context";
-import { Network, NETWORKS, parseNetwork } from "./network";
+import { assertTrackedIdlMatchesBuild, Network, NETWORKS, parseNetwork } from "./network";
 
 const OPTIONS = {
   network: { type: "string" },
@@ -77,6 +77,10 @@ async function main(): Promise<void> {
       syncEnvCommand(net, dryRun);
       return;
     }
+    case "check-idl":
+      assertTrackedIdlMatchesBuild();
+      console.log("tracked IDL matches build output");
+      return;
     case "metadata":
       await metadata(sub, network(), values, positionals.slice(2));
       return;
@@ -130,6 +134,7 @@ Commands:
        [--reserve <pubkey>]       KLend reserve to enable Kamino for that collateral
        [--backend-url <url>]      recorded in the deploy artifact (default 127.0.0.1:8080)
   sync-env                        deployments/<network>.json -> backend/.env, .env.local
+  check-idl                       tracked idl/ matches target/ build output (no --network)
   metadata initialize [--from ${brandingPath()}]
   metadata show
   metadata verify [--from <path>] [--full]
@@ -139,6 +144,9 @@ Commands:
 Flags:
   --dry-run    print what would run, send nothing
   --confirm    required for any mainnet write
+
+Signers: fixture keypairs are localnet-only. Other networks need
+  ANCHOR_WALLET_<NETWORK> (init, metadata) and DEPLOYER_WALLET_<NETWORK> (deploy).
 
 First deploy on a fresh cluster:
   pnpm cli deploy   --network devnet

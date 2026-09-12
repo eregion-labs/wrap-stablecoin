@@ -8,7 +8,8 @@
 import * as anchor from '@coral-xyz/anchor'
 import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAccount, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { adminKeypair, connection, KLEND_PROGRAM, lmaPda, readState, refreshReserveIx } from './common'
+import { KLEND_PROGRAM_ID, lendingMarketAuthority } from '../../cli/klend'
+import { adminKeypair, connection, readState, refreshReserveIx } from './common'
 
 const IDL = require('../../idl/wrap_stablecoin.json')
 const BN = anchor.BN
@@ -37,7 +38,7 @@ async function main() {
     const vaultConfig = new PublicKey(st.vaultConfig!)
     const vaultAuthority = new PublicKey(st.vaultAuthority!)
     const wrappedMint = new PublicKey(st.wrappedMint!)
-    const lma = lmaPda(market)
+    const lma = lendingMarketAuthority(market)
     const userWrapped = getAssociatedTokenAddressSync(wrappedMint, admin.publicKey)
 
     const A = st.assets.A
@@ -112,7 +113,7 @@ async function main() {
             .depositToKlend({ amount: DEPOSIT } as any)
             .accountsPartial({
                 admin: admin.publicKey, vaultConfig, vaultAuthority, assetConfig: p.assetConfig, klendConfig: p.klendConfig,
-                tokenVault: p.tokenVault, tokenMint: p.mint, klendProgram: KLEND_PROGRAM, lendingMarket: market, lendingMarketAuthority: lma,
+                tokenVault: p.tokenVault, tokenMint: p.mint, klendProgram: KLEND_PROGRAM_ID, lendingMarket: market, lendingMarketAuthority: lma,
                 reserve: p.reserve, reserveLiquiditySupply: p.reserveLiquiditySupply, reserveCollateralMint: p.reserveCollateralMint, collateralVault: p.collateralVault,
                 tokenProgram: TOKEN_PROGRAM_ID, collateralTokenProgram: TOKEN_PROGRAM_ID, instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             } as any)
@@ -157,7 +158,7 @@ async function main() {
         .harvestYield({ collateralAmount: new BN(redeem.toString()) } as any)
         .accountsPartial({
             admin: admin.publicKey, vaultConfig, vaultAuthority, assetConfig: pa.assetConfig, klendConfig: pa.klendConfig, tokenMint: pa.mint,
-            treasuryVault: pa.treasuryVault, collateralVault: pa.collateralVault, klendProgram: KLEND_PROGRAM, lendingMarket: market, lendingMarketAuthority: lma,
+            treasuryVault: pa.treasuryVault, collateralVault: pa.collateralVault, klendProgram: KLEND_PROGRAM_ID, lendingMarket: market, lendingMarketAuthority: lma,
             reserve: pa.reserve, reserveLiquiditySupply: pa.reserveLiquiditySupply, reserveCollateralMint: pa.reserveCollateralMint,
             tokenProgram: TOKEN_PROGRAM_ID, collateralTokenProgram: TOKEN_PROGRAM_ID, instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
         } as any)
@@ -192,7 +193,7 @@ async function main() {
             .withdrawAllFromKlend()
             .accountsPartial({
                 admin: admin.publicKey, vaultConfig, vaultAuthority, assetConfig: p.assetConfig, klendConfig: p.klendConfig,
-                tokenVault: p.tokenVault, tokenMint: p.mint, klendProgram: KLEND_PROGRAM, lendingMarket: market, lendingMarketAuthority: lma,
+                tokenVault: p.tokenVault, tokenMint: p.mint, klendProgram: KLEND_PROGRAM_ID, lendingMarket: market, lendingMarketAuthority: lma,
                 reserve: p.reserve, reserveLiquiditySupply: p.reserveLiquiditySupply, reserveCollateralMint: p.reserveCollateralMint, collateralVault: p.collateralVault,
                 tokenProgram: TOKEN_PROGRAM_ID, collateralTokenProgram: TOKEN_PROGRAM_ID, instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             } as any)

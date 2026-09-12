@@ -65,9 +65,6 @@ pub enum ErrorCode {
     #[msg("Pubkey already in allowlist")]
     AllowlistDuplicate,
 
-    #[msg("Harvest amount exceeds available yield")]
-    ExceedsHarvestableYield,
-
     #[msg("Sweep amount exceeds home vault surplus")]
     ExceedsHomeSurplus,
 

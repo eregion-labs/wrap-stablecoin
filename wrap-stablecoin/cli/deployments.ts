@@ -24,7 +24,8 @@ export type DeployedAsset = {
 export type Deployment = {
   cluster: Network;
   rpcUrl: string;
-  wsUrl: string;
+  /** Browser-facing RPC served by /v1/client-config; never the private rpcUrl. */
+  clientRpcUrl: string;
   backendUrl: string;
   programId: string;
   /** Admin pubkey that seeds vault_config (backend `VAULT_AUTHORITY`). */
@@ -47,7 +48,7 @@ export type Deployment = {
 const REQUIRED_FIELDS: (keyof Deployment)[] = [
   "cluster",
   "rpcUrl",
-  "wsUrl",
+  "clientRpcUrl",
   "backendUrl",
   "programId",
   "authority",
@@ -73,6 +74,12 @@ export function readDeployment(network: Network): Deployment {
         `\`pnpm cli init --network ${network}\``,
     );
   }
+  if (dep.cluster !== network) {
+    throw new Error(
+      `${relative(file)} records cluster ${dep.cluster}, not ${network} - delete it and re-run ` +
+        `\`pnpm cli init --network ${network}\``,
+    );
+  }
   if (!dep.assets) dep.assets = {};
   return dep;
 }
@@ -81,9 +88,29 @@ export function readDeploymentIfPresent(network: Network): Deployment | undefine
   return fs.existsSync(deploymentPath(network)) ? readDeployment(network) : undefined;
 }
 
+/**
+ * An artifact describes exactly one vault. Merging a different program or
+ * authority into it would list the old vault's assets under the new one.
+ */
+export function assertSameVault(
+  existing: Deployment | undefined,
+  update: Pick<Deployment, "cluster" | "programId" | "authority">,
+): void {
+  if (!existing) return;
+  for (const field of ["programId", "authority"] as const) {
+    if (existing[field] !== update[field]) {
+      throw new Error(
+        `${relative(deploymentPath(update.cluster))} records ${field} ${existing[field]}, ` +
+          `not ${update[field]} - delete it and re-run \`pnpm cli init --network ${update.cluster}\``,
+      );
+    }
+  }
+}
+
 /** Merge into the existing artifact so re-running init keeps earlier assets. */
 export function writeDeployment(update: Deployment): Deployment {
   const existing = readDeploymentIfPresent(update.cluster);
+  assertSameVault(existing, update);
   const merged: Deployment = {
     ...existing,
     ...update,

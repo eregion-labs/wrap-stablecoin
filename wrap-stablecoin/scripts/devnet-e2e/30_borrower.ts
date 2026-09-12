@@ -7,7 +7,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Keypair, PublicKey, SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY, TransactionInstruction } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { adminKeypair, connection, KLEND_PROGRAM, patchAsset, readState, refreshReserveIx, sendIxs } from './common'
+import { KLEND_PROGRAM_ID } from '../../cli/klend'
+import { adminKeypair, connection, patchAsset, readState, refreshReserveIx, sendIxs } from './common'
 
 const sdk = require('@kamino-finance/klend-sdk')
 const BN = require('bn.js')
@@ -50,7 +51,7 @@ async function main() {
     const reserve = new PublicKey(a.reserve!)
     const reserveLiquiditySupply = new PublicKey(a.reserveLiquiditySupply!)
     const reserveCollateralMint = new PublicKey(a.reserveCollateralMint!)
-    const sentinel = KLEND_PROGRAM.toBase58()
+    const sentinel = KLEND_PROGRAM_ID.toBase58()
     console.log(`[${a.symbol}] borrower:`, borrower.publicKey.toBase58())
 
     // 1. fund borrower with SOL + test token
@@ -65,12 +66,12 @@ async function main() {
     await sendIxs(conn, fundIxs, admin, [], 'fund-borrower')
 
     // 2. user metadata + obligation
-    const [userMetadata] = await sdk.userMetadataPda(borrower.publicKey.toBase58(), KLEND_PROGRAM.toBase58())
+    const [userMetadata] = await sdk.userMetadataPda(borrower.publicKey.toBase58(), KLEND_PROGRAM_ID.toBase58())
     const obligationPda = await sdk.getObligationPdaWithArgs(
         market.toBase58(),
         borrower.publicKey.toBase58(),
         { tag: 0, id: 0, seed1: SystemProgram.programId.toBase58(), seed2: SystemProgram.programId.toBase58() },
-        KLEND_PROGRAM.toBase58(),
+        KLEND_PROGRAM_ID.toBase58(),
     )
     const obligation = new PublicKey(obligationPda.toString())
 
@@ -94,8 +95,8 @@ async function main() {
     if (setupIxs.length) await sendIxs(conn, setupIxs, borrower, [], 'init-obligation')
 
     // 3. deposit collateral
-    const [lma] = await sdk.lendingMarketAuthPda(market.toBase58(), KLEND_PROGRAM.toBase58())
-    const [collateralSupply] = await sdk.reserveCollateralSupplyPda(reserve.toBase58(), KLEND_PROGRAM.toBase58())
+    const [lma] = await sdk.lendingMarketAuthPda(market.toBase58(), KLEND_PROGRAM_ID.toBase58())
+    const [collateralSupply] = await sdk.reserveCollateralSupplyPda(reserve.toBase58(), KLEND_PROGRAM_ID.toBase58())
     const depositIx = sdk.depositReserveLiquidityAndObligationCollateral(
         { liquidityAmount: new BN(COLLATERAL.toString()) },
         {
@@ -110,7 +111,7 @@ async function main() {
     await sendIxs(conn, [refreshReserveIx(reserve, market), refreshObPre, depositIx], borrower, [], 'deposit-collateral')
 
     // 4. borrow
-    const [feeReceiver] = await sdk.reserveFeeVaultPda(reserve.toBase58(), KLEND_PROGRAM.toBase58())
+    const [feeReceiver] = await sdk.reserveFeeVaultPda(reserve.toBase58(), KLEND_PROGRAM_ID.toBase58())
     const refreshObIx = sdk.refreshObligation({ lendingMarket: market.toBase58(), obligation: obligation.toBase58() }, [{ address: reserve.toBase58(), role: 1 }])
     const borrowIx = sdk.borrowObligationLiquidity(
         { liquidityAmount: new BN(BORROW.toString()) },

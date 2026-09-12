@@ -91,8 +91,8 @@ Cluster / RPC / program / mint config is **not** set in the Next apps — it is 
 | Backend | `PROGRAM_ID` | `wrap_stablecoin` program id (or `PROGRAM_ID_{NETWORK}`) |
 | Backend | `VAULT_AUTHORITY` | Seeds `vault_config` PDA |
 | Backend | `DEFAULT_ASSET_MINT` | Required default collateral mint |
-| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (client-config; alias `PUBLIC_SOLANA_RPC_URL`) |
-| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (client-config; alias `PUBLIC_SOLANA_WS_URL`) |
+| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (client-config) |
+| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (client-config) |
 | Backend | `SECRET_NAME` | Optional AWS SM flat JSON (fill-missing-only) |
 | Frontend / admin | `NEXT_PUBLIC_BACKEND_URL` | Backend origin (**sole** public deployment env) |
 

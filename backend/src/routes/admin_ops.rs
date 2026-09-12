@@ -10,9 +10,11 @@ use utoipa::ToSchema;
 use wrap_stablecoin::UpdateAssetPolicyArgs;
 
 use crate::app_state::AppState;
+use crate::routes::blocking::run_blocking;
+use crate::routes::errors::admin_error;
 use crate::routes::network::RequestNetwork;
-use crate::tx_submit::sign_and_send_versioned_tx;
 use crate::routes::tx::TxResponse;
+use crate::tx_submit::sign_and_send_versioned_tx;
 use crate::wrap_stablecoin::{
     fetch_treasury_withdrawal_history, parse_asset_status, unsigned_accept_authority_tx_bytes,
     unsigned_accept_mint_authority_tx_bytes, unsigned_add_asset_tx_bytes,
@@ -165,9 +167,8 @@ fn execute_raw(
     kp: &solana_sdk::signature::Keypair,
     raw: Result<Vec<u8>, anyhow::Error>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let raw = raw.map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    let raw = raw.map_err(admin_error)?;
+    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp]).map_err(admin_error)?;
     Ok(Json(ExecuteResponse {
         signature: sig.to_string(),
     }))
@@ -176,7 +177,7 @@ fn execute_raw(
 fn unsigned_tx_response(
     raw: Result<Vec<u8>, anyhow::Error>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let raw = raw.map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    let raw = raw.map_err(admin_error)?;
     Ok(Json(TxResponse {
         transaction_b64: b64_encode_tx(&raw),
     }))
@@ -185,17 +186,20 @@ fn unsigned_tx_response(
 fn require_admin_keypair(
     state: &AppState,
     network: crate::app_state::SolanaNetwork,
-) -> Result<(Arc<solana_sdk::signature::Keypair>, &crate::app_state::NetworkContext), (axum::http::StatusCode, String)>
-{
+) -> Result<
+    (
+        Arc<solana_sdk::signature::Keypair>,
+        &crate::app_state::NetworkContext,
+    ),
+    (axum::http::StatusCode, String),
+> {
     let ctx = state
         .require_network(network)
         .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
     let kp = ctx.admin_keypair.clone().ok_or_else(|| {
         (
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            format!(
-                "admin keypair not configured for `{network}` — set ADMIN_KEYPAIR_PATH"
-            ),
+            format!("admin keypair not configured for `{network}` — set ADMIN_KEYPAIR_PATH"),
         )
     })?;
     Ok((kp, ctx))
@@ -222,27 +226,30 @@ pub async fn register_asset(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<RegisterAssetRequest>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let admin = kp.pubkey();
-    let asset_mint = parse_mint(&body.asset_mint, "assetMint")?;
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let admin = kp.pubkey();
+        let asset_mint = parse_mint(&body.asset_mint, "assetMint")?;
 
-    let raw = unsigned_add_asset_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &admin,
-        &asset_mint,
-        body.mint_enabled,
-        body.redeem_enabled,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let raw = unsigned_add_asset_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &admin,
+            &asset_mint,
+            body.mint_enabled,
+            body.redeem_enabled,
+        )
+        .map_err(admin_error)?;
 
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
 
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Update on-chain asset policy using the server-held vault admin keypair.
@@ -257,39 +264,41 @@ pub async fn update_asset_policy(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<UpdateAssetPolicyBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let admin = kp.pubkey();
-    let asset_mint = parse_mint(&body.asset_mint, "assetMint")?;
-    let asset_status = parse_asset_status(&body.asset_status)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let admin = kp.pubkey();
+        let asset_mint = parse_mint(&body.asset_mint, "assetMint")?;
+        let asset_status = parse_asset_status(&body.asset_status).map_err(admin_error)?;
 
-    let args = UpdateAssetPolicyArgs {
-        mint_enabled: body.mint_enabled,
-        redeem_enabled: body.redeem_enabled,
-        mint_haircut_bps: body.mint_haircut_bps,
-        redemption_haircut_bps: body.redemption_haircut_bps,
-        mint_cap: body.mint_cap,
-        exposure_cap: body.exposure_cap,
-        min_liquidity_target: body.min_liquidity_target,
-        asset_status,
-    };
+        let args = UpdateAssetPolicyArgs {
+            mint_enabled: body.mint_enabled,
+            redeem_enabled: body.redeem_enabled,
+            mint_haircut_bps: body.mint_haircut_bps,
+            redemption_haircut_bps: body.redemption_haircut_bps,
+            mint_cap: body.mint_cap,
+            exposure_cap: body.exposure_cap,
+            min_liquidity_target: body.min_liquidity_target,
+            asset_status,
+        };
 
-    let raw = unsigned_update_asset_policy_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &admin,
-        &asset_mint,
-        &args,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let raw = unsigned_update_asset_policy_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &admin,
+            &asset_mint,
+            &args,
+        )
+        .map_err(admin_error)?;
 
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
 
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Wrap collateral from the admin wallet into the wrapped token (issue).
@@ -304,28 +313,31 @@ pub async fn admin_mint(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AdminMintRequest>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let admin = kp.pubkey();
-    let asset_mint = ctx
-        .resolve_asset_mint(body.asset_mint.as_deref())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let admin = kp.pubkey();
+        let asset_mint = ctx
+            .resolve_asset_mint(body.asset_mint.as_deref())
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
 
-    let raw = unsigned_wrap_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &admin,
-        &asset_mint,
-        body.amount,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let raw = unsigned_wrap_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &admin,
+            &asset_mint,
+            body.amount,
+        )
+        .map_err(admin_error)?;
 
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
 
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Burn wrapped token from the admin wallet and receive underlying (redeem).
@@ -340,28 +352,31 @@ pub async fn admin_redeem(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AdminRedeemRequest>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let admin = kp.pubkey();
-    let asset_mint = ctx
-        .resolve_asset_mint(body.asset_mint.as_deref())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let admin = kp.pubkey();
+        let asset_mint = ctx
+            .resolve_asset_mint(body.asset_mint.as_deref())
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
 
-    let raw = unsigned_unwrap_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &admin,
-        &asset_mint,
-        body.amount,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let raw = unsigned_unwrap_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &admin,
+            &asset_mint,
+            body.amount,
+        )
+        .map_err(admin_error)?;
 
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
 
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 fn resolve_mint(
@@ -384,23 +399,26 @@ pub async fn deposit_to_klend(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AmountAssetBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let raw = unsigned_deposit_to_klend_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        body.amount,
-        &state.klend_scope_prices,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let raw = unsigned_deposit_to_klend_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            body.amount,
+            &state.klend_scope_prices,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Deploy `token_vault − cushion` into Kamino.
@@ -415,22 +433,25 @@ pub async fn deposit_all_to_klend(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AssetMintBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let raw = unsigned_deposit_all_to_klend_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        &state.klend_scope_prices,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let raw = unsigned_deposit_all_to_klend_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            &state.klend_scope_prices,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Recall underlying liquidity from Kamino into the home vault. `amount` is underlying
@@ -446,23 +467,26 @@ pub async fn withdraw_from_klend(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AmountAssetBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let raw = unsigned_withdraw_from_klend_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        body.amount,
-        &state.klend_scope_prices,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let raw = unsigned_withdraw_from_klend_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            body.amount,
+            &state.klend_scope_prices,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Recall the full Kamino position into the home vault.
@@ -477,22 +501,25 @@ pub async fn withdraw_all_from_klend(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AssetMintBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let raw = unsigned_withdraw_all_from_klend_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        &state.klend_scope_prices,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let raw = unsigned_withdraw_all_from_klend_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            &state.klend_scope_prices,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Harvest Kamino surplus into `treasury_vault`. Amount is kToken collateral atoms; on-chain caps it.
@@ -507,23 +534,26 @@ pub async fn harvest_yield(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<CollateralAmountBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let raw = unsigned_harvest_yield_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        body.collateral_amount,
-        &state.klend_scope_prices,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let raw = unsigned_harvest_yield_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            body.collateral_amount,
+            &state.klend_scope_prices,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Move home-vault surplus above liability + cushion into `treasury_vault`.
@@ -538,22 +568,25 @@ pub async fn sweep_home_surplus(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AmountAssetBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let raw = unsigned_sweep_home_surplus_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        body.amount,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let raw = unsigned_sweep_home_surplus_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            body.amount,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Send treasury tokens to `destination` (wallet; ATA is created if missing).
@@ -568,34 +601,37 @@ pub async fn withdraw_treasury(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<WithdrawTreasuryBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let destination = parse_mint(&body.destination, "destination")?;
-    let raw = unsigned_withdraw_treasury_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &kp.pubkey(),
-        &asset_mint,
-        body.amount,
-        &destination,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    state.treasury_history.prepend(
-        &asset_mint,
-        TreasuryWithdrawalRow {
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let destination = parse_mint(&body.destination, "destination")?;
+        let raw = unsigned_withdraw_treasury_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &kp.pubkey(),
+            &asset_mint,
+            body.amount,
+            &destination,
+        )
+        .map_err(admin_error)?;
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        state.treasury_history.prepend(
+            &asset_mint,
+            TreasuryWithdrawalRow {
+                signature: sig.to_string(),
+                amount: body.amount,
+                destination: destination.to_string(),
+                initiator: kp.pubkey().to_string(),
+                block_time: Some(chrono_now_unix()),
+            },
+        );
+        Ok(Json(ExecuteResponse {
             signature: sig.to_string(),
-            amount: body.amount,
-            destination: destination.to_string(),
-            initiator: kp.pubkey().to_string(),
-            block_time: Some(chrono_now_unix()),
-        },
-    );
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+        }))
+    })
+    .await?
 }
 
 fn chrono_now_unix() -> i64 {
@@ -626,19 +662,22 @@ pub async fn withdraw_treasury_history(
     RequestNetwork(network): RequestNetwork,
     Query(query): Query<WithdrawTreasuryHistoryQuery>,
 ) -> Result<Json<TreasuryWithdrawalHistory>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let asset_mint = resolve_mint(ctx, query.asset_mint.as_deref())?;
-    let history = fetch_treasury_withdrawal_history(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &asset_mint,
-        &state.treasury_history,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(history))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let asset_mint = resolve_mint(ctx, query.asset_mint.as_deref())?;
+        let history = fetch_treasury_withdrawal_history(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &asset_mint,
+            &state.treasury_history,
+        )
+        .map_err(admin_error)?;
+        Ok(Json(history))
+    })
+    .await?
 }
 
 /// Set the global vault pause flag.
@@ -653,18 +692,21 @@ pub async fn set_paused(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<BoolFlagBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_set_paused_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            body.value,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_set_paused_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                body.value,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Set whether wrap is public (false requires allowlist).
@@ -679,18 +721,21 @@ pub async fn set_wrap_public(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<BoolFlagBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_set_wrap_public_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            body.value,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_set_wrap_public_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                body.value,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Set whether unwrap is public (false requires allowlist).
@@ -705,18 +750,21 @@ pub async fn set_unwrap_public(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<BoolFlagBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_set_unwrap_public_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            body.value,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_set_unwrap_public_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                body.value,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Initialize the vault allowlist PDA (once).
@@ -729,17 +777,20 @@ pub async fn init_allowlist(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_init_allowlist_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_init_allowlist_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+            ),
+        )
+    })
+    .await?
 }
 
 /// Add one or more wallets to the wrap/unwrap allowlist (max 64 on-chain).
@@ -754,67 +805,70 @@ pub async fn add_to_allowlist(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<AddToAllowlistBody>,
 ) -> Result<Json<AddAllowlistResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let mut members: Vec<Pubkey> = Vec::new();
-    if let Some(pk) = body.pubkey.as_deref().filter(|s| !s.trim().is_empty()) {
-        members.push(parse_mint(pk, "pubkey")?);
-    }
-    if let Some(list) = body.pubkeys {
-        for (i, pk) in list.iter().enumerate() {
-            if pk.trim().is_empty() {
-                continue;
-            }
-            members.push(parse_mint(pk, &format!("pubkeys[{i}]"))?);
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let mut members: Vec<Pubkey> = Vec::new();
+        if let Some(pk) = body.pubkey.as_deref().filter(|s| !s.trim().is_empty()) {
+            members.push(parse_mint(pk, "pubkey")?);
         }
-    }
-    if members.is_empty() {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            "pubkey or pubkeys is required".to_string(),
-        ));
-    }
-    let mut seen = std::collections::HashSet::new();
-    members.retain(|pk| seen.insert(*pk));
-    if members.len() > wrap_stablecoin::state::MAX_ALLOWED {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            format!(
-                "allowlist max is {} wallets",
-                wrap_stablecoin::state::MAX_ALLOWED
-            ),
-        ));
-    }
-
-    let mut last_sig = String::new();
-    let mut count = 0u32;
-    for member in &members {
-        let raw = unsigned_add_to_allowlist_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            member,
-        );
-        match execute_raw(ctx, kp.as_ref(), raw) {
-            Ok(Json(resp)) => {
-                last_sig = resp.signature;
-                count += 1;
-            }
-            Err(e) => {
-                if count == 0 {
-                    return Err(e);
+        if let Some(list) = body.pubkeys {
+            for (i, pk) in list.iter().enumerate() {
+                if pk.trim().is_empty() {
+                    continue;
                 }
-                return Err((
-                    e.0,
-                    format!("added {count} then failed on {member}: {}", e.1),
-                ));
+                members.push(parse_mint(pk, &format!("pubkeys[{i}]"))?);
             }
         }
-    }
-    Ok(Json(AddAllowlistResponse {
-        signature: last_sig,
-        count,
-    }))
+        if members.is_empty() {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                "pubkey or pubkeys is required".to_string(),
+            ));
+        }
+        let mut seen = std::collections::HashSet::new();
+        members.retain(|pk| seen.insert(*pk));
+        if members.len() > wrap_stablecoin::state::MAX_ALLOWED {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                format!(
+                    "allowlist max is {} wallets",
+                    wrap_stablecoin::state::MAX_ALLOWED
+                ),
+            ));
+        }
+
+        let mut last_sig = String::new();
+        let mut count = 0u32;
+        for member in &members {
+            let raw = unsigned_add_to_allowlist_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                member,
+            );
+            match execute_raw(ctx, kp.as_ref(), raw) {
+                Ok(Json(resp)) => {
+                    last_sig = resp.signature;
+                    count += 1;
+                }
+                Err(e) => {
+                    if count == 0 {
+                        return Err(e);
+                    }
+                    return Err((
+                        e.0,
+                        format!("added {count} then failed on {member}: {}", e.1),
+                    ));
+                }
+            }
+        }
+        Ok(Json(AddAllowlistResponse {
+            signature: last_sig,
+            count,
+        }))
+    })
+    .await?
 }
 
 /// Remove a wallet from the wrap/unwrap allowlist.
@@ -829,19 +883,22 @@ pub async fn remove_from_allowlist(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<PubkeyBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let member = parse_mint(&body.pubkey, "pubkey")?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_remove_from_allowlist_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            &member,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let member = parse_mint(&body.pubkey, "pubkey")?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_remove_from_allowlist_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                &member,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Propose a two-step admin transfer (`pending_admin`).
@@ -856,19 +913,22 @@ pub async fn transfer_authority(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<TransferAuthorityBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let new_admin = parse_mint(&body.new_admin, "newAdmin")?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_transfer_authority_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            &new_admin,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let new_admin = parse_mint(&body.new_admin, "newAdmin")?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_transfer_authority_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                &new_admin,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Cancel a pending admin transfer.
@@ -881,17 +941,20 @@ pub async fn cancel_transfer_authority(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_cancel_transfer_authority_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_cancel_transfer_authority_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+            ),
+        )
+    })
+    .await?
 }
 
 /// Unsigned `accept_authority` tx. Signer must be `pending_admin`. Secret never hits this server.
@@ -904,14 +967,17 @@ pub async fn accept_authority_tx(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    unsigned_tx_response(unsigned_accept_authority_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-    ))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        unsigned_tx_response(unsigned_accept_authority_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+        ))
+    })
+    .await?
 }
 
 /// Execute `accept_authority` when `ADMIN_KEYPAIR` is the pending destination.
@@ -924,39 +990,42 @@ pub async fn accept_authority(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let raw = unsigned_accept_authority_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let vtx: solana_sdk::transaction::VersionedTransaction = bincode::deserialize(&raw)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let payer = vtx
-        .message
-        .static_account_keys()
-        .first()
-        .copied()
-        .ok_or_else(|| {
-            (
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let raw = unsigned_accept_authority_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+        )
+        .map_err(admin_error)?;
+        let vtx: solana_sdk::transaction::VersionedTransaction = bincode::deserialize(&raw)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let payer = vtx
+            .message
+            .static_account_keys()
+            .first()
+            .copied()
+            .ok_or_else(|| {
+                (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "accept_authority tx has no fee payer".to_string(),
+                )
+            })?;
+        if payer != kp.pubkey() {
+            return Err((
                 axum::http::StatusCode::BAD_REQUEST,
-                "accept_authority tx has no fee payer".to_string(),
-            )
-        })?;
-    if payer != kp.pubkey() {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            format!(
-                "admin keypair is not the pending destination ({payer}); use POST /v1/admin/accept-authority/tx"
-            ),
-        ));
-    }
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+                format!(
+                    "admin keypair is not the pending destination ({payer}); use POST /v1/admin/accept-authority/tx"
+                ),
+            ));
+        }
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }
 
 /// Enable Kamino for a registered asset (one-shot).
@@ -971,28 +1040,31 @@ pub async fn enable_klend(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<EnableKlendBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
-    let lending_market = parse_mint(&body.lending_market, "lendingMarket")?;
-    let reserve = parse_mint(&body.reserve, "reserve")?;
-    let reserve_liquidity_supply =
-        parse_mint(&body.reserve_liquidity_supply, "reserveLiquiditySupply")?;
-    let collateral_mint = parse_mint(&body.collateral_mint, "collateralMint")?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_enable_klend_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            &asset_mint,
-            &lending_market,
-            &reserve,
-            &reserve_liquidity_supply,
-            &collateral_mint,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let asset_mint = resolve_mint(ctx, body.asset_mint.as_deref())?;
+        let lending_market = parse_mint(&body.lending_market, "lendingMarket")?;
+        let reserve = parse_mint(&body.reserve, "reserve")?;
+        let reserve_liquidity_supply =
+            parse_mint(&body.reserve_liquidity_supply, "reserveLiquiditySupply")?;
+        let collateral_mint = parse_mint(&body.collateral_mint, "collateralMint")?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_enable_klend_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                &asset_mint,
+                &lending_market,
+                &reserve,
+                &reserve_liquidity_supply,
+                &collateral_mint,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Propose transferring SPL mint authority (permanently disables wrap on accept).
@@ -1007,19 +1079,22 @@ pub async fn propose_mint_authority(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<ProposeMintAuthorityBody>,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let new_mint_authority = parse_mint(&body.new_mint_authority, "newMintAuthority")?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_propose_mint_authority_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-            &new_mint_authority,
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let new_mint_authority = parse_mint(&body.new_mint_authority, "newMintAuthority")?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_propose_mint_authority_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+                &new_mint_authority,
+            ),
+        )
+    })
+    .await?
 }
 
 /// Cancel a pending mint-authority proposal.
@@ -1032,17 +1107,20 @@ pub async fn cancel_propose_mint_authority(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    execute_raw(
-        ctx,
-        kp.as_ref(),
-        unsigned_cancel_propose_mint_authority_tx_bytes(
-            ctx.rpc.as_ref(),
-            &ctx.program_id,
-            &ctx.vault_authority_seed,
-            &kp.pubkey(),
-        ),
-    )
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        execute_raw(
+            ctx,
+            kp.as_ref(),
+            unsigned_cancel_propose_mint_authority_tx_bytes(
+                ctx.rpc.as_ref(),
+                &ctx.program_id,
+                &ctx.vault_authority_seed,
+                &kp.pubkey(),
+            ),
+        )
+    })
+    .await?
 }
 
 /// Unsigned `accept_mint_authority` tx. Signer must be `pending_mint_authority`. Permanently disables wrap.
@@ -1055,14 +1133,17 @@ pub async fn accept_mint_authority_tx(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    unsigned_tx_response(unsigned_accept_mint_authority_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-    ))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        unsigned_tx_response(unsigned_accept_mint_authority_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+        ))
+    })
+    .await?
 }
 
 /// Execute `accept_mint_authority` when `ADMIN_KEYPAIR` is the pending destination. Permanently disables wrap.
@@ -1075,37 +1156,40 @@ pub async fn accept_mint_authority(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<ExecuteResponse>, (axum::http::StatusCode, String)> {
-    let (kp, ctx) = require_admin_keypair(&state, network)?;
-    let raw = unsigned_accept_mint_authority_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let vtx: solana_sdk::transaction::VersionedTransaction = bincode::deserialize(&raw)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    let payer = vtx
-        .message
-        .static_account_keys()
-        .first()
-        .copied()
-        .ok_or_else(|| {
-            (
+    run_blocking(move || {
+        let (kp, ctx) = require_admin_keypair(&state, network)?;
+        let raw = unsigned_accept_mint_authority_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+        )
+        .map_err(admin_error)?;
+        let vtx: solana_sdk::transaction::VersionedTransaction = bincode::deserialize(&raw)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let payer = vtx
+            .message
+            .static_account_keys()
+            .first()
+            .copied()
+            .ok_or_else(|| {
+                (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "accept_mint_authority tx has no fee payer".to_string(),
+                )
+            })?;
+        if payer != kp.pubkey() {
+            return Err((
                 axum::http::StatusCode::BAD_REQUEST,
-                "accept_mint_authority tx has no fee payer".to_string(),
-            )
-        })?;
-    if payer != kp.pubkey() {
-        return Err((
-            axum::http::StatusCode::BAD_REQUEST,
-            format!(
-                "admin keypair is not the pending mint authority ({payer}); use POST /v1/admin/accept-mint-authority/tx"
-            ),
-        ));
-    }
-    let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(ExecuteResponse {
-        signature: sig.to_string(),
-    }))
+                format!(
+                    "admin keypair is not the pending mint authority ({payer}); use POST /v1/admin/accept-mint-authority/tx"
+                ),
+            ));
+        }
+        let sig = sign_and_send_versioned_tx(ctx.rpc.as_ref(), &raw, &[kp.as_ref()])
+            .map_err(admin_error)?;
+        Ok(Json(ExecuteResponse {
+            signature: sig.to_string(),
+        }))
+    })
+    .await?
 }

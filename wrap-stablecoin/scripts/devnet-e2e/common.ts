@@ -13,11 +13,15 @@ import {
     TransactionInstruction,
     sendAndConfirmTransaction,
 } from '@solana/web3.js'
-import { KLEND_PROGRAM_ID, lendingMarketAuthority } from '../../cli/klend'
-import { loadKeypair, rpcUrl, walletPath } from '../../cli/network'
+import { KLEND_PROGRAM_ID } from '../../cli/klend'
+import { FIXTURE_WALLET, loadKeypair, rpcUrl, walletPath } from '../../cli/network'
+
+// The e2e market is administered by the shared fixture admin. The CLI only
+// defaults to it on localnet, so opt in here, before any CLI code resolves a
+// devnet signer (20_seed_vault calls `cli init`).
+process.env.ANCHOR_WALLET_DEVNET ||= FIXTURE_WALLET
 
 export const RPC_URL = rpcUrl('devnet')
-export const KLEND_PROGRAM = KLEND_PROGRAM_ID
 /** Live devnet Pyth receiver USDC/USD price update account; both test stables peg ~$1. */
 export const PYTH_USDC_FEED = new PublicKey('Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX')
 
@@ -132,9 +136,9 @@ export function sighash(name: string): Buffer {
 
 /** KLend refresh_reserve ix; unused oracle slots point at the KLend program id as sentinel. */
 export function refreshReserveIx(reserve: PublicKey, market: PublicKey): TransactionInstruction {
-    const s = KLEND_PROGRAM
+    const s = KLEND_PROGRAM_ID
     return new TransactionInstruction({
-        programId: KLEND_PROGRAM,
+        programId: KLEND_PROGRAM_ID,
         keys: [
             { pubkey: reserve, isSigner: false, isWritable: true },
             { pubkey: market, isSigner: false, isWritable: false },
@@ -146,8 +150,6 @@ export function refreshReserveIx(reserve: PublicKey, market: PublicKey): Transac
         data: sighash('refresh_reserve'),
     })
 }
-
-export const lmaPda = lendingMarketAuthority
 
 /** Vault-seeded e2e assets only — numbered dummies are registered via the admin Reserves UI. */
 export const VAULT_ASSET_KEYS = ['A', 'B'] as const

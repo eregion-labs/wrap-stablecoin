@@ -82,7 +82,7 @@ Caching: `Cache-Control: public, max-age=60, stale-while-revalidate=300` + `ETag
 
 Never includes secrets (admin keypairs, internal privileged RPC credentials).
 
-Backend builds this from `CLIENT_SOLANA_RPC_URL` / `CLIENT_SOLANA_WS_URL` (legacy aliases `PUBLIC_SOLANA_*` accepted), `PROGRAM_ID`, `DEFAULT_ASSET_MINT`, and optional `EXPLORER_BASE_URL`.
+Backend builds this from `CLIENT_SOLANA_RPC_URL` / `CLIENT_SOLANA_WS_URL`, `PROGRAM_ID`, `DEFAULT_ASSET_MINT`, and optional `EXPLORER_BASE_URL`.
 
 ## Network guard
 
@@ -290,12 +290,12 @@ If `ADMIN_KEYPAIR` equals the pending destination, `POST /v1/admin/accept-author
 
 `getMultipleAccounts` is also required and is called with up to 100 keys per request.
 
-Every read behind `GET /v1/vault/assets` uses the client's configured commitment (`confirmed`): the GPA, the batched account sweeps, and the simulated `refresh_reserve` that produces the Kamino marks. The simulation has to set it explicitly — `RpcSimulateTransactionConfig` defaults to no commitment, which the RPC serves at `finalized` — so the asset list, the balances joined onto it, and the harvest/recall caps all come from one bank.
+Every read behind `GET /v1/vault/assets` uses the client's configured commitment (`confirmed`): the GPA, the batched account sweeps, and the simulated `refresh_reserve` that produces the Kamino marks. The simulation has to set it explicitly — `RpcSimulateTransactionConfig` defaults to no commitment, which the RPC serves at `finalized` — so the asset list, the balances joined onto it, and the harvest/recall caps are all read at the same commitment level. They are separate requests and can land on different slots.
 
 Set in `.env` (see `.env.example`):
 
 - `SOLANA_RPC_URL`, `SOLANA_NETWORK`, `PROGRAM_ID`, `VAULT_AUTHORITY`, `DEFAULT_ASSET_MINT`
-- `CLIENT_SOLANA_RPC_URL`, `CLIENT_SOLANA_WS_URL` (required for bootstrap; aliases `PUBLIC_SOLANA_*`)
+- `CLIENT_SOLANA_RPC_URL`, `CLIENT_SOLANA_WS_URL` (required for bootstrap)
 - `APP_ENV`, optional `DEPLOYMENT_ID` / `ADMIN_DASHBOARD_URL` / `EXPLORER_BASE_URL`
 - Optional `SECRET_NAME` (+ `AWS_REGION`) for AWS Secrets Manager fill-missing-only merge
 - `ADMIN_KEYPAIR_PATH` (optional, for `/v1/admin/*`)
