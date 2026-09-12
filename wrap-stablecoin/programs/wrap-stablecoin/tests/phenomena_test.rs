@@ -36,7 +36,7 @@ use utils::{
 };
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
-const WRAPPED_TOKEN_PROGRAM_ID: &str = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT";
+const WRAPPED_TOKEN_PROGRAM_ID: &str = "DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ";
 const USDC_LAMPORTS_PER_USDC: u64 = 1_000_000; // 6 decimals
 const MINT_SIZE: u64 = 82;
 

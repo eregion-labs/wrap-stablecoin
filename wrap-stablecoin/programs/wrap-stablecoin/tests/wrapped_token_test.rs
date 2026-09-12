@@ -20,7 +20,7 @@ use wrap_stablecoin::pda_seeds::{
 };
 
 const KLEND_PROGRAM_ID: &str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
-const WRAPPED_TOKEN_PROGRAM_ID: &str = "5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT";
+const WRAPPED_TOKEN_PROGRAM_ID: &str = "DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ";
 
 const LENDING_MARKET_SIZE: usize = 4656;
 const RESERVE_SIZE: usize = 8616;
