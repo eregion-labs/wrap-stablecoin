@@ -7,6 +7,7 @@ Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrap
 | Page | Description |
 |------|-------------|
 | [Architecture](Architecture) | System design, flows, accounts, security model |
+| [Flows](Flows) | Interactive diagrams: architecture, deployment CLI, wrap/unwrap, Kamino yield |
 | [Monorepo](Monorepo) | Repo layout, build commands, environment variables |
 | [On-chain program](On-chain-program) | Instructions, program ID, account types |
 | [Backend API](Backend-API) | Transaction builder and admin endpoints |
@@ -17,7 +18,7 @@ Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrap
 | Item | Value |
 |------|-------|
 | Program name | `wrap_stablecoin` |
-| Program ID | `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT` |
+| Program ID | `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ` |
 | Base collateral | Registered USD stables (USDC at launch; 1:1 Florin (FLRN) mint/burn) |
 | Yield venue | Kamino KLend |
 

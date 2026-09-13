@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Kamino Yield Lifecycle",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      610
+    ],
+    "legend": {
+      "entries": {
+        "emphasis": {
+          "label": "deploy / exit"
+        },
+        "security": {
+          "label": "invariant gate"
+        },
+        "default": {
+          "label": "wrap / recall / sweep"
+        },
+        "database": {
+          "label": "state account"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "label": "Entry"
+    },
+    {
+      "label": "Home vault"
+    },
+    {
+      "label": "KLend"
+    },
+    {
+      "label": "Position"
+    },
+    {
+      "label": "Treasury"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "user",
+      "type": "frontend",
+      "label": "User wrap",
+      "sublabel": "underlying in",
+      "stage": 0,
+      "row": 2,
+      "tag": "backing"
+    },
+    {
+      "id": "enable",
+      "type": "security",
+      "label": "enable_klend",
+      "sublabel": "Reserve parse",
+      "stage": 0,
+      "row": 3,
+      "tag": "one-shot"
+    },
+    {
+      "id": "token_vault",
+      "type": "database",
+      "label": "token_vault",
+      "sublabel": "user backing",
+      "stage": 1,
+      "row": 2,
+      "tag": "PDA"
+    },
+    {
+      "id": "klend_config",
+      "type": "database",
+      "label": "KLendConfig",
+      "sublabel": "total_liquidity_in_klend",
+      "stage": 2,
+      "row": 3,
+      "tag": "principal",
+      "width": 132
+    },
+    {
+      "id": "reserve",
+      "type": "external",
+      "label": "KLend Reserve",
+      "sublabel": "liquidity supply",
+      "stage": 2,
+      "row": 0,
+      "tag": "CPI"
+    },
+    {
+      "id": "collateral_vault",
+      "type": "database",
+      "label": "collateral_vault",
+      "sublabel": "kTokens",
+      "stage": 3,
+      "row": 2,
+      "tag": "PDA",
+      "width": 132
+    },
+    {
+      "id": "treasury_vault",
+      "type": "database",
+      "label": "treasury_vault",
+      "sublabel": "not backing",
+      "stage": 4,
+      "row": 1,
+      "tag": "yield",
+      "width": 132
+    },
+    {
+      "id": "destination",
+      "type": "external",
+      "label": "Destination ATA",
+      "sublabel": "operator wallet",
+      "stage": 4,
+      "row": 0,
+      "tag": "exit",
+      "width": 132
+    }
+  ],
+  "flows": [
+    {
+      "id": "wrap-in",
+      "from": "user",
+      "to": "token_vault",
+      "label": "wrap deposit",
+      "fromSide": "right",
+      "toSide": "left",
+      "variant": "default"
+    },
+    {
+      "id": "enable-bind",
+      "from": "enable",
+      "to": "klend_config",
+      "label": "enable_klend: Reserve fields match",
+      "fromSide": "right",
+      "toSide": "left",
+      "variant": "security"
+    },
+    {
+      "id": "deploy",
+      "from": "token_vault",
+      "to": "reserve",
+      "label": "deposit_to_klend: vault - amt >= cushion",
+      "fromSide": "top",
+      "toSide": "left",
+      "variant": "emphasis",
+      "via": [
+        [
+          315,
+          157
+        ]
+      ],
+      "labelAt": [
+        315,
+        300
+      ]
+    },
+    {
+      "id": "mint-ktokens",
+      "from": "reserve",
+      "to": "collateral_vault",
+      "label": "kTokens out; principal += delta",
+      "fromSide": "right",
+      "toSide": "top",
+      "variant": "emphasis",
+      "via": [
+        [
+          745,
+          157
+        ]
+      ],
+      "labelAt": [
+        745,
+        271
+      ]
+    },
+    {
+      "id": "recall",
+      "from": "collateral_vault",
+      "to": "token_vault",
+      "label": "withdraw_from_klend: principal ceil-scaled",
+      "fromSide": "left",
+      "toSide": "right",
+      "variant": "default"
+    },
+    {
+      "id": "harvest",
+      "from": "collateral_vault",
+      "to": "treasury_vault",
+      "label": "harvest_yield: remaining >= principal",
+      "fromSide": "right",
+      "toSide": "left",
+      "variant": "security",
+      "via": [
+        [
+          852,
+          385
+        ],
+        [
+          852,
+          271
+        ]
+      ],
+      "labelAt": [
+        852,
+        328
+      ]
+    },
+    {
+      "id": "sweep",
+      "from": "token_vault",
+      "to": "treasury_vault",
+      "label": "sweep_home_surplus: <= vault - liability - cushion",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "variant": "default",
+      "via": [
+        [
+          315,
+          442
+        ],
+        [
+          960,
+          442
+        ]
+      ],
+      "labelAt": [
+        637,
+        442
+      ]
+    },
+    {
+      "id": "treasury-exit",
+      "from": "treasury_vault",
+      "to": "destination",
+      "label": "withdraw_treasury: amount <= treasury",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "variant": "emphasis",
+      "labelAt": [
+        960,
+        214
+      ]
+    }
+  ]
+}

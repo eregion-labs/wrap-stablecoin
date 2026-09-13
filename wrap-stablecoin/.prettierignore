@@ -1,6 +1,7 @@
 .anchor
 .DS_Store
 target
+idl
 node_modules
 dist
 build

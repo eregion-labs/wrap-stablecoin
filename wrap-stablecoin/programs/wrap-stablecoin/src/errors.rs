@@ -65,9 +65,6 @@ pub enum ErrorCode {
     #[msg("Pubkey already in allowlist")]
     AllowlistDuplicate,
 
-    #[msg("Harvest amount exceeds available yield")]
-    ExceedsHarvestableYield,
-
     #[msg("Sweep amount exceeds home vault surplus")]
     ExceedsHomeSurplus,
 
@@ -149,8 +146,17 @@ pub enum ErrorCode {
     #[msg("KLend Reserve liquidity mint does not match the registered asset")]
     KlendReserveMintMismatch,
 
+    #[msg("KLend Reserve liquidity supply does not match the supplied account")]
+    KlendReserveLiquiditySupplyMismatch,
+
+    #[msg("KLend Reserve collateral mint does not match the supplied account")]
+    KlendReserveCollateralMintMismatch,
+
     #[msg("Kamino deposit moved no liquidity from the vault")]
     ZeroLiquidityDeposited,
+
+    #[msg("KLend collateral vault balance is inconsistent across the redeem")]
+    InconsistentKlendCollateralBalance,
 
     #[msg("Collateral mint must be classic SPL Token or Token-2022 with no extensions")]
     UnsupportedTokenExtension,

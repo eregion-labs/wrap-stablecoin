@@ -1,0 +1,9 @@
+{
+  "programs": {
+    "wrap_stablecoin": {
+      "destinations": [
+        { "path": "idl", "format": "both" }
+      ]
+    }
+  }
+}

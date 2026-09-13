@@ -35,7 +35,7 @@ flowchart TB
 | **Backend** | `backend/` | Build unsigned wrap/unwrap txs; execute admin vault and KLend ops |
 | **Frontend** | `frontend/` | Wallet connect, call API, sign and send txs |
 
-Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
+Program ID: `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ`
 
 ---
 
@@ -81,6 +81,8 @@ Florin (FLRN) supply tracks deposited collateral 1:1 (per asset policy). Lending
 Related types: `VaultConfig`, `AssetConfig`, `KLendConfig`, `Allowlist`.
 
 `VaultConfig` carries immutable `authority`, rotatable `admin`/`pending_admin`, wrapped mint, `total_stable_deposited`, and policy flags. Registered collateral is discovered via `AssetConfig` PDAs (no mint list on the vault). Four `flash_*` fields are **reserved layout** for an optional experimental feature (unused in shipped build).
+
+`VaultConfig` pins its 8-byte discriminator to `b"vaultcf2"` (`VAULT_CONFIG_DISCRIMINATOR`) instead of deriving it from the type name. Removing `asset_count`/`registered_assets` moved every field from `total_stable_deposited` onward 257 bytes earlier, while everything up to `vault_authority_bump` (`admin` included) kept its offset — and a name-derived discriminator is identical either side of that change. A vault written under the old layout would have decoded into a garbage `total_stable_deposited`, `paused`, `wrap_public` and `mint_authority_transferred`, silently when its registry was empty and as a misleading `AccountDidNotDeserialize` once assets were registered. Anchor now rejects such an account with `AccountDiscriminatorMismatch`. **There is no migration**: see [Operations.md](Operations.md#vault-layout-revisions).
 
 `AssetConfig` (seed `token_config`) pins per-asset mint, vaults, treasury, decimals, caps, and KLend enablement.
 

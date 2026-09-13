@@ -1,5 +1,6 @@
 use anchor_lang::AccountDeserialize;
 use anchor_lang::AnchorSerialize;
+use anchor_lang::Discriminator;
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
@@ -8,7 +9,7 @@ use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_client::rpc_filter::{Memcmp, RpcFilterType};
-use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::message::legacy::Message as LegacyMessage;
@@ -34,28 +35,21 @@ use crate::metaplex::{fetch_mint_metadata, MintMetadata};
 
 use super::{allowlist, asset_config, vault_authority, vault_config};
 
-fn asset_config_discriminator() -> [u8; 8] {
-    let mut hasher = Sha256::new();
-    hasher.update(b"account:AssetConfig");
-    let hash = hasher.finalize();
-    let mut out = [0u8; 8];
-    out.copy_from_slice(&hash[..8]);
-    out
-}
-
 /// AssetConfig PDAs for a vault via GPA (no on-chain mint directory).
 fn list_asset_configs_for_vault(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_config_key: &Pubkey,
 ) -> Result<Vec<(Pubkey, AssetConfig)>> {
-    let disc = asset_config_discriminator();
     let accounts = rpc
         .get_program_accounts_with_config(
             program_id,
             RpcProgramAccountsConfig {
                 filters: Some(vec![
-                    RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &disc)),
+                    RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                        0,
+                        AssetConfig::DISCRIMINATOR,
+                    )),
                     RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                         ASSET_CONFIG_VAULT_OFFSET,
                         vault_config_key.as_ref(),
@@ -64,7 +58,9 @@ fn list_asset_configs_for_vault(
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64),
                     data_slice: None,
-                    commitment: Some(CommitmentConfig::confirmed()),
+                    // The client's level, not a fixed one: this list is joined against per-asset
+                    // reads that all use it, so a second source of truth would let the two drift.
+                    commitment: Some(rpc.commitment()),
                     min_context_slot: None,
                 },
                 with_context: Some(false),
@@ -86,26 +82,38 @@ fn list_asset_configs_for_vault(
     Ok(out)
 }
 
+/// Solana JSON-RPC rejects `getMultipleAccounts` above 100 keys per request.
+const MAX_MULTIPLE_ACCOUNTS: usize = 100;
+
+/// `getMultipleAccounts` in 100-key requests, preserving input order. The vault holds an
+/// unbounded number of assets, so per-asset accounts must never be fetched one at a time.
+fn get_accounts_batched(rpc: &RpcClient, keys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+    let mut out = Vec::with_capacity(keys.len());
+    for chunk in keys.chunks(MAX_MULTIPLE_ACCOUNTS) {
+        let accounts = rpc
+            .get_multiple_accounts(chunk)
+            .context("getMultipleAccounts")?;
+        if accounts.len() != chunk.len() {
+            return Err(anyhow!(
+                "getMultipleAccounts returned {} entries for {} keys",
+                accounts.len(),
+                chunk.len()
+            ));
+        }
+        out.extend(accounts);
+    }
+    Ok(out)
+}
+
+/// Errors only when the lookup itself failed; a missing PDA is the "not registered" case.
 pub(crate) fn require_registered_asset(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_config_key: &Pubkey,
     asset_mint: &Pubkey,
 ) -> Result<(Pubkey, AssetConfig)> {
-    fetch_asset_config(rpc, program_id, vault_config_key, asset_mint)
-        .map_err(|_| anyhow!("asset not registered: {asset_mint}"))
-}
-
-fn asset_config_exists(
-    rpc: &RpcClient,
-    program_id: &Pubkey,
-    vault_config_key: &Pubkey,
-    asset_mint: &Pubkey,
-) -> bool {
-    let (addr, _) = asset_config(program_id, vault_config_key, asset_mint);
-    rpc.get_account(&addr)
-        .map(|a| !a.data.is_empty())
-        .unwrap_or(false)
+    fetch_asset_config_optional(rpc, program_id, vault_config_key, asset_mint)?
+        .ok_or_else(|| anyhow!("asset not registered: {asset_mint}"))
 }
 
 fn anchor_sighash(namespace: &str, name: &str) -> [u8; 8] {
@@ -300,30 +308,55 @@ pub(crate) fn fetch_vault_config(
     Ok((addr, v))
 }
 
-pub(crate) fn fetch_asset_config(
+/// `Ok(None)` only when the PDA does not exist. An RPC failure or a corrupt account is an error,
+/// never a silent "not registered".
+fn fetch_asset_config_optional(
     rpc: &RpcClient,
     program_id: &Pubkey,
     vault_config_key: &Pubkey,
     token_mint: &Pubkey,
-) -> Result<(Pubkey, AssetConfig)> {
+) -> Result<Option<(Pubkey, AssetConfig)>> {
     let (addr, _) = asset_config(program_id, vault_config_key, token_mint);
-    let acc = rpc
-        .get_account(&addr)
-        .with_context(|| format!("asset_config {addr}"))?;
-    let mut data: &[u8] = &acc.data;
-    let t =
-        AssetConfig::try_deserialize(&mut data).map_err(|e| anyhow!("asset_config decode: {e}"))?;
-    Ok((addr, t))
+    let account = rpc
+        .get_account_with_commitment(&addr, rpc.commitment())
+        .with_context(|| format!("asset_config {addr}"))?
+        .value;
+    let Some(account) = account.filter(|a| !a.data.is_empty()) else {
+        return Ok(None);
+    };
+    let mut data: &[u8] = &account.data;
+    let cfg = AssetConfig::try_deserialize(&mut data)
+        .map_err(|e| anyhow!("asset_config {addr} decode: {e}"))?;
+    Ok(Some((addr, cfg)))
+}
+
+/// SPL token account `amount` (little-endian u64 at offset 64); 0 when missing or too short.
+fn token_amount_of(account: Option<&Account>) -> u64 {
+    match account {
+        Some(a) if a.data.len() >= 72 => u64::from_le_bytes(a.data[64..72].try_into().unwrap()),
+        _ => 0,
+    }
 }
 
 fn get_token_account_amount(rpc: &RpcClient, ata: &Pubkey) -> Result<u64> {
     let acc = rpc
         .get_account(ata)
         .with_context(|| format!("token account {ata}"))?;
-    if acc.data.len() < 72 {
-        return Ok(0);
+    Ok(token_amount_of(Some(&acc)))
+}
+
+/// Balance for public read endpoints only: an unreachable account reads as 0 rather than failing
+/// the request. Logged, so a quote built on a degraded read is visible instead of silently wrong.
+/// Tx-building and admin paths use `get_token_account_amount(..)?` instead.
+fn token_amount_or_zero(rpc: &RpcClient, ata: &Pubkey) -> u64 {
+    match get_token_account_amount(rpc, ata) {
+        Ok(amount) => amount,
+        Err(e) => {
+            // The `token account {ata}` context is already on the error chain.
+            tracing::warn!("balance read failed, treating as 0: {e:#}");
+            0
+        }
     }
-    Ok(u64::from_le_bytes(acc.data[64..72].try_into().unwrap()))
 }
 
 /// KLend Reserve liquidity/collateral snapshot (account size 8624).
@@ -421,26 +454,53 @@ fn decode_klend_reserve_bytes(d: &[u8]) -> Option<KlendReserveMark> {
     })
 }
 
-fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Option<KlendReserveMark> {
-    let acc = rpc.get_account(reserve).ok()?;
-    decode_klend_reserve_bytes(&acc.data)
+/// Errors when the reserve account cannot be fetched; `Ok(None)` when its bytes do not decode.
+fn decode_klend_reserve(rpc: &RpcClient, reserve: &Pubkey) -> Result<Option<KlendReserveMark>> {
+    let acc = rpc
+        .get_account(reserve)
+        .with_context(|| format!("klend reserve {reserve}"))?;
+    Ok(decode_klend_reserve_bytes(&acc.data))
 }
 
 /// Live mark: simulate `refresh_reserve` and decode the post-sim reserve (Kamino accrues lazily).
-/// Falls back to the stored account when the oracle is missing or simulation fails.
+/// Falls back to the stored account when the oracle is missing or simulation fails. Errors when
+/// the stored reserve account cannot be fetched.
 fn decode_klend_reserve_live(
     rpc: &RpcClient,
     klend: &KLendConfig,
     fee_payer: &Pubkey,
     scope_prices: &HashMap<Pubkey, Pubkey>,
+) -> Result<Option<KlendReserveMark>> {
+    let stored = decode_klend_reserve(rpc, &klend.reserve)?;
+    Ok(klend_reserve_mark_live(
+        rpc,
+        klend,
+        fee_payer,
+        scope_prices,
+        stored,
+        None,
+    ))
+}
+
+/// As `decode_klend_reserve_live`, but the stored mark and the simulation blockhash come from the
+/// caller so a sweep over many reserves fetches each of them once. `blockhash: None` falls back to
+/// one `getLatestBlockhash` per simulation.
+fn klend_reserve_mark_live(
+    rpc: &RpcClient,
+    klend: &KLendConfig,
+    fee_payer: &Pubkey,
+    scope_prices: &HashMap<Pubkey, Pubkey>,
+    stored: Option<KlendReserveMark>,
+    blockhash: Option<Hash>,
 ) -> Option<KlendReserveMark> {
-    let stored = decode_klend_reserve(rpc, &klend.reserve);
     let Ok(oracle) = super::klend::scope_prices_for_reserve(scope_prices, &klend.reserve) else {
         return stored;
     };
     let refresh =
         super::klend::build_refresh_reserve_ix(&klend.reserve, &klend.lending_market, &oracle);
-    let Ok(tx) = build_versioned_tx(rpc, fee_payer, vec![refresh], None) else {
+    // A real hash, not a placeholder: `replace_recent_blockhash` should make the node substitute
+    // its own, but a provider that ignores it would fail every simulation into a stale mark.
+    let Ok(tx) = build_versioned_tx(rpc, fee_payer, vec![refresh], blockhash) else {
         return stored;
     };
     use solana_account_decoder_client_types::UiAccountEncoding;
@@ -450,6 +510,11 @@ fn decode_klend_reserve_live(
     let config = RpcSimulateTransactionConfig {
         sig_verify: false,
         replace_recent_blockhash: true,
+        // Explicit, because the field's default is `None` and the client then falls back to
+        // `CommitmentConfig::default()`, which is finalized. This mark drives the harvest and
+        // recall caps, so it has to use the same commitment as the `stored` fallback below and
+        // as the balances joined onto it in `fetch_vault_assets`.
+        commitment: Some(rpc.commitment()),
         accounts: Some(RpcSimulateTransactionAccountsConfig {
             encoding: Some(UiAccountEncoding::Base64),
             addresses: vec![klend.reserve.to_string()],
@@ -488,16 +553,30 @@ fn kamino_surplus_atoms(ktokens: u128, mark: &KlendReserveMark, tracked: u128) -
     live_value.saturating_sub(tracked).min(u64::MAX as u128) as u64
 }
 
+/// Batched KLend accounts for one asset, captured before the per-reserve simulation.
+struct KlendSnapshot {
+    config: KLendConfig,
+    collateral_ktokens: u64,
+    stored_mark: Option<KlendReserveMark>,
+}
+
 /// Caps for recall/harvest in kToken atoms, plus reserve free liquidity, surplus, and supply APY.
 /// Returns `(collateral_ktokens, kamino_available, max_recallable, max_harvestable, kamino_surplus, supply_apy_bps)`.
 fn klend_ktoken_caps(
     rpc: &RpcClient,
-    klend: &KLendConfig,
+    snapshot: KlendSnapshot,
     fee_payer: &Pubkey,
     scope_prices: &HashMap<Pubkey, Pubkey>,
+    blockhash: Option<Hash>,
 ) -> (u64, u64, u64, u64, u64, Option<u64>) {
-    let collateral_ktokens = get_token_account_amount(rpc, &klend.collateral_vault).unwrap_or(0);
-    let Some(mark) = decode_klend_reserve_live(rpc, klend, fee_payer, scope_prices) else {
+    let KlendSnapshot {
+        config: klend,
+        collateral_ktokens,
+        stored_mark,
+    } = snapshot;
+    let Some(mark) =
+        klend_reserve_mark_live(rpc, &klend, fee_payer, scope_prices, stored_mark, blockhash)
+    else {
         return (collateral_ktokens, 0, 0, 0, 0, None);
     };
     let available_u64 = mark.available.min(u64::MAX as u128) as u64;
@@ -714,7 +793,7 @@ pub fn unsigned_unwrap_tx_bytes(
         user == &vault.admin,
     )?;
 
-    let free_liquidity = get_token_account_amount(rpc, &asset_cfg.token_vault).unwrap_or(0);
+    let free_liquidity = get_token_account_amount(rpc, &asset_cfg.token_vault)?;
     validate_unwrap_amount(&asset_cfg, &vault, free_liquidity, amount)?;
 
     let collateral_program = collateral_token_program(rpc, asset_mint)?;
@@ -923,7 +1002,7 @@ pub fn redeem_quote(
     let (asset_config_key, cfg) =
         require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
-    let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
+    let free_liquidity = token_amount_or_zero(rpc, &cfg.token_vault);
     let deployed = klend
         .as_ref()
         .map(|k| k.total_liquidity_in_klend)
@@ -1010,6 +1089,70 @@ pub fn issue_quote(
     })
 }
 
+/// Every on-chain account `fetch_vault_assets` needs for one asset.
+struct AssetAccounts {
+    free_liquidity: u64,
+    treasury_balance: u64,
+    klend: Option<KlendSnapshot>,
+}
+
+/// Two batched sweeps for the whole vault instead of five account reads per asset: the first takes
+/// klend_config, token vault and treasury vault, the second the collateral vault and reserve of
+/// the KLend-enabled subset. Returned in `assets` order.
+fn prefetch_asset_accounts(
+    rpc: &RpcClient,
+    program_id: &Pubkey,
+    assets: &[(Pubkey, AssetConfig)],
+) -> Result<Vec<AssetAccounts>> {
+    let mut keys = Vec::with_capacity(assets.len() * 3);
+    for (asset_config_key, cfg) in assets {
+        keys.push(crate::wrap_stablecoin::pda::klend_config(program_id, asset_config_key).0);
+        keys.push(cfg.token_vault);
+        keys.push(cfg.treasury_vault);
+    }
+    let vault_accounts = get_accounts_batched(rpc, &keys).context("prefetch asset vaults")?;
+
+    let configs: Vec<Option<KLendConfig>> = keys
+        .chunks(3)
+        .zip(vault_accounts.chunks(3))
+        .map(|(k, c)| klend_config_of(&k[0], c[0].as_ref()))
+        .collect();
+    let mut klend_keys = Vec::with_capacity(configs.len() * 2);
+    for config in configs.iter().flatten() {
+        klend_keys.push(config.collateral_vault);
+        klend_keys.push(config.reserve);
+    }
+    let klend_accounts =
+        get_accounts_batched(rpc, &klend_keys).context("prefetch klend collateral and reserves")?;
+
+    // One [collateral_vault, reserve] pair per KLend-enabled asset, in `configs` order.
+    let mut klend_pairs = klend_accounts.chunks_exact(2);
+    let mut out = Vec::with_capacity(assets.len());
+    for (config, chunk) in configs.into_iter().zip(vault_accounts.chunks(3)) {
+        let klend = match config {
+            Some(config) => {
+                let pair = klend_pairs
+                    .next()
+                    .context("klend account batch shorter than the KLend config count")?;
+                Some(KlendSnapshot {
+                    config,
+                    collateral_ktokens: token_amount_of(pair[0].as_ref()),
+                    stored_mark: pair[1]
+                        .as_ref()
+                        .and_then(|a| decode_klend_reserve_bytes(&a.data)),
+                })
+            }
+            None => None,
+        };
+        out.push(AssetAccounts {
+            free_liquidity: token_amount_of(chunk[1].as_ref()),
+            treasury_balance: token_amount_of(chunk[2].as_ref()),
+            klend,
+        });
+    }
+    Ok(out)
+}
+
 pub fn fetch_vault_assets(
     rpc: &RpcClient,
     program_id: &Pubkey,
@@ -1017,16 +1160,36 @@ pub fn fetch_vault_assets(
     scope_prices: &HashMap<Pubkey, Pubkey>,
 ) -> Result<VaultSummaryView> {
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
-    let mut out = Vec::new();
-    for (asset_config_key, cfg) in list_asset_configs_for_vault(rpc, program_id, &vault_config_key)? {
+    let assets = list_asset_configs_for_vault(rpc, program_id, &vault_config_key)?;
+    let prefetched = prefetch_asset_accounts(rpc, program_id, &assets)?;
+    // One blockhash for every refresh_reserve simulation below, and none at all when no asset uses
+    // KLend. On failure each simulation falls back to fetching its own, so a hiccup here costs
+    // round trips rather than the whole response.
+    let blockhash = prefetched
+        .iter()
+        .any(|a| a.klend.is_some())
+        .then(|| {
+            rpc.get_latest_blockhash()
+                .inspect_err(|e| tracing::warn!("shared blockhash for refresh_reserve: {e}"))
+                .ok()
+        })
+        .flatten();
+
+    let mut out = Vec::with_capacity(assets.len());
+    for ((_, cfg), accounts) in assets.iter().zip(prefetched) {
         let mint = cfg.token_mint;
-        let klend = fetch_klend_config_optional(rpc, program_id, &asset_config_key);
-        let free_liquidity = get_token_account_amount(rpc, &cfg.token_vault).unwrap_or(0);
-        let treasury_balance = get_token_account_amount(rpc, &cfg.treasury_vault).unwrap_or(0);
+        let AssetAccounts {
+            free_liquidity,
+            treasury_balance,
+            klend,
+        } = accounts;
         let deployed = klend
             .as_ref()
-            .map(|k| k.total_liquidity_in_klend)
+            .map(|k| k.config.total_liquidity_in_klend)
             .unwrap_or(0);
+        let klend_enabled = klend.is_some();
+        let lending_market = klend.as_ref().map(|k| k.config.lending_market.to_string());
+        let klend_reserve = klend.as_ref().map(|k| k.config.reserve.to_string());
         let liability = cfg.net_liability_saturating();
         let liability_underlying =
             liability_to_underlying_amount(liability, cfg.token_decimals, vault.wrapped_decimals)
@@ -1041,8 +1204,7 @@ pub fn fetch_vault_assets(
             kamino_surplus,
             kamino_supply_apy_bps,
         ) = klend
-            .as_ref()
-            .map(|k| klend_ktoken_caps(rpc, k, &vault.admin, scope_prices))
+            .map(|k| klend_ktoken_caps(rpc, k, &vault.admin, scope_prices, blockhash))
             .unwrap_or((0, 0, 0, 0, 0, None));
         let home_surplus = home_surplus_amount(
             free_liquidity,
@@ -1052,7 +1214,7 @@ pub fn fetch_vault_assets(
             cushion,
         )
         .unwrap_or(0);
-        let max_redeemable = max_redeemable_wstable(&cfg, &vault, free_liquidity).unwrap_or(0);
+        let max_redeemable = max_redeemable_wstable(cfg, &vault, free_liquidity).unwrap_or(0);
         out.push(VaultAssetView {
             mint: mint.to_string(),
             token_decimals: cfg.token_decimals,
@@ -1077,9 +1239,9 @@ pub fn fetch_vault_assets(
             min_liquidity_target: cfg.min_liquidity_target,
             net_liability: liability,
             asset_status: asset_status_label(cfg.asset_status),
-            klend_enabled: klend.is_some(),
-            lending_market: klend.as_ref().map(|k| k.lending_market.to_string()),
-            klend_reserve: klend.as_ref().map(|k| k.reserve.to_string()),
+            klend_enabled,
+            lending_market,
+            klend_reserve,
             collateral_ktokens,
             kamino_available_liquidity,
             max_recallable_ktokens,
@@ -1268,7 +1430,7 @@ pub fn unsigned_add_asset_tx_bytes(
     if vault.admin != *admin {
         return Err(anyhow!("signer is not vault admin"));
     }
-    if asset_config_exists(rpc, program_id, &vault_config_key, underlying_mint) {
+    if fetch_asset_config_optional(rpc, program_id, &vault_config_key, underlying_mint)?.is_some() {
         return Err(anyhow!("asset already registered: {underlying_mint}"));
     }
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
@@ -1456,9 +1618,9 @@ pub fn unsigned_withdraw_from_klend_tx_bytes(
         )?;
     let (cpi, refresh) =
         klend_cpi_with_refresh(rpc, program_id, &asset_config_key, &asset_cfg, scope_prices)?;
-    let mark = decode_klend_reserve_live(rpc, &cpi.klend, admin, scope_prices)
+    let mark = decode_klend_reserve_live(rpc, &cpi.klend, admin, scope_prices)?
         .ok_or_else(|| anyhow!("could not decode KLend reserve for exchange rate"))?;
-    let vault_ktokens = get_token_account_amount(rpc, &cpi.collateral_vault).unwrap_or(0);
+    let vault_ktokens = get_token_account_amount(rpc, &cpi.collateral_vault)?;
     let collateral_amount =
         underlying_to_ktokens(underlying_amount as u128, &mark).min(vault_ktokens);
     if collateral_amount == 0 {
@@ -1627,18 +1789,32 @@ pub fn unsigned_withdraw_treasury_tx_bytes(
     bincode::serialize(&tx).map_err(|e| anyhow!("serialize tx: {e}"))
 }
 
+fn klend_config_of(key: &Pubkey, account: Option<&Account>) -> Option<KLendConfig> {
+    let account = account.filter(|a| !a.data.is_empty())?;
+    let mut data: &[u8] = &account.data;
+    KLendConfig::try_deserialize(&mut data)
+        .inspect_err(|e| {
+            tracing::warn!("klend_config {key} decode failed, treating as disabled: {e}")
+        })
+        .ok()
+}
+
+/// `None` means KLend is not enabled for the asset. A failed lookup or decode reads the same way,
+/// so both are logged: the caller would otherwise quote an unreachable reserve as zero deployed
+/// liquidity.
 fn fetch_klend_config_optional(
     rpc: &RpcClient,
     program_id: &Pubkey,
     asset_config: &Pubkey,
 ) -> Option<KLendConfig> {
     let (key, _) = crate::wrap_stablecoin::pda::klend_config(program_id, asset_config);
-    let acc = rpc.get_account(&key).ok()?;
-    if acc.data.is_empty() {
-        return None;
+    match rpc.get_account_with_commitment(&key, rpc.commitment()) {
+        Ok(resp) => klend_config_of(&key, resp.value.as_ref()),
+        Err(e) => {
+            tracing::warn!("klend_config {key} lookup failed, treating as disabled: {e}");
+            None
+        }
     }
-    let mut data: &[u8] = &acc.data;
-    KLendConfig::try_deserialize(&mut data).ok()
 }
 
 fn asset_status_label(status: AssetStatus) -> String {

@@ -13,25 +13,23 @@ import {
     TransactionInstruction,
     sendAndConfirmTransaction,
 } from '@solana/web3.js'
+import { KLEND_PROGRAM_ID } from '../../cli/klend'
+import { FIXTURE_WALLET, loadKeypair, rpcUrl, walletPath } from '../../cli/network'
 
-export const RPC_URL = process.env.RPC_URL ?? 'https://api.devnet.solana.com'
-export const KLEND_PROGRAM = new PublicKey('KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD')
-/** wrap_stablecoin program deployed on devnet (fresh keypair, declare_id updated to match). */
-export const WRAP_PROGRAM = new PublicKey('DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ')
+// The e2e market is administered by the shared fixture admin. The CLI only
+// defaults to it on localnet, so opt in here, before any CLI code resolves a
+// devnet signer (20_seed_vault calls `cli init`).
+process.env.ANCHOR_WALLET_DEVNET ||= FIXTURE_WALLET
+
+export const RPC_URL = rpcUrl('devnet')
 /** Live devnet Pyth receiver USDC/USD price update account; both test stables peg ~$1. */
 export const PYTH_USDC_FEED = new PublicKey('Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX')
 
-const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
-export const SECRETS_DIR = process.env.SECRETS_DIR ?? path.join(PACKAGE_ROOT, '.secrets')
 export const STATE_FILE = path.join(__dirname, 'devnet-state.json')
-
-export function loadKeypair(file: string): Keypair {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, 'utf8'))))
-}
 
 /** Admin keypair: vault authority/admin, KLend market owner, mint authority of both test tokens. */
 export function adminKeypair(): Keypair {
-    return loadKeypair(path.join(SECRETS_DIR, 'admwu2g9WV2kdwTzjasLXTy7tWq3W15BrP4PE7UZJ5x.json'))
+    return loadKeypair(walletPath('devnet'))
 }
 
 export interface AssetState {
@@ -138,9 +136,9 @@ export function sighash(name: string): Buffer {
 
 /** KLend refresh_reserve ix; unused oracle slots point at the KLend program id as sentinel. */
 export function refreshReserveIx(reserve: PublicKey, market: PublicKey): TransactionInstruction {
-    const s = KLEND_PROGRAM
+    const s = KLEND_PROGRAM_ID
     return new TransactionInstruction({
-        programId: KLEND_PROGRAM,
+        programId: KLEND_PROGRAM_ID,
         keys: [
             { pubkey: reserve, isSigner: false, isWritable: true },
             { pubkey: market, isSigner: false, isWritable: false },
@@ -151,10 +149,6 @@ export function refreshReserveIx(reserve: PublicKey, market: PublicKey): Transac
         ],
         data: sighash('refresh_reserve'),
     })
-}
-
-export function lmaPda(market: PublicKey): PublicKey {
-    return PublicKey.findProgramAddressSync([Buffer.from('lma'), market.toBuffer()], KLEND_PROGRAM)[0]
 }
 
 /** Vault-seeded e2e assets only — numbered dummies are registered via the admin Reserves UI. */

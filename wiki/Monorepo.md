@@ -14,9 +14,14 @@ backend/                  # Axum API (unsigned tx builder + public client-config
 frontend/                 # Next.js wallet UI
 admin-frontend/           # Next.js operator console (backend-signed admin txs)
 shared/client-config/     # Shared Zod schema for GET /v1/client-config
-deployments/              # Cluster artifacts (localnet.json from anchor run local)
+deployments/              # Per-cluster deploy artifacts written by `cli init`
 wiki/                     # This wiki
 ```
+
+`deployments/` is gitignored for every cluster, so a fresh machine must re-run
+`pnpm cli init` against the deployed vault (idempotent: each step is skipped
+when its account already exists) or obtain `deployments/<network>.json` out of
+band before `pnpm cli sync-env` can run.
 
 ## Prerequisites
 
@@ -49,7 +54,22 @@ anchor build
 anchor run local   # also syncs backend + frontend env files
 ```
 
-IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
+IDL build output lands in `wrap-stablecoin/target/`, which is gitignored, so a fresh checkout has no IDL until something builds. The **committed** copy under `wrap-stablecoin/idl/` removes that dependency for the consumers that read the IDL directly:
+
+- `scripts/devnet-e2e/40_flow_test.ts` `require()`s `idl/wrap_stablecoin.json` at runtime, so it runs against a fresh checkout with no build.
+- `cli/` reads the same file for both the runtime `Program` and the program id (`cli/network.ts`), so every CLI command — and `20_seed_vault.ts` and `seed_localnet.ts`, which call `cli init` — works with no build. `scripts/local_env.sh` reads it too, so the localnet validator loads the program at `declare_id!` rather than at whatever keypair `anchor build` last wrote.
+- The mocha tests and `scripts/backend_smoke.ts` import only the `WrapStablecoin` **type** from `idl/wrap_stablecoin.ts`. Their runtime `Program` still comes from `anchor.workspace.wrapStablecoin`, which Anchor resolves to `target/idl/`, so those still need `anchor build` first.
+
+After any change to program accounts, instructions or errors, regenerate the tracked copy and commit it:
+
+```bash
+cd wrap-stablecoin
+anchor idl build -o idl/wrap_stablecoin.json -t idl/wrap_stablecoin.ts
+```
+
+The tracked files are generated output, never hand-edited, so they are byte-identical to what a build produces and a byte comparison against `target/` is the drift check: `pnpm cli check-idl` runs it on both artifacts, and `pnpm cli deploy` and `scripts/verify_branding_release.sh` run it after `anchor build`. (The `.ts` header comment points at `target/idl/wrap_stablecoin.json` because Anchor writes it that way; the authoritative copy is the tracked one next to it.)
+
+Destinations are recorded in `wrap-stablecoin/.idl-sync.json`. Because nothing is edited after generation, copying `target/idl/wrap_stablecoin.json` and `target/types/wrap_stablecoin.ts` into `idl/` is equivalent to the command above.
 
 ## Backend
 
@@ -86,8 +106,8 @@ pnpm run dev
 | Backend | `PROGRAM_ID` | `wrap_stablecoin` program id (or `PROGRAM_ID_{NETWORK}`) |
 | Backend | `VAULT_AUTHORITY` | Pubkey that seeds `vault_config` PDA |
 | Backend | `DEFAULT_ASSET_MINT` | Required; network-scoped override supported |
-| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (alias `PUBLIC_SOLANA_RPC_URL`) |
-| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (alias `PUBLIC_SOLANA_WS_URL`) |
+| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC |
+| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS |
 | Backend | `EXPLORER_BASE_URL` | Explorer base in client-config (default Solscan) |
 | Backend | `SECRET_NAME` | Optional AWS SM flat JSON |
 | Backend | `ADMIN_KEYPAIR_PATH` | Optional admin signer for `/v1/admin/*` |

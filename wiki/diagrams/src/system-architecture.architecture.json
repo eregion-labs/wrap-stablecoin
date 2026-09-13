@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Florin System Architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "viewBox": [1370, 700],
+    "repository": { "url": "https://github.com/eregion-labs/wrap-stablecoin", "revision": "1c4b294109756ac774c98fda80ed359502506803" },
+    "views": [
+      { "id": "user-wrap", "label": "User wrap / unwrap", "focus": ["publicApp", "publicApi", "rpc", "program", "pdas"], "note": "Backend builds an unsigned tx; the wallet signs; the browser submits it to the client RPC." },
+      { "id": "admin-ops", "label": "Local-only admin ops", "focus": ["adminApp", "adminApi", "backendEnv", "rpc", "program", "klend", "oracle"], "note": "Unauthenticated /v1/admin/* signs server-side with the optional admin keypair." },
+      { "id": "deploy-config", "label": "Deploy and config", "focus": ["cli", "backendEnv", "program"], "note": "deployments/<network>.json is the source for backend/.env and both .env.local files." }
+    ]
+  },
+  "components": [
+    { "id": "backendEnv", "type": "database", "label": "Backend config", "sublabel": ".env + admin keypair", "pos": [315, 40], "size": [170, 64],
+      "sources": [{ "path": "backend/src/app_state.rs", "line": 102, "end_line": 135 }, { "path": "backend/src/routes/admin_ops.rs", "line": 186 }] },
+    { "id": "cli", "type": "external", "label": "Deploy CLI", "sublabel": "deployments/<network>.json", "pos": [885, 40], "size": [170, 64],
+      "sources": [{ "path": "wrap-stablecoin/cli/index.ts", "line": 128 }, { "path": "wrap-stablecoin/cli/deployments.ts", "line": 58 }, { "path": "wrap-stablecoin/cli/commands/sync-env.ts", "line": 135 }] },
+    { "id": "adminApp", "type": "frontend", "label": "Admin console", "sublabel": "Next.js :3002", "pos": [30, 210], "size": [170, 64],
+      "sources": [{ "path": "admin-frontend/src/stores/klendStore.ts", "line": 97 }, { "path": "admin-frontend/src/lib/signLocalTx.ts", "line": 29 }] },
+    { "id": "adminApi", "type": "security", "label": "Admin API", "sublabel": "/v1/admin/* server-signed", "tag": "no auth", "pos": [315, 210], "size": [170, 64],
+      "sources": [{ "path": "backend/src/lib.rs", "line": 143, "end_line": 178 }, { "path": "wrap-stablecoin/cli/commands/sync-env.ts", "line": 120, "end_line": 123 }] },
+    { "id": "publicApp", "type": "frontend", "label": "Public app", "sublabel": "Next.js + wallet-adapter", "pos": [30, 380], "size": [170, 64],
+      "sources": [{ "path": "frontend/src/components/WrapRedeemPanel.tsx", "line": 236 }, { "path": "frontend/src/lib/sendWithRefresh.ts", "line": 62 }, { "path": "frontend/src/providers/ClientConfigProvider.tsx", "line": 104 }] },
+    { "id": "publicApi", "type": "backend", "label": "Public API", "sublabel": "/v1/tx, quote, vault", "pos": [315, 380], "size": [170, 64],
+      "sources": [{ "path": "backend/src/lib.rs", "line": 216, "end_line": 225 }, { "path": "backend/src/routes/tx.rs", "line": 100 }] },
+    { "id": "rpc", "type": "cloud", "label": "Solana RPC", "sublabel": "GPA + getMultipleAccounts", "pos": [600, 380], "size": [170, 64],
+      "sources": [{ "path": "backend/src/wrap_stablecoin/builder.rs", "line": 39 }, { "path": "backend/src/wrap_stablecoin/builder.rs", "line": 90 }] },
+    { "id": "program", "type": "backend", "label": "wrap_stablecoin", "sublabel": "Anchor program", "pos": [885, 380], "size": [170, 64],
+      "sources": [{ "path": "wrap-stablecoin/programs/wrap-stablecoin/src/lib.rs", "line": 336 }, { "path": "wrap-stablecoin/programs/wrap-stablecoin/src/lib.rs", "line": 437 }] },
+    { "id": "pdas", "type": "database", "label": "Vault PDAs", "sublabel": "VaultConfig, AssetConfig", "pos": [1170, 380], "size": [170, 64],
+      "sources": [{ "path": "wrap-stablecoin/programs/wrap-stablecoin/src/pda_seeds.rs", "line": 10, "end_line": 38 }, { "path": "wrap-stablecoin/programs/wrap-stablecoin/src/state/asset_config.rs", "line": 13 }] },
+    { "id": "klend", "type": "external", "label": "Kamino KLend", "sublabel": "lending market + reserve", "pos": [885, 570], "size": [170, 64],
+      "sources": [{ "path": "wrap-stablecoin/programs/wrap-stablecoin/src/lib.rs", "line": 634 }, { "path": "wrap-stablecoin/programs/wrap-stablecoin/src/state/klend_config.rs", "line": 6 }] },
+    { "id": "oracle", "type": "external", "label": "Scope / Pyth oracle", "sublabel": "price account", "pos": [1170, 570], "size": [170, 64],
+      "sources": [{ "path": "backend/src/wrap_stablecoin/klend.rs", "line": 141, "end_line": 167 }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Browser", "wraps": ["adminApp", "publicApp"] },
+    { "kind": "region", "label": "Backend host (one cluster)", "wraps": ["backendEnv", "adminApi", "publicApi"] },
+    { "kind": "region", "label": "Solana cluster", "wraps": ["program", "pdas", "klend", "oracle"] }
+  ],
+  "connections": [
+    { "id": "build-tx", "from": "publicApp", "to": "publicApi", "label": "POST /v1/tx/*", "variant": "emphasis" },
+    { "id": "read-chain", "from": "publicApi", "to": "rpc", "label": "GPA, accounts", "variant": "emphasis" },
+    { "id": "execute", "from": "rpc", "to": "program", "label": "wrap / unwrap", "variant": "emphasis" },
+    { "id": "vault-state", "from": "program", "to": "pdas", "label": "mint / burn", "variant": "emphasis" },
+    { "id": "submit-tx", "from": "publicApp", "to": "rpc", "label": "wallet-signed tx", "variant": "emphasis", "fromSide": "bottom", "toSide": "bottom" },
+    { "id": "admin-call", "from": "adminApp", "to": "adminApi", "label": "/v1/admin/*" },
+    { "id": "admin-signer", "from": "backendEnv", "to": "adminApi", "label": "keypair", "variant": "security", "labelDy": 66 },
+    { "id": "admin-send", "from": "adminApi", "to": "rpc", "label": "send_and_confirm", "toSide": "top" },
+    { "id": "klend-cpi", "from": "program", "to": "klend", "label": "CPI deposit / redeem", "labelDy": 76 },
+    { "id": "oracle-read", "from": "klend", "to": "oracle", "label": "refresh_reserve" },
+    { "id": "cli-deploy", "from": "cli", "to": "program", "label": "deploy, init", "variant": "dashed", "labelDy": 150 },
+    { "id": "cli-env", "from": "cli", "to": "backendEnv", "label": "sync-env", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "User path", "items": ["Backend builds unsigned wrap/unwrap txs from chain reads", "Wallet signs; browser submits to the client-config RPC", "Program mints/burns FLRN against token_vault (policy haircuts)"] },
+    { "dot": "rose", "title": "Admin surface", "items": ["/v1/admin/* has no auth by design", "sync-env seeds BIND_HOST=127.0.0.1 on hosted clusters", "Server-signed routes return 503 without ADMIN_KEYPAIR_PATH"] },
+    { "dot": "amber", "title": "Kamino and config", "items": ["KLend CPIs are admin-only, prefixed by refresh_reserve", "RPC must serve getProgramAccounts with memcmp", "sync-env renders backend/.env and both .env.local files"] }
+  ]
+}

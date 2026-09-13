@@ -5,7 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
 use crate::app_state::SolanaNetwork;
-use crate::config::env::{env_opt, env_prefer_required};
+use crate::config::env::{env_opt, env_required};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -113,10 +113,8 @@ impl PublicClientConfig {
         let environment = Self::load_environment()?;
         let deployment_id = Self::load_deployment_id(environment)?;
 
-        // Prefer CLIENT_SOLANA_* (Folkmoot naming); accept PUBLIC_SOLANA_* as legacy alias.
-        let public_rpc =
-            env_prefer_required("CLIENT_SOLANA_RPC_URL", "PUBLIC_SOLANA_RPC_URL")?;
-        let public_ws = env_prefer_required("CLIENT_SOLANA_WS_URL", "PUBLIC_SOLANA_WS_URL")?;
+        let public_rpc = env_required("CLIENT_SOLANA_RPC_URL")?;
+        let public_ws = env_required("CLIENT_SOLANA_WS_URL")?;
         validate_url(&public_rpc, "CLIENT_SOLANA_RPC_URL")?;
         validate_url(&public_ws, "CLIENT_SOLANA_WS_URL")?;
 
@@ -131,8 +129,8 @@ impl PublicClientConfig {
             }
         });
         let public_app_url = env_opt("PUBLIC_APP_URL");
-        let explorer_base_url = env_opt("EXPLORER_BASE_URL")
-            .unwrap_or_else(|| "https://solscan.io".to_string());
+        let explorer_base_url =
+            env_opt("EXPLORER_BASE_URL").unwrap_or_else(|| "https://solscan.io".to_string());
         validate_url(&explorer_base_url, "EXPLORER_BASE_URL")?;
 
         let admin_dashboard = env_opt("CAPABILITY_ADMIN_DASHBOARD")
@@ -155,9 +153,7 @@ impl PublicClientConfig {
                 default_asset_mint: mint.to_string(),
             },
             features: PublicFeaturesConfig {
-                capabilities: PublicCapabilities {
-                    admin_dashboard,
-                },
+                capabilities: PublicCapabilities { admin_dashboard },
             },
             links: PublicLinksConfig {
                 admin_dashboard_url,
@@ -223,8 +219,6 @@ mod tests {
             "DEPLOYMENT_ID",
             "CLIENT_SOLANA_RPC_URL",
             "CLIENT_SOLANA_WS_URL",
-            "PUBLIC_SOLANA_RPC_URL",
-            "PUBLIC_SOLANA_WS_URL",
             "ADMIN_DASHBOARD_URL",
             "PUBLIC_APP_URL",
             "EXPLORER_BASE_URL",
@@ -245,8 +239,9 @@ mod tests {
             }
             let program = Keypair::new().pubkey();
             let mint = Keypair::new().pubkey();
-            let cfg = PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint.to_string())
-                .unwrap();
+            let cfg =
+                PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint.to_string())
+                    .unwrap();
             assert_eq!(cfg.schema_version, 1);
             assert_eq!(cfg.deployment_id, "local-dev");
             assert_eq!(cfg.environment, "local");
@@ -261,22 +256,6 @@ mod tests {
             let json = serde_json::to_string(&cfg).unwrap();
             assert!(!json.contains("ADMIN_KEYPAIR"));
             assert!(!json.contains("keypair"));
-        });
-    }
-
-    #[test]
-    fn accepts_legacy_public_solana_aliases() {
-        with_clean_env(|| {
-            unsafe {
-                std::env::set_var("APP_ENV", "local");
-                std::env::set_var("PUBLIC_SOLANA_RPC_URL", "http://127.0.0.1:8901");
-                std::env::set_var("PUBLIC_SOLANA_WS_URL", "ws://127.0.0.1:8900");
-            }
-            let program = Keypair::new().pubkey();
-            let mint = Keypair::new().pubkey().to_string();
-            let cfg = PublicClientConfig::from_env(SolanaNetwork::Localnet, &program, &mint)
-                .unwrap();
-            assert_eq!(cfg.solana.rpc_url, "http://127.0.0.1:8901");
         });
     }
 

@@ -57,6 +57,8 @@ Related types: `VaultConfig`, `AssetConfig`, `KLendConfig`, `Allowlist`.
 
 `VaultConfig` carries immutable `authority`, rotatable `admin`/`pending_admin`, wrapped mint, `total_stable_deposited`, and policy flags. Registered collateral is discovered via `AssetConfig` PDAs (no mint list on the vault). Four `flash_*` fields are **reserved layout** (initialized to safe defaults; unused in shipped build).
 
+Its 8-byte discriminator is pinned to `b"vaultcf2"` (`VAULT_CONFIG_DISCRIMINATOR`) rather than derived from the type name, so a vault written before `asset_count`/`registered_assets` were removed fails `AccountDiscriminatorMismatch` instead of reading everything from `total_stable_deposited` onward 257 bytes out of alignment. There is no migration — a pre-existing vault needs a fresh `authority` keypair and a new `initialize`.
+
 `AssetConfig` (seed `token_config`) pins per-asset mint, vaults, treasury, decimals, caps, and KLend enablement.
 
 ### PDA seeds

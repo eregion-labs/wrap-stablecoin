@@ -8,6 +8,8 @@ use solana_sdk::pubkey::Pubkey;
 use utoipa::ToSchema;
 
 use crate::app_state::AppState;
+use crate::routes::blocking::run_blocking;
+use crate::routes::errors::public_error;
 use crate::routes::network::RequestNetwork;
 use crate::wrap_stablecoin::{
     fetch_token_holders, fetch_vault_assets, fetch_vault_meta, issue_quote, redeem_quote,
@@ -61,17 +63,20 @@ pub async fn vault_assets(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<VaultAssetsResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let summary = fetch_vault_assets(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &state.klend_scope_prices,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(summary))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let summary = fetch_vault_assets(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &state.klend_scope_prices,
+        )
+        .map_err(public_error)?;
+        Ok(Json(summary))
+    })
+    .await?
 }
 
 /// Vault admin pubkey and cluster metadata for frontend gating.
@@ -84,16 +89,15 @@ pub async fn vault_meta(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<VaultMetaResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let meta = fetch_vault_meta(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(meta))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let meta = fetch_vault_meta(ctx.rpc.as_ref(), &ctx.program_id, &ctx.vault_authority_seed)
+            .map_err(public_error)?;
+        Ok(Json(meta))
+    })
+    .await?
 }
 
 /// Largest wrapped-token accounts (RPC top 20) plus mint supply. Keys are token-account addresses, not wallet owners.
@@ -106,16 +110,16 @@ pub async fn token_holders(
     State(state): State<Arc<AppState>>,
     RequestNetwork(network): RequestNetwork,
 ) -> Result<Json<TokenHoldersResponse>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let holders = fetch_token_holders(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(holders))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let holders =
+            fetch_token_holders(ctx.rpc.as_ref(), &ctx.program_id, &ctx.vault_authority_seed)
+                .map_err(public_error)?;
+        Ok(Json(holders))
+    })
+    .await?
 }
 
 /// Deterministic redeem quote from current on-chain policy and vault liquidity.
@@ -134,23 +138,26 @@ pub async fn redeem_quote_handler(
     RequestNetwork(network): RequestNetwork,
     Query(query): Query<RedeemQuoteQuery>,
 ) -> Result<Json<RedeemQuoteView>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let asset_mint = ctx
-        .resolve_asset_mint(query.asset_mint.as_deref())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let user = parse_user(query.user.as_deref())?;
-    let quote = redeem_quote(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &asset_mint,
-        query.amount,
-        user.as_ref(),
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(quote))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let asset_mint = ctx
+            .resolve_asset_mint(query.asset_mint.as_deref())
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let user = parse_user(query.user.as_deref())?;
+        let quote = redeem_quote(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &asset_mint,
+            query.amount,
+            user.as_ref(),
+        )
+        .map_err(public_error)?;
+        Ok(Json(quote))
+    })
+    .await?
 }
 
 /// Deterministic issue quote (mint haircut) from current on-chain policy.
@@ -169,21 +176,24 @@ pub async fn issue_quote_handler(
     RequestNetwork(network): RequestNetwork,
     Query(query): Query<IssueQuoteQuery>,
 ) -> Result<Json<IssueQuoteView>, (axum::http::StatusCode, String)> {
-    let ctx = state
-        .require_network(network)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let asset_mint = ctx
-        .resolve_asset_mint(query.asset_mint.as_deref())
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
-    let user = parse_user(query.user.as_deref())?;
-    let quote = issue_quote(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &asset_mint,
-        query.amount,
-        user.as_ref(),
-    )
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
-    Ok(Json(quote))
+    run_blocking(move || {
+        let ctx = state
+            .require_network(network)
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let asset_mint = ctx
+            .resolve_asset_mint(query.asset_mint.as_deref())
+            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e))?;
+        let user = parse_user(query.user.as_deref())?;
+        let quote = issue_quote(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &asset_mint,
+            query.amount,
+            user.as_ref(),
+        )
+        .map_err(public_error)?;
+        Ok(Json(quote))
+    })
+    .await?
 }

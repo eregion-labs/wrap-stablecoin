@@ -23,7 +23,6 @@ import {
     connection,
     ensureNumberedAssets,
     kitSigner,
-    KLEND_PROGRAM,
     numberedSymbol,
     parseNumberedArgs,
     printAssetRegistry,
@@ -33,6 +32,7 @@ import {
     sendIxs,
     writeState,
 } from './common'
+import { KLEND_PROGRAM_ID } from '../../cli/klend'
 
 const sdk = require('@kamino-finance/klend-sdk')
 const { createSolanaRpc } = require('@solana/kit')
@@ -81,12 +81,12 @@ async function ensureReserve(conn: any, rpc: any, admin: Keypair, market: Public
         mint.toBase58(),
         TOKEN_PROGRAM_ID.toBase58(),
         { address: reserve.toBase58() },
-        KLEND_PROGRAM.toBase58(),
+        KLEND_PROGRAM_ID.toBase58(),
     )
     // Devnet KLend InitReserve / UpdateReserveConfig require instruction_sysvar; SDK 7.x omits it.
     for (const ix of createIxs) withIxSysvar(ix)
     await sendIxs(conn, createIxs, admin, [reserveKp], `reserve-${symbol}`)
-    const pdas = await sdk.reservePdas(KLEND_PROGRAM.toBase58(), reserve.toBase58())
+    const pdas = await sdk.reservePdas(KLEND_PROGRAM_ID.toBase58(), reserve.toBase58())
 
     // config: pyth oracle, generous limits, 500%->1000% APR curve for fast yield
     const cfg = new sdk.AssetReserveConfig({
@@ -109,8 +109,8 @@ async function ensureReserve(conn: any, rpc: any, admin: Keypair, market: Public
     cfg.assetReserveConfigParams.maxAgePriceSeconds = 3600
     cfg.assetReserveConfigParams.borrowLimitOutsideElevationGroup = new Decimal(1_000_000_000)
 
-    const manager = new sdk.KaminoManager(rpc, undefined, KLEND_PROGRAM.toBase58(), undefined)
-    const marketState = await sdk.LendingMarket.fetch(rpc, market.toBase58(), KLEND_PROGRAM.toBase58())
+    const manager = new sdk.KaminoManager(rpc, undefined, KLEND_PROGRAM_ID.toBase58(), undefined)
+    const marketState = await sdk.LendingMarket.fetch(rpc, market.toBase58(), KLEND_PROGRAM_ID.toBase58())
     const configIxs = await manager.updateReserveIxs(kitSigner(admin.publicKey), { address: market.toBase58(), state: marketState }, reserve.toBase58(), cfg.getReserveConfig())
     const sendable = configIxs.filter((c: any) => !c.requiresGlobalAdmin).map((c: any) => withIxSysvar(c.ix))
     for (let i = 0; i < sendable.length; i += 4) await sendIxs(conn, sendable.slice(i, i + 4), admin, [], `cfg-${symbol}-${i}`)
@@ -119,7 +119,7 @@ async function ensureReserve(conn: any, rpc: any, admin: Keypair, market: Public
     const limitBuf = Buffer.alloc(8)
     limitBuf.writeBigUInt64LE(1_000_000_000n * 10n ** 6n)
     const outsideLimitIx = withIxSysvar(
-        await sdk.updateReserveConfigIx(kitSigner(admin.publicKey), market.toBase58(), reserve.toBase58(), new types.UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup(), limitBuf, KLEND_PROGRAM.toBase58()),
+        await sdk.updateReserveConfigIx(kitSigner(admin.publicKey), market.toBase58(), reserve.toBase58(), new types.UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup(), limitBuf, KLEND_PROGRAM_ID.toBase58()),
     )
     await sendIxs(conn, [outsideLimitIx], admin, [], `cfg-${symbol}-outside`)
 
@@ -177,7 +177,7 @@ async function main() {
         const market = marketKp.publicKey
         const size = sdk.LendingMarket.layout.span + 8
         const rent = await conn.getMinimumBalanceForRentExemption(size)
-        const [marketAuthority] = await sdk.lendingMarketAuthPda(market.toBase58(), KLEND_PROGRAM.toBase58())
+        const [marketAuthority] = await sdk.lendingMarketAuthPda(market.toBase58(), KLEND_PROGRAM_ID.toBase58())
         const quoteCurrency = Array(32).fill(0)
         for (let i = 0; i < 3; i++) quoteCurrency[i] = 'USD'.charCodeAt(i)
         const initIx = sdk.initLendingMarket(
@@ -192,7 +192,7 @@ async function main() {
         )
         await sendIxs(
             conn,
-            [SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: market, space: size, lamports: rent, programId: KLEND_PROGRAM }), initIx],
+            [SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: market, space: size, lamports: rent, programId: KLEND_PROGRAM_ID }), initIx],
             admin,
             [marketKp],
             'init-market',

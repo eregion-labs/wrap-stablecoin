@@ -268,10 +268,12 @@ pub fn unsigned_enable_klend_tx_bytes(
     let (asset_config_key, _) =
         require_registered_asset(rpc, program_id, &vault_config_key, asset_mint)?;
     let (klend_config_key, _) = klend_config(program_id, &asset_config_key);
-    if let Ok(acc) = rpc.get_account(&klend_config_key) {
-        if !acc.data.is_empty() {
-            return Err(anyhow!("KLend already enabled for this asset"));
-        }
+    let existing = rpc
+        .get_account_with_commitment(&klend_config_key, rpc.commitment())
+        .with_context(|| format!("klend_config {klend_config_key}"))?
+        .value;
+    if existing.is_some_and(|acc| !acc.data.is_empty()) {
+        return Err(anyhow!("KLend already enabled for this asset"));
     }
     let (vault_authority_key, _) = vault_authority(program_id, &vault_config_key);
     let klend_program = klend_program_id();
@@ -309,9 +311,7 @@ pub fn unsigned_propose_mint_authority_tx_bytes(
     new_mint_authority: &Pubkey,
 ) -> Result<Vec<u8>> {
     if *new_mint_authority == Pubkey::default() {
-        return Err(anyhow!(
-            "newMintAuthority must not be the default pubkey"
-        ));
+        return Err(anyhow!("newMintAuthority must not be the default pubkey"));
     }
     let (vault_config_key, vault) = fetch_vault_config(rpc, program_id, vault_authority_seed)?;
     if vault.mint_authority_transferred {

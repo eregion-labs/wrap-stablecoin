@@ -1,6 +1,7 @@
 **[Home](Home)**
 
 - [Architecture](Architecture)
+- [Flows](Flows)
 - [Local development](Local-development)
 - [Monorepo](Monorepo)
 - [Accounting](Accounting)

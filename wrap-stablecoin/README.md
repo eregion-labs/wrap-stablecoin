@@ -4,7 +4,7 @@ A Solana program that mints a wrapped stablecoin (Florin (FLRN)) 1:1 against USD
 
 > New to Florin? Start with **[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)** — a plain-language explainer with flowcharts.
 
-Program ID: `5JmAnBvF8akh9N36bqoxZdAsyv4SeW6oNedJpj3WUSoT`
+Program ID: `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ`
 
 ## Flow
 
@@ -40,7 +40,7 @@ The design splits user-facing flows from KLend interaction. `wrap` and `unwrap` 
 
 ## Accounts
 
-- **VaultConfig** — global config (authority, admin, pending_admin, wrapped mint, flags). Collateral membership is per-`AssetConfig` PDA (no mint list on the vault). Four `flash_*` fields are reserved layout (unused in shipped build).
+- **VaultConfig** — global config (authority, admin, pending_admin, wrapped mint, flags). Collateral membership is per-`AssetConfig` PDA (no mint list on the vault). Four `flash_*` fields are reserved layout (unused in shipped build). Discriminator pinned to `b"vaultcf2"`; a vault created before the asset-registry removal is unreadable and needs a fresh `authority` (see `ARCHITECTURE.md`).
 - **AssetConfig** — per-collateral registry (seed `token_config`): vaults, treasury, caps, KLend wiring, and deposit/liquidity totals.
 - **Allowlist** — optional list of pubkeys permitted to wrap/unwrap when the vault is private.
 
@@ -87,6 +87,88 @@ Stop: `anchor run stop-local` (alias: `anchor run local-stop`) — see [kill.md]
 The validator runs as a **background job** in that terminal (`&`); slot logs keep printing while the tab stays open.
 
 See [../wiki/Local-development.md](../wiki/Local-development.md) for full reference (Kamino fixtures, env vars, backend/frontend setup).
+
+## Deploying to devnet / mainnet
+
+One CLI ([`cli/`](cli/)) covers deploy, vault bootstrap, and env rendering. Every
+command except `check-idl` takes `--network`. Re-runs differ per command: `init`
+and `metadata initialize` skip what already exists (`init` first checks existing
+accounts against the requested parameters), `deploy` rebuilds and upgrades an
+existing program on every run, `sync-env` rewrites the env files, and `metadata update-uri` /
+`revoke-authority` send a transaction on every run.
+
+```bash
+export DEPLOYER_WALLET_DEVNET=<deployer keypair>   # deploy only
+export ANCHOR_WALLET_DEVNET=<vault admin keypair>  # init, metadata
+pnpm cli deploy   --network devnet
+pnpm cli init     --network devnet --decimals-mint <mint> --reserve <klend-reserve>
+pnpm cli sync-env --network devnet
+pnpm cli metadata initialize --network devnet
+```
+
+| Command | Does |
+|---------|------|
+| `deploy` | `anchor build`, then `anchor deploy` or `anchor upgrade` depending on whether the program id already exists on the cluster |
+| `init` | `initialize` → `add_asset` → `enable_klend`, skipping any step whose account exists once it matches the requested parameters, then writes `deployments/<network>.json` |
+| `sync-env` | Renders `backend/.env` + both `.env.local` files from that artifact |
+| `metadata` | Florin mint metadata (see [../branding](../branding)) |
+
+Further collateral is a second `init --asset <mint> --reserve <reserve>`, or the
+Reserves page in the admin console (`POST /v1/admin/register-asset`).
+
+`--reserve` is the only Kamino input: the reserve's market, liquidity supply, and
+kToken mint are read off the account ([`cli/klend.ts`](cli/klend.ts)) and
+re-validated on-chain by `enable_klend`.
+
+### CLI environment
+
+Resolved in [`cli/network.ts`](cli/network.ts). Each key is read as
+`{KEY}_{LOCALNET|DEVNET|MAINNET}`; the unscoped `{KEY}` is a fallback on localnet
+only. Values come from the shell or CI environment: `pnpm cli` does not load a
+`.env` file, and `wrap-stablecoin/.env` is only sourced by `anchor run local`.
+Wallet paths may be relative to `wrap-stablecoin/`.
+
+| Key | Read by | localnet | devnet | mainnet |
+|-----|---------|----------|--------|---------|
+| `RPC_URL` | `deploy`, `init`, `metadata` | `ANCHOR_PROVIDER_URL`, else `http://127.0.0.1:${RPC_PORT:-8901}` | `https://api.devnet.solana.com` | required |
+| `CLIENT_RPC_URL` | `init` (recorded for `sync-env`) | resolved `RPC_URL` | resolved `RPC_URL` | required |
+| `ANCHOR_WALLET` | `init`, `metadata` (vault admin) | fixture `admwu2g9...` | required | required |
+| `DEPLOYER_WALLET` | `deploy` (upgrade authority) | fixture `depxPDoQ...` | required | required |
+
+`sync-env` reads none of these; it renders from `deployments/<network>.json`.
+`scripts/seed_localnet.ts` resolves the localnet `RPC_URL`, `ANCHOR_WALLET`, and
+`DEPLOYER_WALLET` the same way.
+
+### Safety rails
+
+- `--dry-run` resolves every address and prints the steps without sending anything.
+- Mainnet writes need `--confirm`.
+- Fixture keypairs are localnet-only: the admin fixture's secret key is committed
+  (`fixtures/user/wallet.json`), so devnet and mainnet refuse to fall back to it
+  (see [CLI environment](#cli-environment)). The devnet-e2e scripts are the one
+  exception and opt into the fixture admin themselves.
+- Mainnet has no default RPC, and the browser-facing `CLIENT_RPC_URL_MAINNET` is
+  kept apart from `RPC_URL_MAINNET`: `sync-env` writes it to `backend/.env`,
+  which serves it to every browser via `GET /v1/client-config`, while a mainnet
+  deploy RPC is a private provider URL with an API key.
+- Only localnet reads unscoped keys: `anchor run`/`anchor test` export
+  `ANCHOR_WALLET` and `ANCHOR_PROVIDER_URL` for localnet, and a stray
+  `ANCHOR_WALLET` or `RPC_URL` from another shell can never sign for or point at
+  devnet or mainnet.
+- `deploy` checks the right key for the path it takes. A **first deploy** aborts
+  unless `target/deploy/wrap_stablecoin-keypair.json` matches `declare_id!` —
+  `anchor build` mints a fresh keypair whenever that file is missing, and
+  publishing under it would move the program away from the address every PDA
+  derives from. An **upgrade** never reads that file; it aborts unless the
+  deployer wallet is the program's on-chain upgrade authority.
+- The program's **upgrade authority** is the `deploy` signer
+  (`DEPLOYER_WALLET_*`), never the vault admin that `init` signs with. Point it
+  at a multisig before mainnet; the vault admin rotates separately on-chain via
+  `transfer_authority` / `accept_authority`. `deploy` can upgrade only while
+  `DEPLOYER_WALLET_*` holds the upgrade-authority key; once a multisig holds it,
+  upgrades go outside the CLI: `solana program write-buffer`, then
+  `solana program set-buffer-authority` to the multisig, then the multisig's
+  upgrade proposal.
 
 ## Running E2E tests locally
 

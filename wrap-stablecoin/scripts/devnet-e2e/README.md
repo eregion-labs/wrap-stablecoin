@@ -30,8 +30,11 @@ so measurable yield accrues in minutes. Price is the live devnet Pyth receiver U
 
 - `.secrets/` in this package (`wrap-stablecoin/.secrets/`) with the admin keypair
   (`admwu2g9...json`, a few devnet SOL) and deployer (`depxPDoQ...json`, ~6 SOL to deploy
-  the 831 KB program). Never committed. Same path Anchor.toml / local scripts use.
-  Override with `SECRETS_DIR` if needed.
+  the 831 KB program). Same path Anchor.toml / local scripts use. The admin's secret
+  is also committed as `fixtures/user/wallet.json`, so the CLI only defaults to it on
+  localnet: the e2e scripts opt in by defaulting `ANCHOR_WALLET_DEVNET` to it
+  (`common.ts`); set that variable to use another admin. `pnpm cli deploy` below has no
+  such default and needs `DEPLOYER_WALLET_DEVNET` set explicitly.
 - `yarn install` in `wrap-stablecoin/` and `anchor build`. The freshly generated program
   keypair means `declare_id!` + `Anchor.toml` are updated to the deployed id
   `DUKXaKc4q6DXKf6mB13iyAB5vgBRvMH8WC2qy3RGUqSJ` (the committed `BZQaR9Bc` had no keypair).
@@ -42,9 +45,7 @@ so measurable yield accrues in minutes. Price is the live devnet Pyth receiver U
 
 ```bash
 cd wrap-stablecoin
-solana program deploy target/deploy/wrap_stablecoin.so \
-  --program-id target/deploy/wrap_stablecoin-keypair.json \
-  -u devnet -k .secrets/depxPDoQBS9JXgwVumiJeuaaSU9b8FaCRwEVTaGD1v9.json
+pnpm cli deploy --network devnet   # builds, then deploys or upgrades
 ```
 
 ## Run the on-chain e2e (A/B vault path)
@@ -52,7 +53,7 @@ solana program deploy target/deploy/wrap_stablecoin.so \
 | Step | Script | What it does |
 |---|---|---|
 | 1 | `10_setup_market.ts` | tUSDA + tUSDB mints (admin = mint authority), shared KLend market, one reserve each with pyth oracle + steep curve |
-| 2 | `20_seed_vault.ts` | `initialize` -> `add_asset(A)` -> `enable_klend(A)` -> `add_asset(B)` -> `enable_klend(B)` (A/B only) |
+| 2 | `20_seed_vault.ts` | `cli init` per asset: `initialize` -> `add_asset(A)` -> `enable_klend(A)` -> `add_asset(B)` -> `enable_klend(B)` (A/B only); also writes `deployments/devnet.json` |
 | 3 | `30_borrower.ts A` / `30_borrower.ts B` | per-asset borrower: obligation, deposit 200k collateral, borrow 150k (utilization -> yield) |
 | 4 | `40_flow_test.ts` | wrap A+B -> deposit_to_klend -> wait for yield -> harvest_yield (positive) -> per-pool guard (unwrap B beyond liability must fail) -> withdraw_all_from_klend -> sweep_home_surplus -> withdraw_treasury -> unwrap |
 

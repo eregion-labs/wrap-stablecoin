@@ -9,8 +9,12 @@ use solana_sdk::transaction::VersionedTransaction;
 use utoipa::ToSchema;
 
 use crate::app_state::{AppState, NetworkContext};
+use crate::routes::blocking::run_blocking;
+use crate::routes::errors::public_error;
 use crate::routes::network::RequestNetwork;
-use crate::wrap_stablecoin::{ensure_tx_targets_program, unsigned_unwrap_tx_bytes, unsigned_wrap_tx_bytes};
+use crate::wrap_stablecoin::{
+    ensure_tx_targets_program, unsigned_unwrap_tx_bytes, unsigned_wrap_tx_bytes,
+};
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -83,8 +87,7 @@ fn verify_tx_bytes(
             format!("tx decode: {e}"),
         )
     })?;
-    ensure_tx_targets_program(&vtx, program_id)
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))
+    ensure_tx_targets_program(&vtx, program_id).map_err(public_error)
 }
 
 /// Build unsigned **wrap** (issue) transaction.
@@ -99,24 +102,28 @@ pub async fn issue_tx(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<IssueRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
-    let user = Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
-    let asset_mint = ctx
-        .resolve_asset_mint(body.asset_mint.as_deref())
-        .map_err(bad_request)?;
-    let raw = unsigned_wrap_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &user,
-        &asset_mint,
-        body.amount,
-    )
-    .map_err(|e| bad_request(e.to_string()))?;
-    verify_tx_bytes(&raw, &ctx.program_id)?;
-    Ok(Json(TxResponse {
-        transaction_b64: b64_encode_tx(&raw),
-    }))
+    run_blocking(move || {
+        let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
+        let user =
+            Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
+        let asset_mint = ctx
+            .resolve_asset_mint(body.asset_mint.as_deref())
+            .map_err(bad_request)?;
+        let raw = unsigned_wrap_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &user,
+            &asset_mint,
+            body.amount,
+        )
+        .map_err(public_error)?;
+        verify_tx_bytes(&raw, &ctx.program_id)?;
+        Ok(Json(TxResponse {
+            transaction_b64: b64_encode_tx(&raw),
+        }))
+    })
+    .await?
 }
 
 /// Build unsigned **unwrap** (redeem) transaction.
@@ -131,24 +138,28 @@ pub async fn redeem_tx(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<RedeemRequest>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, String)> {
-    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
-    let user = Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
-    let asset_mint = ctx
-        .resolve_asset_mint(body.asset_mint.as_deref())
-        .map_err(bad_request)?;
-    let raw = unsigned_unwrap_tx_bytes(
-        ctx.rpc.as_ref(),
-        &ctx.program_id,
-        &ctx.vault_authority_seed,
-        &user,
-        &asset_mint,
-        body.amount,
-    )
-    .map_err(|e| bad_request(e.to_string()))?;
-    verify_tx_bytes(&raw, &ctx.program_id)?;
-    Ok(Json(TxResponse {
-        transaction_b64: b64_encode_tx(&raw),
-    }))
+    run_blocking(move || {
+        let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
+        let user =
+            Pubkey::from_str(&body.user).map_err(|e| bad_request(format!("invalid user: {e}")))?;
+        let asset_mint = ctx
+            .resolve_asset_mint(body.asset_mint.as_deref())
+            .map_err(bad_request)?;
+        let raw = unsigned_unwrap_tx_bytes(
+            ctx.rpc.as_ref(),
+            &ctx.program_id,
+            &ctx.vault_authority_seed,
+            &user,
+            &asset_mint,
+            body.amount,
+        )
+        .map_err(public_error)?;
+        verify_tx_bytes(&raw, &ctx.program_id)?;
+        Ok(Json(TxResponse {
+            transaction_b64: b64_encode_tx(&raw),
+        }))
+    })
+    .await?
 }
 
 /// Simulate a serialized transaction (unsigned ok).
@@ -163,23 +174,27 @@ pub async fn preview_tx(
     RequestNetwork(network): RequestNetwork,
     Json(body): Json<PreviewRequest>,
 ) -> Result<Json<PreviewResponse>, (axum::http::StatusCode, String)> {
-    let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
-    use base64::Engine;
-    let raw = base64::engine::general_purpose::STANDARD
-        .decode(body.transaction_b64.trim())
-        .map_err(|e| bad_request(format!("base64: {e}")))?;
-    let vtx: VersionedTransaction = bincode::deserialize(&raw).map_err(|e| bad_request(format!("tx decode: {e}")))?;
-    ensure_tx_targets_program(&vtx, &ctx.program_id).map_err(|e| bad_request(e.to_string()))?;
-    let sim = ctx
-        .rpc
-        .simulate_transaction(&vtx)
-        .map_err(|e| bad_request(e.to_string()))?;
-    let err = sim.value.err.map(|e| format!("{e:?}"));
-    let logs = sim.value.logs;
-    let units_consumed = sim.value.units_consumed;
-    Ok(Json(PreviewResponse {
-        err,
-        logs,
-        units_consumed,
-    }))
+    run_blocking(move || {
+        let ctx = require_ctx(state.as_ref(), RequestNetwork(network))?;
+        use base64::Engine;
+        let raw = base64::engine::general_purpose::STANDARD
+            .decode(body.transaction_b64.trim())
+            .map_err(|e| bad_request(format!("base64: {e}")))?;
+        let vtx: VersionedTransaction =
+            bincode::deserialize(&raw).map_err(|e| bad_request(format!("tx decode: {e}")))?;
+        ensure_tx_targets_program(&vtx, &ctx.program_id).map_err(public_error)?;
+        let sim = ctx
+            .rpc
+            .simulate_transaction(&vtx)
+            .map_err(|e| public_error(e.into()))?;
+        let err = sim.value.err.map(|e| format!("{e:?}"));
+        let logs = sim.value.logs;
+        let units_consumed = sim.value.units_consumed;
+        Ok(Json(PreviewResponse {
+            err,
+            logs,
+            units_consumed,
+        }))
+    })
+    .await?
 }

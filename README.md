@@ -40,7 +40,20 @@ anchor build
 anchor run local   # persistent localnet + KLend — see wiki/Local-development.md
 ```
 
-IDL output: `wrap-stablecoin/target/idl/wrap_stablecoin.json`.
+IDL build output: `wrap-stablecoin/target/idl/wrap_stablecoin.json` (gitignored). The copy TS consumers read is the committed `wrap-stablecoin/idl/` — regenerate and commit it after any program change, see [`wiki/Monorepo.md`](wiki/Monorepo.md#on-chain-program).
+
+Other clusters go through the CLI (`wrap-stablecoin/cli/`), which deploys, boots
+the vault, and renders every env file from `deployments/<network>.json`:
+
+```bash
+cd wrap-stablecoin
+pnpm cli deploy   --network devnet
+pnpm cli init     --network devnet --decimals-mint <mint> --reserve <klend-reserve>
+pnpm cli sync-env --network devnet
+```
+
+`--dry-run` previews any command; mainnet writes need `--confirm`. See
+[`wrap-stablecoin/README.md`](wrap-stablecoin/README.md#deploying-to-devnet--mainnet).
 
 ## Backend (Axum + utoipa + Solana)
 
@@ -78,8 +91,8 @@ Cluster / RPC / program / mint config is **not** set in the Next apps — it is 
 | Backend | `PROGRAM_ID` | `wrap_stablecoin` program id (or `PROGRAM_ID_{NETWORK}`) |
 | Backend | `VAULT_AUTHORITY` | Seeds `vault_config` PDA |
 | Backend | `DEFAULT_ASSET_MINT` | Required default collateral mint |
-| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (client-config; alias `PUBLIC_SOLANA_RPC_URL`) |
-| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (client-config; alias `PUBLIC_SOLANA_WS_URL`) |
+| Backend | `CLIENT_SOLANA_RPC_URL` | Browser-safe RPC (client-config) |
+| Backend | `CLIENT_SOLANA_WS_URL` | Browser-safe WS (client-config) |
 | Backend | `SECRET_NAME` | Optional AWS SM flat JSON (fill-missing-only) |
 | Frontend / admin | `NEXT_PUBLIC_BACKEND_URL` | Backend origin (**sole** public deployment env) |
 

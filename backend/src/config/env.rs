@@ -46,18 +46,6 @@ pub fn env_for_network_required(base_key: &str, network: SolanaNetwork) -> Resul
     }
 }
 
-/// Prefer primary key, then legacy alias (both must be non-empty if set).
-pub fn env_prefer(primary: &str, alias: &str) -> Option<String> {
-    env_opt(primary).or_else(|| env_opt(alias))
-}
-
-pub fn env_prefer_required(primary: &str, alias: &str) -> Result<String> {
-    match env_prefer(primary, alias) {
-        Some(v) => Ok(v),
-        None => bail!("{primary} (or legacy {alias}) is required"),
-    }
-}
-
 /// Fill process env with keys from a flat JSON object that are missing or empty.
 /// Existing non-empty process env always wins.
 pub fn merge_fill_missing(flat: &serde_json::Map<String, serde_json::Value>) -> usize {

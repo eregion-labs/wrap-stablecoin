@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+NETWORK="${1:?usage: verify_branding_release.sh <localnet|devnet|mainnet>}"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MONO="$(cd "$ROOT/.." && pwd)"
 cd "$ROOT"
@@ -8,10 +10,8 @@ cd "$ROOT"
 echo "== anchor build =="
 anchor build
 
-echo "== metadata verify =="
-npm run cli -- metadata verify || {
-  echo "metadata verify skipped (vault may not be seeded yet)"
-}
+echo "== metadata verify ($NETWORK) =="
+npm run cli -- metadata verify --network "$NETWORK"
 
 echo "== grep audit (user-facing product names) =="
 if rg -n 'wStable' "$MONO/frontend/src" "$MONO/admin-frontend/src" "$MONO/backend/src" \
@@ -19,6 +19,9 @@ if rg -n 'wStable' "$MONO/frontend/src" "$MONO/admin-frontend/src" "$MONO/backen
   echo "FAIL: wStable still present in app source"
   exit 1
 fi
+
+echo "== tracked IDL matches build output =="
+npm run cli -- check-idl
 
 echo "== IDL contains initialize_mint_metadata =="
 node -e "

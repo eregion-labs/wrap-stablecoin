@@ -52,6 +52,33 @@ User unwrap never recalls Kamino automatically.
 - **Public wrap/unwrap:** `set_wrap_public` / `set_unwrap_public`; when false, callers must be on the allowlist (or be admin). Init the allowlist PDA and add members **before** flipping a flag private.
 - **Cushion:** set the pool’s min liquidity (`min_liquidity_target`) to reserve home vault on Kamino deploy and home-surplus sweep.
 
+## Vault layout revisions
+
+`VaultConfig`'s discriminator is pinned to `b"vaultcf2"` (`VAULT_CONFIG_DISCRIMINATOR` in `state/vault_config.rs`), not derived from the type name. Dropping `asset_count`/`registered_assets` shifted every field from `total_stable_deposited` onward 257 bytes earlier (`admin` and everything before `total_stable_deposited` kept its offset, which is what made the break easy to miss). The pin is what turns a stale vault into a hard `AccountDiscriminatorMismatch` instead of a decode into garbage `total_stable_deposited`, `paused`, `wrap_public` and `mint_authority_transferred` — silent on a vault whose registry was still empty, and a misleading `AccountDidNotDeserialize` once assets were registered.
+
+**A vault initialized before that change cannot be read, repaired, or migrated.** Deploying this program against an existing devnet or mainnet vault will fail every instruction that touches `vault_config`. Because the PDA is seeded `["vault_config", authority]` and `initialize` uses `init`, the old address stays occupied — you cannot re-init over it. To bring up a working vault:
+
+1. Generate a **new authority keypair** — this is what makes the `vault_config` PDA address different.
+2. Bootstrap the vault with the CLI, which runs `initialize` → `add_asset` → `enable_klend` in one go:
+
+   ```bash
+   cd wrap-stablecoin && pnpm cli init --network devnet --decimals-mint <mint> --reserve <klend-reserve>
+   ```
+
+   **Point the CLI at the new keypair first, or it will bootstrap the wrong vault.** The signer comes from `ANCHOR_WALLET_{LOCALNET|DEVNET|MAINNET}`, falling back to the unsuffixed `ANCHOR_WALLET` on localnet only; devnet and mainnet read their own scoped key and nothing else. Relative paths resolve against `wrap-stablecoin/`. With nothing set, localnet falls back to the fixture admin keypair (a different authority, so a different `vault_config` PDA) and devnet/mainnet refuse to run: fixture keypairs are localnet-only. `cli init` derives the vault PDAs from whatever that keypair resolves to and prints the authority it is using before it sends anything; `--dry-run` prints the plan without sending, and any mainnet write also needs `--confirm`.
+
+   `--network` is always required. `--decimals-mint` is required on the first init — it fixes Florin precision forever. Once `vault_config` exists it is optional, and when passed its decimals must match the vault's or `init` fails. `init` always registers exactly one collateral: `--asset` defaults to `--decimals-mint`, and omitting `--reserve` registers that collateral with Kamino off. Every step is skipped when its account already exists, so re-running is safe and registering a second collateral is just another `init` call with `--asset <mint>` (plus `--reserve` for Kamino). An existing `klend_config` is recorded as it is on chain whether or not `--reserve` is passed, and a `--reserve` that differs from it fails. The run writes `deployments/<network>.json`; if that file records a different `programId` or `authority` (as it does for the old vault here), `init` refuses to run until you delete it.
+3. Render the backend env from that artifact and restart the backend:
+
+   ```bash
+   cd wrap-stablecoin && pnpm cli sync-env --network devnet
+   ```
+
+   `VAULT_AUTHORITY` in `backend/.env` is the `authority` field of `deployments/<network>.json`, i.e. the keypair step 2 signed with. Do not hand-edit it. Because `backend/src/config/env.rs` resolves `{KEY}_{NETWORK}` ahead of the bare key, `sync-env` deletes every network-scoped `VAULT_AUTHORITY_*`, `PROGRAM_ID_*` and `DEFAULT_ASSET_MINT_*` override it finds (all managed keys, all three suffixes) so the value it writes is the one the backend resolves. Unrelated keys such as `ADMIN_KEYPAIR_PATH` are preserved.
+4. Rebuild the IDL into the tracked copy and commit it — see [`Monorepo.md`](Monorepo.md#on-chain-program) for the exact commands. Both artifacts embed the discriminator: the JSON is what the devnet-e2e scripts decode with, the `.ts` is what the tests and CLI type against, so regenerating only one leaves a copy that cannot decode the new vault. The `anchor.workspace` consumers (mocha tests, the smoke scripts) take their runtime IDL from `target/idl/`, so they need a fresh `anchor build` on top of the tracked copy; `cli/` and the devnet-e2e scripts read the tracked copy directly and do not.
+
+Any future change that moves or removes an existing `VaultConfig` field must bump the trailing digit of the pinned discriminator, or the same silent-decode hazard returns.
+
 ## Launch recipe (open wrap, discounted redeem)
 
 Init already defaults both flags to public and haircuts to 0. Launch posture is ops, not code defaults.

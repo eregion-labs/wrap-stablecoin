@@ -17,7 +17,7 @@ import {
 import * as fs from "node:fs";
 import { expect } from "chai";
 import * as crypto from "node:crypto";
-import { WrapStablecoin } from "../target/types/wrap_stablecoin";
+import { WrapStablecoin } from "../idl/wrap_stablecoin";
 import {
   ALLOWLIST_SEED,
   ASSET_CONFIG_SEED,

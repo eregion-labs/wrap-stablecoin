@@ -9,6 +9,8 @@ use utoipa::ToSchema;
 
 use crate::app_state::{AppState, SolanaNetwork};
 use crate::config::env::env_opt;
+use crate::routes::blocking::run_blocking;
+use crate::routes::errors::admin_error;
 use crate::routes::network::RequestNetwork;
 use crate::wrap_stablecoin::{
     lookup_klend_reserves_for_mint, KlendReserveLookup, KAMINO_DEVNET_MARKET, KAMINO_MAIN_MARKET,
@@ -66,16 +68,8 @@ pub async fn klend_reserve(
     })?;
     let markets = default_kamino_markets(network);
     let rpc = ctx.rpc.clone();
-    let lookup = tokio::task::spawn_blocking(move || {
-        lookup_klend_reserves_for_mint(&rpc, &mint, &markets)
-    })
-    .await
-    .map_err(|e| {
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        )
-    })?
-    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, format!("{e:#}")))?;
+    let lookup = run_blocking(move || lookup_klend_reserves_for_mint(&rpc, &mint, &markets))
+        .await?
+        .map_err(admin_error)?;
     Ok(Json(lookup))
 }
