@@ -7,6 +7,7 @@ Documentation for the **wrap-stablecoin** monorepo: a Kamino KLend–backed wrap
 | Page | Description |
 |------|-------------|
 | [Architecture](Architecture) | System design, flows, accounts, security model |
+| [Flows](Flows) | Interactive diagrams: architecture, deployment CLI, wrap/unwrap, Kamino yield |
 | [Monorepo](Monorepo) | Repo layout, build commands, environment variables |
 | [On-chain program](On-chain-program) | Instructions, program ID, account types |
 | [Backend API](Backend-API) | Transaction builder and admin endpoints |

@@ -1,0 +1,362 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Deployment CLI Workflow",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "deploy",
+        "label": "Deploy",
+        "focus": [
+          "resolve",
+          "build",
+          "authority",
+          "publish",
+          "gate_deploy"
+        ],
+        "note": "anchor build, IDL drift check, then anchor deploy or anchor upgrade by on-chain upgrade authority."
+      },
+      {
+        "id": "bootstrap",
+        "label": "Bootstrap",
+        "focus": [
+          "init_ctx",
+          "bootstrap",
+          "klend",
+          "artifact",
+          "gate_init",
+          "run_local"
+        ],
+        "note": "init reconciles initialize, add_asset and enable_klend against chain, then merges deployments/<network>.json."
+      },
+      {
+        "id": "env-sync",
+        "label": "Env sync",
+        "focus": [
+          "artifact",
+          "sync",
+          "extras",
+          "gate_sync"
+        ],
+        "note": "sync-env renders backend/.env and both .env.local files from the artifact only."
+      }
+    ],
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "CLI step"
+        },
+        "security": {
+          "label": "Check / abort"
+        },
+        "database": {
+          "label": "Repo file"
+        },
+        "cloud": {
+          "label": "Cluster write"
+        },
+        "external": {
+          "label": "Local script"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "op",
+      "label": "Operator: pnpm cli"
+    },
+    {
+      "id": "cluster",
+      "label": "Cluster (RPC)"
+    },
+    {
+      "id": "files",
+      "label": "Repo artifacts"
+    },
+    {
+      "id": "gates",
+      "label": "Abort gates (throw)",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "ph_env",
+      "label": "Resolve",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "ph_deploy",
+      "label": "deploy",
+      "fromCol": 1,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    {
+      "id": "ph_init",
+      "label": "init",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "ph_sync",
+      "label": "sync-env",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "resolve",
+    "build",
+    "authority",
+    "publish",
+    "init_ctx",
+    "bootstrap",
+    "klend",
+    "artifact",
+    "sync"
+  ],
+  "nodes": [
+    {
+      "id": "run_local",
+      "lane": "op",
+      "col": 2,
+      "type": "external",
+      "label": "anchor run local",
+      "sublabel": "seed_localnet.ts",
+      "width": 130
+    },
+    {
+      "id": "resolve",
+      "lane": "op",
+      "col": 0,
+      "type": "security",
+      "label": "parseNetwork",
+      "sublabel": "{KEY}_{NETWORK}",
+      "tag": "guardMainnet",
+      "width": 130
+    },
+    {
+      "id": "build",
+      "lane": "op",
+      "col": 1,
+      "type": "backend",
+      "label": "anchor build",
+      "sublabel": "IDL drift check",
+      "width": 130
+    },
+    {
+      "id": "init_ctx",
+      "lane": "op",
+      "col": 3,
+      "type": "backend",
+      "label": "init",
+      "sublabel": "assertSameVault",
+      "width": 130
+    },
+    {
+      "id": "extras",
+      "lane": "op",
+      "col": 5,
+      "type": "backend",
+      "label": "metadata / check-idl",
+      "sublabel": "optional follow-ups",
+      "width": 130
+    },
+    {
+      "id": "authority",
+      "lane": "cluster",
+      "col": 1,
+      "type": "security",
+      "label": "upgradeAuthority",
+      "sublabel": "program on cluster?",
+      "width": 130
+    },
+    {
+      "id": "publish",
+      "lane": "cluster",
+      "col": 2,
+      "type": "cloud",
+      "label": "anchor deploy | upgrade",
+      "sublabel": "deployer wallet signs",
+      "width": 160
+    },
+    {
+      "id": "bootstrap",
+      "lane": "cluster",
+      "col": 3,
+      "type": "cloud",
+      "label": "initialize, add_asset",
+      "sublabel": "skip if account exists",
+      "width": 150
+    },
+    {
+      "id": "klend",
+      "lane": "cluster",
+      "col": 4,
+      "type": "cloud",
+      "label": "reconcileKlend",
+      "sublabel": "enable_klend, klend-sdk",
+      "width": 130
+    },
+    {
+      "id": "artifact",
+      "lane": "files",
+      "col": 4,
+      "type": "database",
+      "label": "writeDeployment",
+      "sublabel": "deployments/<net>.json",
+      "width": 130
+    },
+    {
+      "id": "sync",
+      "lane": "files",
+      "col": 5,
+      "type": "database",
+      "label": "sync-env",
+      "sublabel": "backend/.env, .env.local",
+      "width": 130
+    },
+    {
+      "id": "gate_env",
+      "lane": "gates",
+      "col": 1,
+      "type": "security",
+      "label": "Env abort",
+      "sublabel": "signer, RPC, --confirm",
+      "width": 130
+    },
+    {
+      "id": "gate_deploy",
+      "lane": "gates",
+      "col": 2,
+      "type": "security",
+      "label": "Deploy abort",
+      "sublabel": "IDL, keypair, authority",
+      "width": 130
+    },
+    {
+      "id": "gate_init",
+      "lane": "gates",
+      "col": 3,
+      "type": "security",
+      "label": "Init abort",
+      "sublabel": "vault, decimals, reserve",
+      "width": 130
+    },
+    {
+      "id": "gate_sync",
+      "lane": "gates",
+      "col": 5,
+      "type": "security",
+      "label": "readDeployment abort",
+      "sublabel": "field or cluster",
+      "width": 130
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-resolve-build",
+      "from": "resolve",
+      "to": "build",
+      "label": "deploy",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-build-authority",
+      "from": "build",
+      "to": "authority",
+      "label": "IDL ok"
+    },
+    {
+      "id": "e-authority-publish",
+      "from": "authority",
+      "to": "publish",
+      "label": "choose path"
+    },
+    {
+      "id": "e-publish-init",
+      "from": "publish",
+      "to": "init_ctx",
+      "label": "init"
+    },
+    {
+      "id": "e-init-bootstrap",
+      "from": "init_ctx",
+      "to": "bootstrap"
+    },
+    {
+      "id": "e-bootstrap-klend",
+      "from": "bootstrap",
+      "to": "klend",
+      "label": "--reserve"
+    },
+    {
+      "id": "e-klend-artifact",
+      "from": "klend",
+      "to": "artifact",
+      "label": "record"
+    },
+    {
+      "id": "e-artifact-sync",
+      "from": "artifact",
+      "to": "sync",
+      "label": "sync-env",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-sync-extras",
+      "from": "sync",
+      "to": "extras",
+      "label": "optional",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e-local-init",
+      "from": "run_local",
+      "to": "init_ctx",
+      "label": "init + syncEnv",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e-resolve-gate",
+      "from": "resolve",
+      "to": "gate_env",
+      "label": "throw",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e-publish-gate",
+      "from": "publish",
+      "to": "gate_deploy",
+      "label": "mismatch",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e-bootstrap-gate",
+      "from": "bootstrap",
+      "to": "gate_init",
+      "label": "mismatch",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e-sync-gate",
+      "from": "sync",
+      "to": "gate_sync",
+      "label": "invalid",
+      "variant": "security",
+      "role": "error"
+    }
+  ]
+}
